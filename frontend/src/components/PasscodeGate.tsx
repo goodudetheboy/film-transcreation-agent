@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { verifyPasscode } from '../api/apiClient';
+
+export const PASSCODE_STORAGE_KEY = 'film-transcreation-agent:passcode';
 
 export interface PasscodeGateProps {
   onUnlock: (passcode: string) => void;
@@ -9,6 +11,29 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
   const [value, setValue] = useState('');
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(PASSCODE_STORAGE_KEY);
+    if (!saved) return;
+
+    let cancelled = false;
+    setChecking(true);
+    verifyPasscode(saved).then((result) => {
+      if (cancelled) return;
+      setChecking(false);
+      if (result.ok) {
+        onUnlock(saved);
+      } else {
+        localStorage.removeItem(PASSCODE_STORAGE_KEY);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // Intentionally runs once on mount only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,6 +45,7 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
     setChecking(false);
 
     if (result.ok) {
+      localStorage.setItem(PASSCODE_STORAGE_KEY, value);
       onUnlock(value);
     } else {
       setError(result.message ?? 'Incorrect passcode');
