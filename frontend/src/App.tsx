@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { PasscodeGate } from './components/PasscodeGate';
 import { ResultsList } from './components/ResultsList';
 import { ErrorBanner } from './components/ErrorBanner';
+import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
 import { streamAnalyze } from './api/apiClient';
 import { useResultsStore } from './store/resultsStore';
@@ -43,6 +44,7 @@ function App() {
 
   return (
     <>
+      {testMode && <TestModeBanner />}
       {status === 'error' && errorMessage && (
         <ErrorBanner message={errorMessage} onRetry={handleRetry} />
       )}

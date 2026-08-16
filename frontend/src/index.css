@@ -346,6 +346,32 @@ textarea {
   background: rgba(0, 0, 0, 0.15);
 }
 
+/* ---------- Test mode banner ---------- */
+
+.test-mode-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-bottom: 1px solid var(--accent);
+  background: var(--accent);
+  color: #1a1200;
+  padding: 10px 20px;
+}
+
+.test-mode-banner__message {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.test-mode-banner__message::before {
+  content: 'TEST MODE — ';
+}
+
 /* ---------- Results ---------- */
 
 .results-placeholder {
