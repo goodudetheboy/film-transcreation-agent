@@ -30,3 +30,13 @@ The backend does exactly four things, in order:
   `gcloud`-based local proxy to reach, which locks out judges entirely. (That's a
   literal `gcloud` tunnel, unrelated to our own backend naming — it's Google's IAP
   terminology.)
+
+## Update: `POST /api/verify-passcode`
+
+The frontend originally accepted any non-empty string at the passcode gate and only
+discovered it was wrong after the user filled out a whole script and hit Analyze —
+confusing, since the check is entirely server-side (by design, above). Added a cheap
+endpoint behind the same `passcodeMiddleware` guard that does nothing but return 200;
+reaching the handler at all means the passcode already passed. The frontend calls it
+from the passcode gate itself and shows an inline error there, before showing the
+main UI. No new decision here — same passcode check, just exposed one step earlier.

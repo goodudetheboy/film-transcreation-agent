@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createApp } from './app.js';
 import { createDialogflowClient } from './services/dialogflowClient.js';
 import { loadConfig } from './config/env.js';

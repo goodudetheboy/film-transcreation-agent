@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest';
-import { streamAnalyze } from '../apiClient';
+import { streamAnalyze, verifyPasscode } from '../apiClient';
 import type { AgentEvent } from '../apiClient.types';
 
 function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
@@ -18,11 +18,12 @@ function streamFromChunks(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-function fakeFetch(status: number, body: ReadableStream<Uint8Array> | null) {
+function fakeFetch(status: number, body: ReadableStream<Uint8Array> | null, textBody = '') {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
     body,
+    text: vi.fn().mockResolvedValue(textBody),
   } as unknown as Response);
 }
 
@@ -89,6 +90,35 @@ describe('streamAnalyze', () => {
     expect(events).toEqual([{ type: 'error', message: expect.stringContaining('401') }]);
   });
 
+  it("includes the backend's JSON error detail in the message when present", async () => {
+    const fetchImpl = fakeFetch(401, null, JSON.stringify({ error: 'invalid passcode' }));
+    const events: AgentEvent[] = [];
+    await streamAnalyze(
+      { script: 's', targetCountry: 'c', passcode: 'wrong' },
+      (e) => events.push(e),
+      { fetchImpl, baseUrl: 'http://x' },
+    );
+    expect(events).toEqual([
+      { type: 'error', message: 'request failed with status 401: invalid passcode' },
+    ]);
+  });
+
+  it('falls back to the raw response text when the error body is not JSON', async () => {
+    const fetchImpl = fakeFetch(429, null, 'Too many requests, please try again later.');
+    const events: AgentEvent[] = [];
+    await streamAnalyze(
+      { script: 's', targetCountry: 'c', passcode: 'p' },
+      (e) => events.push(e),
+      { fetchImpl, baseUrl: 'http://x' },
+    );
+    expect(events).toEqual([
+      {
+        type: 'error',
+        message: 'request failed with status 429: Too many requests, please try again later.',
+      },
+    ]);
+  });
+
   it('POSTs script, targetCountry and passcode as JSON in the request body', async () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([]));
     await streamAnalyze(
@@ -103,5 +133,31 @@ describe('streamAnalyze', () => {
         body: JSON.stringify({ script: 'a script', targetCountry: 'Japan', passcode: 'secret' }),
       }),
     );
+  });
+});
+
+describe('verifyPasscode', () => {
+  it('resolves ok:true when the backend returns 200', async () => {
+    const fetchImpl = fakeFetch(200, null);
+    const result = await verifyPasscode('correct', { fetchImpl, baseUrl: 'http://x' });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('POSTs the passcode as JSON to /api/verify-passcode', async () => {
+    const fetchImpl = fakeFetch(200, null);
+    await verifyPasscode('correct', { fetchImpl, baseUrl: 'http://x' });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://x/api/verify-passcode',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ passcode: 'correct' }),
+      }),
+    );
+  });
+
+  it('resolves ok:false with the backend detail when the passcode is wrong', async () => {
+    const fetchImpl = fakeFetch(401, null, JSON.stringify({ error: 'invalid passcode' }));
+    const result = await verifyPasscode('wrong', { fetchImpl, baseUrl: 'http://x' });
+    expect(result).toEqual({ ok: false, message: 'invalid passcode' });
   });
 });

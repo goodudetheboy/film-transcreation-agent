@@ -2,6 +2,7 @@ import express, { type Express, Router } from 'express';
 import cors from 'cors';
 import { healthRoute } from './routes/health.js';
 import { analyzeRoute } from './routes/analyze.js';
+import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
@@ -34,6 +35,7 @@ export function createApp(deps: AppDeps = {}): Express {
   const guarded = Router();
   guarded.use(rateLimitMiddleware({ windowMs: config.rateLimitWindowMs, max: config.rateLimitMax }));
   guarded.use(passcodeMiddleware(config.sharedPasscode));
+  guarded.use(verifyPasscodeRoute());
   guarded.use(
     analyzeRoute({
       dialogflowClient,
