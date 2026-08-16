@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+.env
+.env.local
+*.local
+.DS_Store
+*.log
+npm-debug.log*
+
+# Python (test_agent.py reference script)
+__pycache__/
+*.pyc
+.venv/
+venv/

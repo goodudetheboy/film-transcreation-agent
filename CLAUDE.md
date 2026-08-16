@@ -1,0 +1,62 @@
+# CLAUDE.md
+
+Cultural Resonance Agent — localization triage tool for the Agentic Cinema hackathon.
+Submit a script + target country, get back a ranked list of lines unlikely to land
+there, each with a reason and a suggested replacement.
+
+## Repo map
+
+- `frontend/` — Vite + React + TS UI
+- `proxy/` — thin Express relay: passcode gate, rate limit, calls Dialogflow CX
+- `tests/integration/` — cross-boundary tests (real proxy, faked Google client)
+- `docs/` — see below
+- `test_agent.py` — teammate's reference script calling the Dialogflow CX playbook
+  directly; the proxy's `services/dialogflowClient.ts` mirrors its call shape
+
+## Before changing anything architectural
+
+Read `docs/adr/` first. Each file is one decision with its reasoning. If you're about
+to make a different choice than what's recorded there, add a new ADR (or mark the old
+one superseded) — don't silently deviate. See `docs/adr/0002-*.md` for an example:
+an earlier assumption (Agent Engine `reasoningEngines`) turned out to be wrong once a
+teammate's real reference script surfaced (Dialogflow CX `detectIntent`), and the ADR
+records both the wrong assumption and the correction rather than pretending it was
+right from the start.
+
+For business/product context (why this exists, who it's for), read `docs/product/`.
+
+## Progress logging — do this every session
+
+At the end of every work session (or a meaningfully complete chunk of work), create
+`docs/progress/YYYYMMDD-HHMMSS.md` (local date/time) summarizing:
+- What changed
+- Decisions made (and whether they need a new/updated ADR)
+- Open TODOs / what's blocked and on what
+
+Never edit a prior progress file — always a new one. At the **start** of a session,
+read the most recent file in `docs/progress/` (sorted by filename) to see where things
+left off before doing anything else.
+
+## Running things
+
+```bash
+npm install                # once, at repo root
+npm run dev:proxy          # start the proxy
+npm run dev:frontend       # start the Vite dev server
+npm test                   # all three suites
+npm run test:frontend      # frontend unit/component tests
+npm run test:proxy         # proxy unit tests
+npm run test:integration   # cross-boundary tests
+```
+
+Requires Google Cloud ADC configured locally:
+`gcloud auth application-default login --project silent-scholar-505618-u6`. See
+`docs/adr/0003-google-auth-via-adc.md`.
+
+## Testing constraint — do not simplify this away
+
+Integration tests (`tests/integration/`) must exercise a **really-running proxy
+server** via the frontend's real `apiClient` — no mocking that hop, ever. Only the
+Dialogflow CX call may be faked, via injecting a fake client into `createApp(deps)`.
+If a future change makes this constraint inconvenient, that's a signal to fix the
+design, not to quietly mock the frontend→proxy hop.

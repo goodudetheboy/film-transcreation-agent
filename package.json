@@ -1,0 +1,20 @@
+{
+  "name": "film-transcreation-agent",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "proxy",
+    "tests/integration"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:proxy": "npm run dev -w proxy",
+    "test:frontend": "npm run test -w frontend",
+    "test:proxy": "npm run test -w proxy",
+    "test:integration": "npm run test -w tests/integration",
+    "test": "npm run test:frontend && npm run test:proxy && npm run test:integration"
+  }
+}
