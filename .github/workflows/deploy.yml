@@ -1,0 +1,70 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: silent-scholar-505618-u6
+  REGION: us-central1
+  SERVICE_NAME: film-transcreation-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE_NAME" \
+            --source backend \
+            --project "$PROJECT_ID" \
+            --region "$REGION" \
+            --allow-unauthenticated \
+            --set-env-vars "SHARED_PASSCODE=${{ secrets.SHARED_PASSCODE }}"
+
+      - name: Get deployed backend URL
+        id: backend
+        run: |
+          URL=$(gcloud run services describe "$SERVICE_NAME" \
+            --project "$PROJECT_ID" --region "$REGION" \
+            --format='value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install and build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_BACKEND_URL: ${{ steps.backend.outputs.url }}
+
+      - name: Deploy frontend to Firebase Hosting
+        run: |
+          npx firebase-tools deploy --only hosting \
+            --project "$PROJECT_ID" --non-interactive
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
+
+      - name: Summary
+        run: |
+          echo "### Deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Backend: ${{ steps.backend.outputs.url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frontend: see Firebase Hosting URL in the step above" >> "$GITHUB_STEP_SUMMARY"

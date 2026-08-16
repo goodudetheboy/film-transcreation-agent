@@ -1,0 +1,8 @@
+.git/
+node_modules/
+dist/
+.env
+.env.local
+*.log
+src/**/*.test.ts
+src/__tests__/
