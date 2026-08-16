@@ -59,16 +59,35 @@ and needs no separate account/platform.
 ## Update: GitHub Actions (`.github/workflows/deploy.yml`)
 
 Same two-step deploy (backend, then frontend against its URL), automated on push to
-`main`. Auth uses a single dedicated service account (not a personal credential),
-authenticated via `google-github-actions/auth` using a JSON key stored as the
-`GCP_SA_KEY` repo secret — reused for both the `gcloud run deploy` step and the
-`firebase-tools deploy` step (both read `GOOGLE_APPLICATION_CREDENTIALS`), so only
-one secret is needed for GCP auth rather than two separate credentials for Cloud
-Run vs. Firebase. `SHARED_PASSCODE` is a second repo secret, never committed.
+`main`. Auth uses a single dedicated service account (not a personal credential) —
+reused for both the `gcloud run deploy` step and the `firebase-tools deploy` step,
+since both consume whatever credentials `google-github-actions/auth` exports,
+regardless of how that auth was obtained. `SHARED_PASSCODE` is a repo secret, never
+committed.
 
-Workload Identity Federation (no long-lived key at all) is the more secure
-alternative to a JSON key secret, but needs more one-time GCP setup (identity pool
-+ provider + attribute mapping) — deferred as a "do this if there's time" upgrade,
-not blocking for a hackathon timeline. Documented as a known gap, not silently
-ignored.
+## Update: switched to Workload Identity Federation (no stored key)
+
+The user asked directly whether a Google credential had to live in GitHub at all.
+Researched current (2026) support before answering rather than assuming: confirmed
+via the official `google-github-actions/auth` repo that WIF is the recommended
+approach over a JSON key secret, and confirmed Firebase Hosting deploys specifically
+now support WIF-derived credentials (added November 2024 — this used to be a real
+gap, it isn't anymore).
+
+Switched `.github/workflows/deploy.yml`'s auth step from `credentials_json` (a
+`GCP_SA_KEY` secret) to `workload_identity_provider` + `service_account`, with
+`permissions: id-token: write` added at the job level. No code downstream of the
+auth step changed — `gcloud run deploy` and `firebase-tools deploy` both already
+consumed the credentials file `google-github-actions/auth` exports, whether that
+credential came from a key or from WIF token exchange.
+
+Setup (one-time, see `docs/runbook.md`): create a Workload Identity Pool, an OIDC
+provider trusting `https://token.actions.githubusercontent.com`, with an
+**attribute-condition restricting it to this exact repo** (`assertion.repository ==
+'goodudetheboy/film-transcreation-agent'`) — not just the GitHub org, so no other
+repo under the same account can impersonate the deploy service account even if
+compromised. The provider/service-account identifiers aren't secret (the security
+boundary is the attribute-condition, not obscurity), so they're stored as GitHub
+repo *variables*, not secrets — `SHARED_PASSCODE` is now the only actual secret
+this workflow needs.
 

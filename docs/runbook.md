@@ -22,32 +22,67 @@ for how the deploy itself works (`scripts/deploy.sh`).
 ## One-time setup for GitHub Actions auto-deploy (optional)
 
 Only needed if you want `.github/workflows/deploy.yml` to deploy automatically on
-push to `main`, instead of running `scripts/deploy.sh` by hand.
+push to `main`, instead of running `scripts/deploy.sh` by hand. Uses **Workload
+Identity Federation (WIF)** — GitHub proves its identity to GCP per-run and gets a
+short-lived token; no long-lived key is ever created, stored, or downloaded.
 
 ```bash
+PROJECT_ID="silent-scholar-505618-u6"
+REPO="goodudetheboy/film-transcreation-agent"
+
+# 1. Get the project number (needed for the WIF provider's resource path below)
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+echo "$PROJECT_NUMBER"   # note this down
+
+# 2. Create the deploy service account (no key created for it — that's the point)
 gcloud iam service-accounts create gh-actions-deploy \
-  --project silent-scholar-505618-u6 \
+  --project "$PROJECT_ID" \
   --display-name "GitHub Actions deploy"
 
-SA_EMAIL="gh-actions-deploy@silent-scholar-505618-u6.iam.gserviceaccount.com"
+SA_EMAIL="gh-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
 
 for ROLE in roles/run.admin roles/iam.serviceAccountUser \
             roles/cloudbuild.builds.editor roles/artifactregistry.admin \
             roles/storage.admin roles/firebasehosting.admin; do
-  gcloud projects add-iam-policy-binding silent-scholar-505618-u6 \
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member "serviceAccount:${SA_EMAIL}" --role "$ROLE"
 done
 
-gcloud iam service-accounts keys create gh-actions-deploy-key.json \
-  --iam-account "$SA_EMAIL"
+# 3. Create the Workload Identity Pool
+gcloud iam workload-identity-pools create "github" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# 4. Create the OIDC provider — attribute-condition restricts this to ONLY
+#    workflow runs from this exact repo, nothing else can impersonate the SA
+gcloud iam workload-identity-pools providers create-oidc "film-transcreation-agent" \
+  --project="$PROJECT_ID" \
+  --location="global" \
+  --workload-identity-pool="github" \
+  --display-name="film-transcreation-agent repo" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository == '${REPO}'" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# 5. Allow that provider to impersonate the service account
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --project="$PROJECT_ID" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github/attribute.repository/${REPO}"
 ```
 
 Then, in the GitHub repo (Settings → Secrets and variables → Actions):
-- [ ] `GCP_SA_KEY` — the full contents of `gh-actions-deploy-key.json`.
-- [ ] `SHARED_PASSCODE` — the real passcode (same value as `backend/.env`).
+- [ ] Under **Variables** (not Secrets — these aren't sensitive):
+  - `WORKLOAD_IDENTITY_PROVIDER` =
+    `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/film-transcreation-agent`
+    (substitute the real `PROJECT_NUMBER` from step 1)
+  - `GCP_SERVICE_ACCOUNT` = `gh-actions-deploy@silent-scholar-505618-u6.iam.gserviceaccount.com`
+- [ ] Under **Secrets**:
+  - `SHARED_PASSCODE` — the real passcode (same value as `backend/.env`).
 
-**Delete `gh-actions-deploy-key.json` locally once it's pasted into the GitHub
-secret** — it's a real credential and shouldn't sit on disk or get committed.
+No `GCP_SA_KEY` needed at all — that's the whole point of WIF. Allow ~5 minutes
+after step 3/4 for the pool/provider to propagate before the first workflow run.
 
 ## Before deploying for judging
 
