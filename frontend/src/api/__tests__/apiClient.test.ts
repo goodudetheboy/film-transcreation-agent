@@ -33,7 +33,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([frame]));
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'p' },
+      { script: 's', targetCountry: 'c', passcode: 'p', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -46,7 +46,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([f1 + f2]));
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'p' },
+      { script: 's', targetCountry: 'c', passcode: 'p', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -59,7 +59,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([full.slice(0, mid), full.slice(mid)]));
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'p' },
+      { script: 's', targetCountry: 'c', passcode: 'p', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -72,7 +72,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([done, extra]));
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'p' },
+      { script: 's', targetCountry: 'c', passcode: 'p', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -83,7 +83,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(401, null);
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'wrong' },
+      { script: 's', targetCountry: 'c', passcode: 'wrong', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -94,7 +94,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(401, null, JSON.stringify({ error: 'invalid passcode' }));
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'wrong' },
+      { script: 's', targetCountry: 'c', passcode: 'wrong', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -107,7 +107,7 @@ describe('streamAnalyze', () => {
     const fetchImpl = fakeFetch(429, null, 'Too many requests, please try again later.');
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: 's', targetCountry: 'c', passcode: 'p' },
+      { script: 's', targetCountry: 'c', passcode: 'p', testMode: true },
       (e) => events.push(e),
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -119,10 +119,10 @@ describe('streamAnalyze', () => {
     ]);
   });
 
-  it('POSTs script, targetCountry and passcode as JSON in the request body', async () => {
+  it('POSTs script, targetCountry, passcode and testMode as JSON in the request body', async () => {
     const fetchImpl = fakeFetch(200, streamFromChunks([]));
     await streamAnalyze(
-      { script: 'a script', targetCountry: 'Japan', passcode: 'secret' },
+      { script: 'a script', targetCountry: 'Japan', passcode: 'secret', testMode: false },
       () => {},
       { fetchImpl, baseUrl: 'http://x' },
     );
@@ -130,7 +130,12 @@ describe('streamAnalyze', () => {
       'http://x/api/analyze',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ script: 'a script', targetCountry: 'Japan', passcode: 'secret' }),
+        body: JSON.stringify({
+          script: 'a script',
+          targetCountry: 'Japan',
+          passcode: 'secret',
+          testMode: false,
+        }),
       }),
     );
   });

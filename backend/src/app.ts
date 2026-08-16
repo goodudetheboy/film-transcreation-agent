@@ -7,10 +7,12 @@ import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
 import type { DialogflowClient } from './services/dialogflowClient.js';
+import { createMockDialogflowClient } from './services/mockDialogflowClient.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
   dialogflowClient?: DialogflowClient;
+  mockDialogflowClient?: DialogflowClient;
 }
 
 const notConfiguredClient: DialogflowClient = {
@@ -22,6 +24,7 @@ const notConfiguredClient: DialogflowClient = {
 export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
   const dialogflowClient = deps.dialogflowClient ?? notConfiguredClient;
+  const mockDialogflowClient = deps.mockDialogflowClient ?? createMockDialogflowClient();
 
   const app = express();
   app.use(cors());
@@ -39,6 +42,7 @@ export function createApp(deps: AppDeps = {}): Express {
   guarded.use(
     analyzeRoute({
       dialogflowClient,
+      mockDialogflowClient,
       maxScriptLines: config.maxScriptLines,
       revealDelayMs: config.revealDelayMs,
     }),

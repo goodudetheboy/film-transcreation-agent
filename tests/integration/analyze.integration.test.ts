@@ -36,7 +36,12 @@ describe('frontend apiClient -> real backend -> faked Dialogflow CX', () => {
     // Only backend.dialogflowClient (injected above) is fake.
     const events: AgentEvent[] = [];
     await streamAnalyze(
-      { script: "RILEY\nI'm not eating that broccoli.", targetCountry: 'Japan', passcode: TEST_PASSCODE },
+      {
+        script: "RILEY\nI'm not eating that broccoli.",
+        targetCountry: 'Japan',
+        passcode: TEST_PASSCODE,
+        testMode: false, // must reach the injected fake dialogflowClient, not the default mock
+      },
       (e) => events.push(e),
       { baseUrl: backend.url },
     );
@@ -56,7 +61,7 @@ describe('frontend apiClient -> real backend -> faked Dialogflow CX', () => {
     try {
       const events: AgentEvent[] = [];
       await streamAnalyze(
-        { script: 'line one', targetCountry: 'Japan', passcode: 'wrong' },
+        { script: 'line one', targetCountry: 'Japan', passcode: 'wrong', testMode: false },
         (e) => events.push(e),
         { baseUrl: wrongPasscodeBackend.url },
       );
@@ -74,7 +79,12 @@ describe('frontend apiClient -> real backend -> faked Dialogflow CX', () => {
     });
 
     try {
-      const payload = { script: 'line one', targetCountry: 'Japan', passcode: TEST_PASSCODE };
+      const payload = {
+        script: 'line one',
+        targetCountry: 'Japan',
+        passcode: TEST_PASSCODE,
+        testMode: false,
+      };
       await streamAnalyze(payload, () => {}, { baseUrl: limitedBackend.url }); // consumes the only allowed request
 
       const events: AgentEvent[] = [];

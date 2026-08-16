@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { PasscodeGate } from './components/PasscodeGate';
 import { ResultsList } from './components/ResultsList';
 import { ErrorBanner } from './components/ErrorBanner';
+import { HeaderSettings } from './components/HeaderSettings';
 import { streamAnalyze } from './api/apiClient';
 import { useResultsStore } from './store/resultsStore';
 
@@ -9,6 +10,7 @@ function App() {
   const [passcode, setPasscode] = useState<string | null>(null);
   const [script, setScript] = useState('');
   const [targetCountry, setTargetCountry] = useState('');
+  const [testMode, setTestMode] = useState(true);
 
   const { status, lines, errorMessage, addFlaggedLine, setStatus, setError, reset } =
     useResultsStore();
@@ -28,7 +30,7 @@ function App() {
     reset();
     setStatus('streaming');
 
-    await streamAnalyze({ script, targetCountry, passcode: passcode! }, (event) => {
+    await streamAnalyze({ script, targetCountry, passcode: passcode!, testMode }, (event) => {
       if (event.type === 'line_flagged') {
         addFlaggedLine(event.line);
       } else if (event.type === 'done') {
@@ -46,9 +48,10 @@ function App() {
       )}
       <header className="app-header">
         <div>
-          <h1 className="app-title">Cultural Resonance Agent</h1>
+          <h1 className="app-title">Film Transcreation Agent</h1>
           <p className="app-tagline">Localization triage — script in, flagged lines out</p>
         </div>
+        <HeaderSettings testMode={testMode} onTestModeChange={setTestMode} />
       </header>
       <main className="app-body">
         <section className="panel panel--source">

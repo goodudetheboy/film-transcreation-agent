@@ -17,6 +17,7 @@ function sleep(ms: number): Promise<void> {
 
 export interface AnalyzeRouteDeps {
   dialogflowClient: DialogflowClient;
+  mockDialogflowClient: DialogflowClient;
   maxScriptLines: number;
   revealDelayMs: number;
 }
@@ -25,7 +26,12 @@ export function analyzeRoute(deps: AnalyzeRouteDeps): Router {
   const router = Router();
 
   router.post('/api/analyze', async (req, res) => {
-    const { script, targetCountry } = req.body ?? {};
+    const { script, targetCountry, testMode } = req.body ?? {};
+    // Defaults true unless explicitly false — safer for a hackathon demo than
+    // silently hitting the real paid API if a caller forgets the flag. See
+    // docs/adr/0010-test-mode-mock-data.md.
+    const useMock = testMode !== false;
+    const client = useMock ? deps.mockDialogflowClient : deps.dialogflowClient;
 
     if (typeof script !== 'string' || script.trim() === '') {
       res.status(400).json({ error: 'script is required' });
@@ -48,8 +54,11 @@ export function analyzeRoute(deps: AnalyzeRouteDeps): Router {
     });
 
     try {
-      writeEvent(res, { type: 'progress', message: 'analyzing script' });
-      const flaggedLines = await deps.dialogflowClient.analyzeScript({
+      writeEvent(res, {
+        type: 'progress',
+        message: useMock ? 'analyzing script (test mode — mock data)' : 'analyzing script',
+      });
+      const flaggedLines = await client.analyzeScript({
         script,
         country: targetCountry,
       });

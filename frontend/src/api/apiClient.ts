@@ -4,6 +4,8 @@ export interface StreamAnalyzePayload {
   script: string;
   targetCountry: string;
   passcode: string;
+  /** When true (or omitted server-side), the backend returns mock data instead of calling Dialogflow CX. */
+  testMode: boolean;
 }
 
 export interface ApiClientOptions {
