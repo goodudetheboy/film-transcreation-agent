@@ -7,7 +7,8 @@
   decision that got superseded once real information arrived.
 - **`product/`** — the business/product context: the pitch, the user story,
   acceptance criteria. What we're building and why it matters, as distinct from how.
-- **`progress/`** — one file per work session, `YYYYMMDD-HHMMSS.md`. See
-  [CLAUDE.md](../CLAUDE.md) for the logging mechanism.
+- **`progress/`** — one file per calendar day, `YYYYMMDD.md`, with a `##` section per
+  session/chunk of work within that day. See [CLAUDE.md](../CLAUDE.md) for the
+  logging mechanism.
 - **`runbook.md`** — operational checklist, currently just the pre-judging safety
   checklist for the deployed demo.

@@ -25,17 +25,22 @@ right from the start.
 
 For business/product context (why this exists, who it's for), read `docs/product/`.
 
-## Progress logging — do this every session
+## Progress logging — one file per day, not per session
 
-At the end of every work session (or a meaningfully complete chunk of work), create
-`docs/progress/YYYYMMDD-HHMMSS.md` (local date/time) summarizing:
+`docs/progress/YYYYMMDD.md` — **one file per calendar day**, not one per session or
+per chunk of work. At the end of a work session (or a meaningfully complete chunk),
+append a `## HH:MM — title` section to **today's** file summarizing:
 - What changed
 - Decisions made (and whether they need a new/updated ADR)
 - Open TODOs / what's blocked and on what
 
-Never edit a prior progress file — always a new one. At the **start** of a session,
-read the most recent file in `docs/progress/` (sorted by filename) to see where things
-left off before doing anything else.
+If today's file doesn't exist yet, create it. If it does, add a new `##` section to
+it — don't create a second file for the same day. Only start a new file when the
+calendar date changes. Edit a prior day's file only to fix an error in it, not to
+add new entries — new entries always go in today's file.
+
+At the **start** of a session, read the most recent file in `docs/progress/` (sorted
+by filename) to see where things left off before doing anything else.
 
 ## Running things
 
