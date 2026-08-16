@@ -17,7 +17,7 @@ export async function streamAnalyze(
   options: StreamAnalyzeOptions = {},
 ): Promise<void> {
   const baseUrl =
-    options.baseUrl ?? (import.meta.env.VITE_PROXY_URL as string | undefined) ?? '';
+    options.baseUrl ?? (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? '';
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(`${baseUrl}/api/analyze`, {

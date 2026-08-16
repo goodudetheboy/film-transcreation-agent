@@ -1,6 +1,6 @@
 /**
- * Mirrors AgentEvent/FlaggedLine in proxy/src/routes/analyze.ts and
- * proxy/src/services/dialogflowClient.ts. Not literally shared via a workspace
+ * Mirrors AgentEvent/FlaggedLine in backend/src/routes/analyze.ts and
+ * backend/src/services/dialogflowClient.ts. Not literally shared via a workspace
  * package (kept dead-simple for the hackathon scaffold, per docs/adr/0006) — if
  * this shape changes, update both sides by hand.
  */

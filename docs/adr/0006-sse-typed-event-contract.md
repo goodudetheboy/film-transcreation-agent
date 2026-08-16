@@ -1,4 +1,4 @@
-# 0006. SSE typed-event contract, synthesized by the proxy
+# 0006. SSE typed-event contract, synthesized by the backend
 
 Status: Accepted (revised after 0002)
 
@@ -20,7 +20,7 @@ Two things, kept conceptually separate:
    This contract is what the frontend's `apiClient` parses, and it's designed to stay
    stable even if the backend's actual delivery mechanism changes later.
 
-2. **The proxy synthesizes the reveal.** After `dialogflowClient` returns the full
+2. **The backend synthesizes the reveal.** After `dialogflowClient` returns the full
    flagged-lines array from one blocking `detectIntent` call, the route handler drips
    it out as a sequence of SSE frames (small delay between each) rather than writing
    one giant frame. This is an honest simplification: one real Google call, synthetic
@@ -31,7 +31,7 @@ Two things, kept conceptually separate:
 ## Consequences
 
 - If the teammate's agent later adds genuine incremental delivery (streamingDetectIntent,
-  or a move to Agent Engine), only the proxy's internal handling changes — the typed
+  or a move to Agent Engine), only the backend's internal handling changes — the typed
   event contract and the frontend don't need to.
 - Don't claim in the demo narrative that the agent is streaming multi-stage reasoning
   live — it isn't, yet. The counter/reveal is real data, synthetic pacing.

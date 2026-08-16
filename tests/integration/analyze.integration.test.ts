@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { streamAnalyze } from '../../frontend/src/api/apiClient';
 import type { AgentEvent } from '../../frontend/src/api/apiClient.types';
-import { startTestProxy, type TestProxy } from './helpers/startTestProxy';
+import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
 import { fakeDialogflowClient } from './helpers/fakeDialogflowClient';
 
 const TEST_PASSCODE = 'integration-test-passcode';
 
-describe('frontend apiClient -> real proxy -> faked Dialogflow CX', () => {
-  let proxy: TestProxy;
+describe('frontend apiClient -> real backend -> faked Dialogflow CX', () => {
+  let backend: TestBackend;
 
   beforeAll(async () => {
-    proxy = await startTestProxy({
+    backend = await startTestBackend({
       config: {
         sharedPasscode: TEST_PASSCODE,
         rateLimitWindowMs: 60_000,
@@ -28,17 +28,17 @@ describe('frontend apiClient -> real proxy -> faked Dialogflow CX', () => {
   });
 
   afterAll(async () => {
-    await proxy.close();
+    await backend.close();
   });
 
-  it('streams a done event end-to-end when the real apiClient calls the live proxy', async () => {
+  it('streams a done event end-to-end when the real apiClient calls the live backend', async () => {
     // No fetchImpl override anywhere in this file — real fetch, real TCP, real Express app.
-    // Only proxy.dialogflowClient (injected above) is fake.
+    // Only backend.dialogflowClient (injected above) is fake.
     const events: AgentEvent[] = [];
     await streamAnalyze(
       { script: "RILEY\nI'm not eating that broccoli.", targetCountry: 'Japan', passcode: TEST_PASSCODE },
       (e) => events.push(e),
-      { baseUrl: proxy.url },
+      { baseUrl: backend.url },
     );
 
     expect(events[0]).toMatchObject({ type: 'progress' });
@@ -48,7 +48,7 @@ describe('frontend apiClient -> real proxy -> faked Dialogflow CX', () => {
 
   it('rejects with an error event when the passcode is wrong, and never reaches the fake Dialogflow client', async () => {
     const dialogflowClient = fakeDialogflowClient([]);
-    const wrongPasscodeProxy = await startTestProxy({
+    const wrongPasscodeBackend = await startTestBackend({
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000, revealDelayMs: 0 },
       dialogflowClient,
     });
@@ -58,30 +58,30 @@ describe('frontend apiClient -> real proxy -> faked Dialogflow CX', () => {
       await streamAnalyze(
         { script: 'line one', targetCountry: 'Japan', passcode: 'wrong' },
         (e) => events.push(e),
-        { baseUrl: wrongPasscodeProxy.url },
+        { baseUrl: wrongPasscodeBackend.url },
       );
       expect(events).toEqual([{ type: 'error', message: expect.stringContaining('401') }]);
       expect(dialogflowClient.analyzeScript).not.toHaveBeenCalled();
     } finally {
-      await wrongPasscodeProxy.close();
+      await wrongPasscodeBackend.close();
     }
   });
 
-  it('surfaces a proxy-side 429 as an error event after exceeding the configured rate limit', async () => {
-    const limitedProxy = await startTestProxy({
+  it('surfaces a backend-side 429 as an error event after exceeding the configured rate limit', async () => {
+    const limitedBackend = await startTestBackend({
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1, revealDelayMs: 0 },
       dialogflowClient: fakeDialogflowClient([]),
     });
 
     try {
       const payload = { script: 'line one', targetCountry: 'Japan', passcode: TEST_PASSCODE };
-      await streamAnalyze(payload, () => {}, { baseUrl: limitedProxy.url }); // consumes the only allowed request
+      await streamAnalyze(payload, () => {}, { baseUrl: limitedBackend.url }); // consumes the only allowed request
 
       const events: AgentEvent[] = [];
-      await streamAnalyze(payload, (e) => events.push(e), { baseUrl: limitedProxy.url });
+      await streamAnalyze(payload, (e) => events.push(e), { baseUrl: limitedBackend.url });
       expect(events).toEqual([{ type: 'error', message: expect.stringContaining('429') }]);
     } finally {
-      await limitedProxy.close();
+      await limitedBackend.close();
     }
   });
 });

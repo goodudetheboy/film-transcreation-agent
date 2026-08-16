@@ -7,5 +7,5 @@ const dialogflowClient = createDialogflowClient(config);
 const app = createApp({ config, dialogflowClient });
 
 app.listen(config.port, () => {
-  console.log(`proxy listening on :${config.port}`);
+  console.log(`backend listening on :${config.port}`);
 });

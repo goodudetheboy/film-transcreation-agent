@@ -1,4 +1,4 @@
-# 0005. Proxy responsibilities: passcode, rate limit, relay — nothing more
+# 0005. Backend responsibilities: passcode, rate limit, relay — nothing more
 
 Status: Accepted
 
@@ -11,7 +11,7 @@ blowup from bots/crawlers hitting a paid Google API, not "who is this person."
 
 ## Decision
 
-The proxy does exactly four things, in order:
+The backend does exactly four things, in order:
 1. **Passcode check** — a shared secret (JSON body field, not a header — see
    "Passcode transport" in the scaffold plan) checked server-side. Not real auth —
    just a crawler/bot filter. Anyone with the code gets in; that's fine, the code is
@@ -23,8 +23,10 @@ The proxy does exactly four things, in order:
 
 ## Consequences
 
-- No database, no sessions, no user model — the proxy stays stateless and simple.
+- No database, no sessions, no user model — the backend stays stateless and simple.
 - A GCP budget alert/cap should be set at the project level regardless (defense in
   depth, not code — see `docs/runbook.md`).
 - IAP was considered and rejected for the public demo path — it requires a
-  `gcloud`-based local proxy to reach, which locks out judges entirely.
+  `gcloud`-based local proxy to reach, which locks out judges entirely. (That's a
+  literal `gcloud` tunnel, unrelated to our own backend naming — it's Google's IAP
+  terminology.)

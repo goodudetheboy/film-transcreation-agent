@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 
-/** Not real auth — a crawler/bot filter. See docs/adr/0005-proxy-responsibilities.md. */
+/** Not real auth — a crawler/bot filter. See docs/adr/0005-backend-responsibilities.md. */
 export function passcodeMiddleware(expectedPasscode: string): RequestHandler {
   return (req, res, next) => {
     const provided = req.body?.passcode;

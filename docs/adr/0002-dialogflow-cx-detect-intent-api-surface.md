@@ -32,17 +32,17 @@ contract:
 
 ## Decision
 
-The proxy's `services/dialogflowClient.ts` wraps `@google-cloud/dialogflow-cx`'s
+The backend's `services/dialogflowClient.ts` wraps `@google-cloud/dialogflow-cx`'s
 `SessionsClient`, mirroring `test_agent.py`'s call shape exactly (new session per
 call, same parameter names, same fence-stripping logic). It returns the parsed array
 of flagged lines from a single `detectIntent` call — no streaming from Google itself.
 
 ## Consequences
 
-- The proxy must synthesize the frontend-facing progressive reveal itself, since
+- The backend must synthesize the frontend-facing progressive reveal itself, since
   Google isn't streaming to us — see 0006.
 - The exact JSON schema of a flagged line isn't confirmed from documentation, only
-  inferred from the reference script's generic `json.loads`. Treat the proxy's
+  inferred from the reference script's generic `json.loads`. Treat the backend's
   flagged-line type as provisional until we've run a real call and inspected actual
   output.
 - If the teammate's agent design changes (e.g. moves to Agent Engine later, or adds

@@ -16,7 +16,7 @@ Layer defenses instead of relying on any single one:
 - Input size cap on submitted scripts (0005).
 - **GCP budget alert/cap on the project** — set manually in the console, not code;
   the ceiling of last resort.
-- **Time-box the deployment** — spin the proxy + frontend up for the judging window,
+- **Time-box the deployment** — spin the backend + frontend up for the judging window,
   tear down after, rather than leaving it running indefinitely.
 
 See `docs/runbook.md` for the concrete checklist.

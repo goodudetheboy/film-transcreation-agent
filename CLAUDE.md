@@ -7,11 +7,11 @@ there, each with a reason and a suggested replacement.
 ## Repo map
 
 - `frontend/` — Vite + React + TS UI
-- `proxy/` — thin Express relay: passcode gate, rate limit, calls Dialogflow CX
-- `tests/integration/` — cross-boundary tests (real proxy, faked Google client)
+- `backend/` — thin Express relay: passcode gate, rate limit, calls Dialogflow CX
+- `tests/integration/` — cross-boundary tests (real backend, faked Google client)
 - `docs/` — see below
 - `test_agent.py` — teammate's reference script calling the Dialogflow CX playbook
-  directly; the proxy's `services/dialogflowClient.ts` mirrors its call shape
+  directly; the backend's `services/dialogflowClient.ts` mirrors its call shape
 
 ## Before changing anything architectural
 
@@ -41,11 +41,11 @@ left off before doing anything else.
 
 ```bash
 npm install                # once, at repo root
-npm run dev:proxy          # start the proxy
+npm run dev:backend        # start the backend
 npm run dev:frontend       # start the Vite dev server
 npm test                   # all three suites
 npm run test:frontend      # frontend unit/component tests
-npm run test:proxy         # proxy unit tests
+npm run test:backend       # backend unit tests
 npm run test:integration   # cross-boundary tests
 ```
 
@@ -55,8 +55,8 @@ Requires Google Cloud ADC configured locally:
 
 ## Testing constraint — do not simplify this away
 
-Integration tests (`tests/integration/`) must exercise a **really-running proxy
+Integration tests (`tests/integration/`) must exercise a **really-running backend
 server** via the frontend's real `apiClient` — no mocking that hop, ever. Only the
 Dialogflow CX call may be faked, via injecting a fake client into `createApp(deps)`.
 If a future change makes this constraint inconvenient, that's a signal to fix the
-design, not to quietly mock the frontend→proxy hop.
+design, not to quietly mock the frontend→backend hop.

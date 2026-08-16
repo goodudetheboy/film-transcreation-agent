@@ -1,4 +1,4 @@
-# 0004. Thin proxy deploys to Cloud Run, in the same GCP project as the agent
+# 0004. Thin backend deploys to Cloud Run, in the same GCP project as the agent
 
 Status: Accepted
 
@@ -13,15 +13,15 @@ third-party platform instead of zero credential material anywhere.
 
 ## Decision
 
-The proxy is a small Express service deployed to **Cloud Run**, in the same GCP
+The backend is a small Express service deployed to **Cloud Run**, in the same GCP
 project (`silent-scholar-505618-u6`) as the Dialogflow CX agent — so it gets ADC via
 an attached service account for free, with no key file to generate or leak.
 
 ## Consequences
 
-- Frontend hosting (Vercel/Firebase, see 0007) is a fully separate concern from proxy
-  hosting — the two don't have to live on the same platform, and shouldn't.
+- Frontend hosting (Vercel/Firebase, see 0007) is a fully separate concern from
+  backend hosting — the two don't have to live on the same platform, and shouldn't.
 - Local dev requires the developer's own ADC (0003), not a copy of the Cloud Run
   service account's credentials.
-- Deploying the proxy is out of scope for the initial scaffold — this ADR records the
-  target, not a working Cloud Run deploy yet.
+- Deploying the backend is out of scope for the initial scaffold — this ADR records
+  the target, not a working Cloud Run deploy yet.

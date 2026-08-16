@@ -19,7 +19,7 @@ via its `ReadableStream` body reader and parsing SSE-formatted frames manually.
 - **Also makes the parser testable under plain Node/Vitest** — native `fetch` exists
   in Node 20+, so `apiClient.test.ts` can feed it a canned `ReadableStream` with no
   browser/jsdom required, and the integration layer can call the real parser against
-  a real running proxy from a Node test process.
+  a real running backend from a Node test process.
 - We own the SSE frame-parsing logic (reassembling frames split across chunk reads,
   etc.) instead of getting it for free from the browser — covered by dedicated parser
   tests.

@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "proxy",
+    "backend",
     "tests/integration"
   ],
   "engines": {
@@ -11,10 +11,10 @@
   },
   "scripts": {
     "dev:frontend": "npm run dev -w frontend",
-    "dev:proxy": "npm run dev -w proxy",
+    "dev:backend": "npm run dev -w backend",
     "test:frontend": "npm run test -w frontend",
-    "test:proxy": "npm run test -w proxy",
+    "test:backend": "npm run test -w backend",
     "test:integration": "npm run test -w tests/integration",
-    "test": "npm run test:frontend && npm run test:proxy && npm run test:integration"
+    "test": "npm run test:frontend && npm run test:backend && npm run test:integration"
   }
 }

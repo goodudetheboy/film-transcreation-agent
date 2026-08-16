@@ -78,7 +78,7 @@ describe('streamAnalyze', () => {
     expect(events).toEqual([{ type: 'done', summary: { totalFlagged: 0 } }]);
   });
 
-  it('surfaces a non-200 proxy response as an error-shaped event', async () => {
+  it('surfaces a non-200 backend response as an error-shaped event', async () => {
     const fetchImpl = fakeFetch(401, null);
     const events: AgentEvent[] = [];
     await streamAnalyze(

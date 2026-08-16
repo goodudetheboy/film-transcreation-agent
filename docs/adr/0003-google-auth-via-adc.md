@@ -19,13 +19,13 @@ Google credentials are only ever resolved server-side, via ADC:
   no key material anywhere.
 
 The browser never holds, sees, or transmits Google credentials. It only ever talks to
-our own proxy (see 0004).
+our own backend (see 0004).
 
 ## Consequences
 
-- Whoever runs the proxy locally needs their own Google account IAM-provisioned on
+- Whoever runs the backend locally needs their own Google account IAM-provisioned on
   the `silent-scholar-505618-u6` project (or a service-account key file path set via
   `GOOGLE_APPLICATION_CREDENTIALS`, kept out of git).
 - No API key rotation/management burden — ADC handles token refresh.
 - Rules out any deployment target that can't provide ADC natively (see 0004 for why
-  that excludes Vercel for the proxy specifically).
+  that excludes Vercel for the backend specifically).
