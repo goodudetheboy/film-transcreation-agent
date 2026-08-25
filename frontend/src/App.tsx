@@ -11,6 +11,7 @@ import { ProjectDetailView } from './views/ProjectDetailView';
 import { FilmsListView } from './views/FilmsListView';
 import { NewFilmView } from './views/NewFilmView';
 import { FilmDetailView } from './views/FilmDetailView';
+import { VideoPreprocessing } from './components/VideoPreprocessing';
 import { useResultsStore } from './store/resultsStore';
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
@@ -46,6 +47,9 @@ function App() {
           <NavLink to="/films" className={navLinkClass}>
             Films
           </NavLink>
+          <NavLink to="/gestures" className={navLinkClass}>
+            Video Preprocessing
+          </NavLink>
         </nav>
         <HeaderSettings testMode={testMode} onTestModeChange={setTestMode} />
       </header>
@@ -61,6 +65,7 @@ function App() {
           <Route path="/films" element={<FilmsListView passcode={passcode} />} />
           <Route path="/films/new" element={<NewFilmView passcode={passcode} />} />
           <Route path="/films/:id" element={<FilmDetailView passcode={passcode} />} />
+          <Route path="/gestures" element={<VideoPreprocessing passcode={passcode} testMode={testMode} />} />
         </Routes>
       </main>
     </>

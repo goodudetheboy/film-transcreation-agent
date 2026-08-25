@@ -5,6 +5,7 @@ import { analyzeRoute } from './routes/analyze.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { filmsRoute } from './routes/films.js';
+import { preprocessVideoRoute } from './routes/preprocessVideo.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
@@ -16,6 +17,8 @@ import { createProjectStore, type ProjectStore } from './services/projectStore.j
 import { createFilmStore, type FilmStore } from './services/filmStore.js';
 import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
 import { INSIDE_OUT_DETAILS } from './fixtures/insideOutDetails.js';
+import type { CaptioningClient } from './services/captioningClient.js';
+import { createMockCaptioningClient } from './services/mockCaptioningClient.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
@@ -25,6 +28,8 @@ export interface AppDeps {
   mockResearchAgent?: ResearchAgent;
   projectStore?: ProjectStore;
   filmStore?: FilmStore;
+  captioningClient?: CaptioningClient;
+  mockCaptioningClient?: CaptioningClient;
 }
 
 const notConfiguredClient: DialogflowClient = {
@@ -36,6 +41,12 @@ const notConfiguredClient: DialogflowClient = {
 const notConfiguredResearchAgent: ResearchAgent = {
   async researchBatch() {
     throw new Error('researchAgent not provided to createApp()');
+  },
+};
+
+const notConfiguredCaptioningClient: CaptioningClient = {
+  async preprocessVideo() {
+    throw new Error('captioningClient not provided to createApp()');
   },
 };
 
@@ -55,6 +66,8 @@ export function createApp(deps: AppDeps = {}): Express {
         videoUrl: 'https://example.com/videos/inside-out-mock.mp4',
       },
     ]);
+  const captioningClient = deps.captioningClient ?? notConfiguredCaptioningClient;
+  const mockCaptioningClient = deps.mockCaptioningClient ?? createMockCaptioningClient();
 
   const app = express();
   app.use(cors());
@@ -92,6 +105,7 @@ export function createApp(deps: AppDeps = {}): Express {
       defaultRubrics: DEFAULT_RUBRICS,
     }),
   );
+  guarded.use(preprocessVideoRoute({ captioningClient, mockCaptioningClient }));
   app.use(guarded);
 
   return app;

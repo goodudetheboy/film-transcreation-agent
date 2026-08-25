@@ -1,4 +1,4 @@
-import type { AgentEvent } from './apiClient.types';
+import type { AgentEvent, GestureLog } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
 
 export interface StreamAnalyzePayload {
@@ -93,4 +93,37 @@ export async function verifyPasscode(
 
   const detail = await describeError(res);
   return { ok: false, message: detail || `request failed with status ${res.status}` };
+}
+
+export interface PreprocessVideoPayload {
+  videoUrl: string;
+  passcode: string;
+  /** When true (or omitted server-side), the backend returns mock data instead of calling Gemini. */
+  testMode: boolean;
+}
+
+export type PreprocessVideoResult =
+  | { ok: true; lines: GestureLog[] }
+  | { ok: false; message: string };
+
+export async function preprocessVideo(
+  payload: PreprocessVideoPayload,
+  options: ApiClientOptions = {},
+): Promise<PreprocessVideoResult> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/preprocess-video`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const detail = await describeError(res);
+    return { ok: false, message: detail || `request failed with status ${res.status}` };
+  }
+
+  const body = JSON.parse(await res.text()) as { lines: GestureLog[] };
+  return { ok: true, lines: body.lines };
 }

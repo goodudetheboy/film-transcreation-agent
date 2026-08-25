@@ -113,3 +113,12 @@ export interface Film {
   details: FilmDetail[];
   createdAt: string;
 }
+
+/** Mirrors GestureLog in backend/src/services/captioningClient.ts. */
+export interface GestureLog {
+  timecode: string;
+  gesture: string;
+  character: string;
+  narrativeLoad: string;
+  backgroundNote: string;
+}
