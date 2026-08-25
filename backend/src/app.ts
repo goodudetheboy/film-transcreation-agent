@@ -3,16 +3,24 @@ import cors from 'cors';
 import { healthRoute } from './routes/health.js';
 import { analyzeRoute } from './routes/analyze.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
+import { projectsRoute } from './routes/projects.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
 import type { DialogflowClient } from './services/dialogflowClient.js';
 import { createMockDialogflowClient } from './services/mockDialogflowClient.js';
+import type { ResearchAgent } from './services/researchAgent.js';
+import { createMockResearchAgent } from './services/mockResearchAgent.js';
+import { createProjectStore, type ProjectStore } from './services/projectStore.js';
+import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
   dialogflowClient?: DialogflowClient;
   mockDialogflowClient?: DialogflowClient;
+  researchAgent?: ResearchAgent;
+  mockResearchAgent?: ResearchAgent;
+  projectStore?: ProjectStore;
 }
 
 const notConfiguredClient: DialogflowClient = {
@@ -21,10 +29,19 @@ const notConfiguredClient: DialogflowClient = {
   },
 };
 
+const notConfiguredResearchAgent: ResearchAgent = {
+  async researchBatch() {
+    throw new Error('researchAgent not provided to createApp()');
+  },
+};
+
 export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
   const dialogflowClient = deps.dialogflowClient ?? notConfiguredClient;
   const mockDialogflowClient = deps.mockDialogflowClient ?? createMockDialogflowClient();
+  const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
+  const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
+  const projectStore = deps.projectStore ?? createProjectStore();
 
   const app = express();
   app.use(cors());
@@ -45,6 +62,14 @@ export function createApp(deps: AppDeps = {}): Express {
       mockDialogflowClient,
       maxScriptLines: config.maxScriptLines,
       revealDelayMs: config.revealDelayMs,
+    }),
+  );
+  guarded.use(
+    projectsRoute({
+      store: projectStore,
+      researchAgent,
+      mockResearchAgent,
+      defaultRubrics: DEFAULT_RUBRICS,
     }),
   );
   app.use(guarded);

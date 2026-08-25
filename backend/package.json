@@ -7,10 +7,12 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:research:manual": "tsx scripts/manual-research-test.ts"
   },
   "dependencies": {
     "@google-cloud/dialogflow-cx": "^5.3.0",
+    "@google/genai": "^2.18.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

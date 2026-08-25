@@ -18,6 +18,14 @@ for how the deploy itself works (`scripts/deploy.sh`).
       equivalent of local ADC login. Without it, real (non-test-mode) requests
       will fail in production the same way they do locally without
       `gcloud auth application-default login`.
+- [ ] Confirm the **Vertex AI API** (`aiplatform.googleapis.com`) is enabled on the
+      project — Dialogflow CX and Vertex AI are different APIs, so this may not be
+      on by default even if Dialogflow already works.
+- [ ] Grant the Cloud Run service's default compute service account the
+      **Vertex AI User** role (`roles/aiplatform.user`) — this is what lets the
+      Research agent (`docs/adr/0012`) call Gemini via `@google/genai` in
+      production. Without it, real (non-test-mode) research requests will fail the
+      same way real analyze requests do without the Dialogflow role above.
 
 ## One-time setup for GitHub Actions auto-deploy (optional)
 

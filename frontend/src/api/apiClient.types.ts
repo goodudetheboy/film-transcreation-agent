@@ -16,3 +16,67 @@ export type AgentEvent =
   | { type: 'line_flagged'; line: FlaggedLine }
   | { type: 'done'; summary: { totalFlagged: number } }
   | { type: 'error'; message: string };
+
+/**
+ * Mirrors ProjectItem/Project/researchAgent types in backend/src/services/projectStore.ts
+ * and researchAgent.ts, and ResearchStreamEvent in backend/src/routes/projects.ts. Not
+ * literally shared, same rationale as FlaggedLine/AgentEvent above.
+ */
+export interface Rubric {
+  id: string;
+  description: string;
+}
+
+export interface RubricFinding {
+  rubricId: string;
+  reasonToChange: string;
+  evidence: string;
+  sources: string[];
+  changeDirection: string;
+}
+
+export interface ResearchResult {
+  itemId: string;
+  targetCountry: string;
+  findings: RubricFinding[];
+}
+
+export interface ProjectItem {
+  id: string;
+  scriptLine: string;
+  sceneDescription: string;
+}
+
+export type BatchStatus = 'pending' | 'running' | 'done' | 'error';
+
+export interface ProjectBatch {
+  index: number;
+  itemIds: string[];
+  status: BatchStatus;
+}
+
+export type ProjectStatus = 'draft' | 'researching' | 'done' | 'error';
+
+export interface Project {
+  id: string;
+  country: string;
+  items: ProjectItem[];
+  rubrics: Rubric[];
+  status: ProjectStatus;
+  batches: ProjectBatch[];
+  results: ResearchResult[];
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export type ResearchStreamEvent =
+  | { type: 'progress'; message: string }
+  | {
+      type: 'batch_done';
+      batchIndex: number;
+      totalBatches: number;
+      itemIds: string[];
+      results: ResearchResult[];
+    }
+  | { type: 'done'; summary: { totalItems: number; totalFindings: number } }
+  | { type: 'error'; message: string };

@@ -8,6 +8,9 @@ export interface Config {
   googleCloudProject: string;
   dialogflowLocation: string;
   dialogflowAgentId: string;
+  geminiLocation: string;
+  geminiModel: string;
+  parallelApiKey?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -21,5 +24,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     googleCloudProject: env.GOOGLE_CLOUD_PROJECT ?? 'silent-scholar-505618-u6',
     dialogflowLocation: env.DIALOGFLOW_LOCATION ?? 'us-central1',
     dialogflowAgentId: env.DIALOGFLOW_AGENT_ID ?? 'f475df77-4a24-4d7e-a6ff-a3f5d039f975',
+    geminiLocation: env.GEMINI_LOCATION ?? 'us-central1',
+    geminiModel: env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+    parallelApiKey: env.PARALLEL_API_KEY,
   };
 }

@@ -30,4 +30,14 @@ describe('passcodeMiddleware', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
   });
+
+  it('accepts the passcode as a query param on a GET request with no body', async () => {
+    const app = express();
+    app.use(express.json());
+    app.use(passcodeMiddleware('secret'));
+    app.get('/protected', (_req, res) => res.status(200).json({ ok: true }));
+
+    const res = await request(app).get('/protected?passcode=secret');
+    expect(res.status).toBe(200);
+  });
 });
