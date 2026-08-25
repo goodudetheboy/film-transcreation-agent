@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getProject, streamResearch } from '../api/projectsApiClient';
 import { useProjectStore } from '../store/projectStore';
@@ -49,6 +49,11 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
     startResearch();
     await streamResearch(id, { passcode, testMode }, (event) => applyEvent(event));
   }
+
+  const rubricsById = useMemo(
+    () => Object.fromEntries((currentProject?.rubrics ?? []).map((r) => [r.id, r])),
+    [currentProject?.rubrics],
+  );
 
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
   if (!currentProject) return <p className="results-placeholder">Loading…</p>;
@@ -109,48 +114,83 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
                     <span className="result-card__value">{item.sceneDescription}</span>
                   </div>
                 </div>
-                <span className={`status-badge status-badge--${status}`}>{status}</span>
+                <div className="item-row__badges">
+                  <span className={`status-badge status-badge--${status}`}>{status}</span>
+                  {result && (
+                    <span
+                      className={`verdict-badge verdict-badge--${result.shouldTranscreate ? 'change' : 'no-change'}`}
+                    >
+                      {result.shouldTranscreate ? 'needs change' : 'fine as-is'}
+                    </span>
+                  )}
+                </div>
               </button>
 
               {isExpanded && (
                 <div className="item-findings">
                   {!result && <p className="results-placeholder">Not yet researched.</p>}
-                  {result && result.findings.length === 0 && (
-                    <p className="results-placeholder">No rubric concerns found.</p>
+
+                  {result && (
+                    <div className="verdict-block">
+                      <span
+                        className={`verdict-badge verdict-badge--${result.shouldTranscreate ? 'change' : 'no-change'}`}
+                      >
+                        {result.shouldTranscreate ? 'Needs Change' : 'Fine As-Is'}
+                      </span>
+                      <p className="verdict-block__text">{result.summary}</p>
+                    </div>
                   )}
-                  {result &&
-                    result.findings.map((f, i) => (
-                      <div className="finding-card" key={i}>
-                        <div className="result-card__row">
-                          <span className="result-card__key">Rubric</span>
-                          <span className="result-card__value">{f.rubricId}</span>
-                        </div>
-                        <div className="result-card__row">
-                          <span className="result-card__key">Reason</span>
-                          <span className="result-card__value">{f.reasonToChange}</span>
-                        </div>
-                        <div className="result-card__row">
-                          <span className="result-card__key">Evidence</span>
-                          <span className="result-card__value">{f.evidence}</span>
-                        </div>
-                        <div className="result-card__row">
-                          <span className="result-card__key">Direction</span>
-                          <span className="result-card__value">{f.changeDirection}</span>
-                        </div>
-                        {f.sources.length > 0 && (
-                          <div className="result-card__row">
-                            <span className="result-card__key">Sources</span>
-                            <span className="result-card__value source-list">
-                              {f.sources.map((s, si) => (
-                                <a key={si} href={s} target="_blank" rel="noreferrer" className="source-link">
-                                  {s}
-                                </a>
-                              ))}
-                            </span>
-                          </div>
-                        )}
+
+                  {result?.shouldTranscreate && result.suggestedReplacement && (
+                    <div className="replacement-card">
+                      <div className="result-card__row">
+                        <span className="result-card__key">Suggested</span>
+                        <span className="result-card__value">{result.suggestedReplacement.text}</span>
                       </div>
-                    ))}
+                      <div className="result-card__row">
+                        <span className="result-card__key">Why</span>
+                        <span className="result-card__value">{result.suggestedReplacement.justification}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {result &&
+                    result.scores.map((s) => {
+                      const rubric = rubricsById[s.rubricId];
+                      const tier = s.score >= 7 ? 'high' : s.score >= 4 ? 'mid' : 'low';
+                      return (
+                        <div className="finding-card" key={s.rubricId}>
+                          <div className="result-card__row">
+                            <span className="result-card__key">Rubric</span>
+                            <span className="result-card__value">{rubric?.description ?? s.rubricId}</span>
+                          </div>
+                          <div className="result-card__row">
+                            <span className="result-card__key">Score</span>
+                            <span className={`score-value score-value--${tier}`}>{s.score} / 10</span>
+                          </div>
+                          <div className="result-card__row">
+                            <span className="result-card__key">Reasoning</span>
+                            <span className="result-card__value">{s.reasoning}</span>
+                          </div>
+                          <div className="result-card__row">
+                            <span className="result-card__key">Evidence</span>
+                            <span className="result-card__value">{s.evidence}</span>
+                          </div>
+                          {s.sources.length > 0 && (
+                            <div className="result-card__row">
+                              <span className="result-card__key">Sources</span>
+                              <span className="result-card__value source-list">
+                                {s.sources.map((src, si) => (
+                                  <a key={si} href={src} target="_blank" rel="noreferrer" className="source-link">
+                                    {src}
+                                  </a>
+                                ))}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </li>

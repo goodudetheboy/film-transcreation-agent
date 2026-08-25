@@ -21,7 +21,13 @@ function itemsList(count: number) {
 
 function resultsFor(ids: string[]) {
   return JSON.stringify(
-    ids.map((id) => ({ item_id: id, target_country: 'Japan', findings: [] })),
+    ids.map((id) => ({
+      item_id: id,
+      target_country: 'Japan',
+      scores: [],
+      summary: 'no concerns',
+      should_transcreate: false,
+    })),
   );
 }
 
@@ -102,7 +108,9 @@ describe('createResearchAgent researchBatch', () => {
       rubrics: [],
     });
 
-    expect(results).toEqual([{ itemId: 'item-0', targetCountry: 'Japan', findings: [] }]);
+    expect(results).toEqual([
+      { itemId: 'item-0', targetCountry: 'Japan', scores: [], summary: 'no concerns', shouldTranscreate: false },
+    ]);
   });
 
   it('throws a clear error, including the raw text, on invalid JSON', async () => {
@@ -145,22 +153,25 @@ describe('createResearchAgent researchBatch', () => {
     expect(progress[1].itemIds).toEqual(['item-10', 'item-11', 'item-12', 'item-13', 'item-14']);
   });
 
-  it('maps snake_case finding fields to camelCase', async () => {
+  it('maps snake_case score fields to camelCase, including a suggested replacement', async () => {
     const generateContent = vi.fn(async () =>
       ({
         text: JSON.stringify([
           {
             item_id: 'item-0',
             target_country: 'Japan',
-            findings: [
+            scores: [
               {
                 rubric_id: 'food-aversion',
-                reason_to_change: 'reason',
+                score: 9,
+                reasoning: 'reason',
                 evidence: 'evidence',
                 sources: ['https://example.com'],
-                change_direction: 'direction',
               },
             ],
+            summary: 'this should change',
+            should_transcreate: true,
+            suggested_replacement: { text: 'replacement text', justification: 'because' },
           },
         ]),
       }),
@@ -173,12 +184,45 @@ describe('createResearchAgent researchBatch', () => {
       rubrics: [{ id: 'food-aversion', description: 'test' }],
     });
 
-    expect(results[0].findings[0]).toEqual({
-      rubricId: 'food-aversion',
-      reasonToChange: 'reason',
-      evidence: 'evidence',
-      sources: ['https://example.com'],
-      changeDirection: 'direction',
+    expect(results[0]).toEqual({
+      itemId: 'item-0',
+      targetCountry: 'Japan',
+      scores: [
+        {
+          rubricId: 'food-aversion',
+          score: 9,
+          reasoning: 'reason',
+          evidence: 'evidence',
+          sources: ['https://example.com'],
+        },
+      ],
+      summary: 'this should change',
+      shouldTranscreate: true,
+      suggestedReplacement: { text: 'replacement text', justification: 'because' },
     });
+  });
+
+  it('omits suggestedReplacement entirely when suggested_replacement is null', async () => {
+    const generateContent = vi.fn(async () => ({
+      text: JSON.stringify([
+        {
+          item_id: 'item-0',
+          target_country: 'Japan',
+          scores: [],
+          summary: 'fine as-is',
+          should_transcreate: false,
+          suggested_replacement: null,
+        },
+      ]),
+    }));
+    const agent = createResearchAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+
+    const results = await agent.researchBatch({
+      items: itemsList(1),
+      targetCountry: 'Japan',
+      rubrics: [],
+    });
+
+    expect(results[0]).not.toHaveProperty('suggestedReplacement');
   });
 });

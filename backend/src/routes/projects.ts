@@ -11,7 +11,7 @@ export type ResearchStreamEvent =
       itemIds: string[];
       results: ResearchResult[];
     }
-  | { type: 'done'; summary: { totalItems: number; totalFindings: number } }
+  | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
   | { type: 'error'; message: string };
 
 function writeEvent(res: Response, event: ResearchStreamEvent): void {
@@ -120,10 +120,10 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       });
 
       deps.store.updateProject(project.id, { status: 'done' });
-      const totalFindings = results.reduce((sum, r) => sum + r.findings.length, 0);
+      const totalRecommendedForChange = results.filter((r) => r.shouldTranscreate).length;
       writeEvent(res, {
         type: 'done',
-        summary: { totalItems: results.length, totalFindings },
+        summary: { totalItems: results.length, totalRecommendedForChange },
       });
     } catch (err) {
       deps.store.updateProject(project.id, {

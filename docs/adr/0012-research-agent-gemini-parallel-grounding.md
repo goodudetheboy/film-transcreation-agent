@@ -1,6 +1,6 @@
 # 0012. Research agent: TypeScript, Gemini + Parallel Web Search, batched sequential calls
 
-Status: Accepted
+Status: Superseded by 0014
 
 ## Context
 

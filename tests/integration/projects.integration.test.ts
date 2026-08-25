@@ -19,17 +19,23 @@ describe('frontend projectsApiClient -> real backend -> faked research agent', (
           {
             itemId: 'placeholder',
             targetCountry: 'Japan',
-            findings: [
+            scores: [
               {
                 rubricId: 'food-aversion',
-                reasonToChange:
+                score: 9,
+                reasoning:
                   "Broccoli reads as a disliked vegetable to American kids, but not to Japanese kids.",
                 evidence:
                   "Documented case: Pixar re-animated this exact line for Inside Out's Japanese release, swapping in green peppers.",
                 sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
-                changeDirection: 'Swap the disliked food for one Japanese kids commonly dislike.',
               },
             ],
+            summary: 'The broccoli line does not translate to Japan and should be transcreated.',
+            shouldTranscreate: true,
+            suggestedReplacement: {
+              text: 'Swap the disliked food for one Japanese kids commonly dislike.',
+              justification: 'Matches the real Pixar localization precedent for this exact scene.',
+            },
           },
         ],
       ]),
@@ -72,7 +78,10 @@ describe('frontend projectsApiClient -> real backend -> faked research agent', (
     expect(events[0]).toMatchObject({ type: 'progress' });
     const batchEvents = events.filter((e) => e.type === 'batch_done');
     expect(batchEvents).toHaveLength(1);
-    expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalItems: 1, totalFindings: 1 } });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      summary: { totalItems: 1, totalRecommendedForChange: 1 },
+    });
   });
 
   it('rejects project creation with an error when the passcode is wrong', async () => {

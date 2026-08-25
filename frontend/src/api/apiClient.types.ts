@@ -27,18 +27,31 @@ export interface Rubric {
   description: string;
 }
 
-export interface RubricFinding {
+export interface RubricScore {
   rubricId: string;
-  reasonToChange: string;
+  /** 0-10 integer. Relevance/match-strength between the item and the concern this
+   * rubric describes — NOT a "how well would this land" fit score. */
+  score: number;
+  reasoning: string;
   evidence: string;
   sources: string[];
-  changeDirection: string;
+}
+
+export interface SuggestedReplacement {
+  text: string;
+  justification: string;
 }
 
 export interface ResearchResult {
   itemId: string;
   targetCountry: string;
-  findings: RubricFinding[];
+  /** Always exactly one entry per project rubric, in rubric order — exhaustive. */
+  scores: RubricScore[];
+  /** Synthesis across all scores, not a re-listing. */
+  summary: string;
+  shouldTranscreate: boolean;
+  /** Present only when shouldTranscreate is true. */
+  suggestedReplacement?: SuggestedReplacement;
 }
 
 export interface ProjectItem {
@@ -78,7 +91,7 @@ export type ResearchStreamEvent =
       itemIds: string[];
       results: ResearchResult[];
     }
-  | { type: 'done'; summary: { totalItems: number; totalFindings: number } }
+  | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
   | { type: 'error'; message: string };
 
 /** Mirrors Film/FilmDetail in backend/src/services/filmStore.ts. Mocked "Discovery" —

@@ -31,7 +31,7 @@ describe('projectStore', () => {
   it('setCurrentProject seeds itemResults from the project\'s existing results', () => {
     const project = fakeProject({
       status: 'done',
-      results: [{ itemId: 'i1', targetCountry: 'Japan', findings: [] }],
+      results: [{ itemId: 'i1', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }],
     });
     useProjectStore.getState().setCurrentProject(project);
     const state = useProjectStore.getState();
@@ -65,7 +65,7 @@ describe('projectStore', () => {
       batchIndex: 0,
       totalBatches: 2,
       itemIds: ['i1'],
-      results: [{ itemId: 'i1', targetCountry: 'Japan', findings: [] }],
+      results: [{ itemId: 'i1', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }],
     });
     const state = useProjectStore.getState();
     expect(state.itemResults['i1']).toBeDefined();
@@ -73,7 +73,7 @@ describe('projectStore', () => {
   });
 
   it('applyEvent(done) sets researchStatus to done', () => {
-    useProjectStore.getState().applyEvent({ type: 'done', summary: { totalItems: 1, totalFindings: 0 } });
+    useProjectStore.getState().applyEvent({ type: 'done', summary: { totalItems: 1, totalRecommendedForChange: 0 } });
     expect(useProjectStore.getState().researchStatus).toBe('done');
   });
 

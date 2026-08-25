@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { createMockResearchAgent } from './mockResearchAgent.js';
 
+const RUBRICS = [
+  { id: 'food-aversion', description: 'food that reads differently abroad' },
+  { id: 'wordplay', description: 'wordplay that depends on the source language' },
+];
+
 describe('createMockResearchAgent', () => {
   it('returns one result per item, deterministic regardless of rubrics passed in', async () => {
     const agent = createMockResearchAgent();
@@ -20,7 +25,20 @@ describe('createMockResearchAgent', () => {
     expect(result.every((r) => r.targetCountry === 'Japan')).toBe(true);
   });
 
-  it('returns an empty findings array when no rubric-relevant content is present', async () => {
+  it('scores every rubric exhaustively, one entry per rubric, in order', async () => {
+    const agent = createMockResearchAgent();
+    const result = await agent.researchBatch({
+      items: [{ id: 'a', scriptLine: 'hello', sceneDescription: 'a quiet room' }],
+      targetCountry: 'Brazil',
+      rubrics: RUBRICS,
+    });
+
+    expect(result[0].scores).toHaveLength(2);
+    expect(result[0].scores.map((s) => s.rubricId)).toEqual(['food-aversion', 'wordplay']);
+    expect(result[0].shouldTranscreate).toBe(false);
+  });
+
+  it('returns empty scores and shouldTranscreate:false when no rubrics are given', async () => {
     const agent = createMockResearchAgent();
     const result = await agent.researchBatch({
       items: [{ id: 'a', scriptLine: 'hello', sceneDescription: 'a quiet room' }],
@@ -28,10 +46,12 @@ describe('createMockResearchAgent', () => {
       rubrics: [],
     });
 
-    expect(result[0].findings).toEqual([]);
+    expect(result[0].scores).toEqual([]);
+    expect(result[0].shouldTranscreate).toBe(false);
+    expect(result[0]).not.toHaveProperty('suggestedReplacement');
   });
 
-  it('detects "broccoli" in sceneDescription and returns the canned Inside Out finding', async () => {
+  it('detects "broccoli" and scores food-aversion high, recommending transcreation with a suggestion', async () => {
     const agent = createMockResearchAgent();
     const result = await agent.researchBatch({
       items: [
@@ -42,12 +62,17 @@ describe('createMockResearchAgent', () => {
         },
       ],
       targetCountry: 'Japan',
-      rubrics: [{ id: 'food-aversion', description: 'food that reads differently abroad' }],
+      rubrics: RUBRICS,
     });
 
-    expect(result[0].findings).toHaveLength(1);
-    expect(result[0].findings[0].rubricId).toBe('food-aversion');
-    expect(result[0].findings[0].sources.length).toBeGreaterThan(0);
+    const foodScore = result[0].scores.find((s) => s.rubricId === 'food-aversion');
+    const wordplayScore = result[0].scores.find((s) => s.rubricId === 'wordplay');
+    expect(foodScore?.score).toBeGreaterThanOrEqual(7);
+    expect(foodScore?.sources.length).toBeGreaterThan(0);
+    expect(wordplayScore?.score).toBeLessThan(7);
+    expect(result[0].shouldTranscreate).toBe(true);
+    expect(result[0].suggestedReplacement?.text.length).toBeGreaterThan(0);
+    expect(result[0].suggestedReplacement?.justification.length).toBeGreaterThan(0);
   });
 
   it('fires onBatchComplete per batch, same as the real agent, so callers can rely on the contract', async () => {

@@ -673,3 +673,83 @@ textarea {
   font-size: 12px;
   word-break: break-all;
 }
+
+/* ---------- Score values (per-rubric score tiering) ---------- */
+
+.score-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-value--low {
+  color: var(--success);
+}
+
+.score-value--mid {
+  color: var(--accent);
+}
+
+.score-value--high {
+  color: var(--danger);
+}
+
+/* ---------- Verdict block ---------- */
+
+.verdict-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.verdict-block__text {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+}
+
+/* ---------- Verdict badge (reused at list-row and expanded-detail scale) ---------- */
+
+.verdict-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+  width: fit-content;
+}
+
+.verdict-badge--change {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+}
+
+.verdict-badge--no-change {
+  color: var(--success);
+  border-color: var(--success-dim);
+}
+
+/* ---------- Suggested replacement ---------- */
+
+.replacement-card {
+  border: 1px solid var(--border-strong);
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------- Item row badge group ---------- */
+
+.item-row__badges {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}

@@ -123,15 +123,18 @@ describe('POST /api/projects/:id/research', () => {
     const finding: ResearchResult = {
       itemId: 'placeholder',
       targetCountry: 'Japan',
-      findings: [
+      scores: [
         {
           rubricId: 'food-aversion',
-          reasonToChange: 'reason',
+          score: 9,
+          reasoning: 'reason',
           evidence: 'evidence',
           sources: ['https://example.com'],
-          changeDirection: 'direction',
         },
       ],
+      summary: 'should change',
+      shouldTranscreate: true,
+      suggestedReplacement: { text: 'replacement', justification: 'because' },
     };
     const agent = fakeAgent([[finding], []]);
     const app = buildApp({ mockResearchAgent: agent });
@@ -146,7 +149,7 @@ describe('POST /api/projects/:id/research', () => {
     const batchEvents = events.filter((e) => e.type === 'batch_done');
     expect(batchEvents).toHaveLength(2);
     expect(batchEvents[0]).toMatchObject({ batchIndex: 0, totalBatches: 2 });
-    expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalFindings: 1 } });
+    expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalRecommendedForChange: 1 } });
 
     const fetched = await request(app).get(`/api/projects/${created.body.id}?passcode=${TEST_PASSCODE}`);
     expect(fetched.body.status).toBe('done');
@@ -163,8 +166,8 @@ describe('POST /api/projects/:id/research', () => {
   });
 
   it('defaults to the mock research agent, never touching the real one, unless testMode is explicitly false', async () => {
-    const real = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', findings: [] }]]);
-    const mock = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', findings: [] }]]);
+    const real = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }]]);
+    const mock = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }]]);
     const app = buildApp({ researchAgent: real, mockResearchAgent: mock });
     const created = await createProject(app);
 
@@ -175,8 +178,8 @@ describe('POST /api/projects/:id/research', () => {
   });
 
   it('uses the real research agent when testMode is explicitly false', async () => {
-    const real = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', findings: [] }]]);
-    const mock = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', findings: [] }]]);
+    const real = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }]]);
+    const mock = fakeAgent([[{ itemId: 'x', targetCountry: 'Japan', scores: [], summary: 'fine', shouldTranscreate: false }]]);
     const app = buildApp({ researchAgent: real, mockResearchAgent: mock });
     const created = await createProject(app);
 

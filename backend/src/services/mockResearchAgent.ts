@@ -1,38 +1,70 @@
 import { BATCH_SIZE, chunk } from './researchAgent.js';
-import type { ResearchAgent, ResearchItem, ResearchResult, RubricFinding } from './researchAgent.js';
+import type {
+  ResearchAgent,
+  ResearchItem,
+  ResearchResult,
+  RubricScore,
+  Rubric,
+} from './researchAgent.js';
 
-/** Canned food-aversion finding referencing the same documented Inside Out case used
+/** Canned food-aversion score referencing the same documented Inside Out case used
  * by mockDialogflowClient.ts, so a demo run always has something recognizable to show. */
-const BROCCOLI_FINDING: RubricFinding = {
-  rubricId: 'food-aversion',
-  reasonToChange:
-    'Broccoli reads as a disliked vegetable to American kids, but not to Japanese kids — the joke has no basis in the target market.',
-  evidence:
-    'Documented case: Pixar re-animated this exact line for Inside Out\'s Japanese release, swapping in green peppers.',
-  sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
-  changeDirection: 'Swap the disliked food for one Japanese kids commonly dislike, e.g. green peppers.',
-};
-
-function mockFindingsFor(item: ResearchItem): RubricFinding[] {
-  const haystack = `${item.scriptLine} ${item.sceneDescription}`.toLowerCase();
-  if (haystack.includes('broccoli')) {
-    return [BROCCOLI_FINDING];
+function mockScoreFor(rubric: Rubric, isBroccoli: boolean): RubricScore {
+  if (isBroccoli && rubric.id === 'food-aversion') {
+    return {
+      rubricId: 'food-aversion',
+      score: 9,
+      reasoning:
+        'Broccoli reads as a disliked vegetable to American kids, but not to Japanese kids — the joke has no basis in the target market.',
+      evidence:
+        "Documented case: Pixar re-animated this exact line for Inside Out's Japanese release, swapping in green peppers.",
+      sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
+    };
   }
-  return [];
+  return {
+    rubricId: rubric.id,
+    score: 1,
+    reasoning: `No signal for "${rubric.description}" was found in this mock item.`,
+    evidence: '(mock data — no web search performed)',
+    sources: [],
+  };
+}
+
+function mockResultFor(item: ResearchItem, targetCountry: string, rubrics: Rubric[]): ResearchResult {
+  const haystack = `${item.scriptLine} ${item.sceneDescription}`.toLowerCase();
+  const isBroccoli = haystack.includes('broccoli');
+  const scores = rubrics.map((r) => mockScoreFor(r, isBroccoli));
+  const shouldTranscreate = isBroccoli && rubrics.some((r) => r.id === 'food-aversion');
+
+  return {
+    itemId: item.id,
+    targetCountry,
+    scores,
+    summary: shouldTranscreate
+      ? "The broccoli reference scores high on food-aversion — it assumes an American kid's dislike that doesn't hold in the target market. Recommend transcreating."
+      : 'No rubric scored high enough to warrant a change for this item.',
+    shouldTranscreate,
+    ...(shouldTranscreate
+      ? {
+          suggestedReplacement: {
+            text: 'Swap the disliked food for one Japanese kids commonly dislike, e.g. green peppers.',
+            justification: 'Matches the real Pixar localization precedent for this exact scene.',
+          },
+        }
+      : {}),
+  };
 }
 
 export function createMockResearchAgent(): ResearchAgent {
   return {
-    async researchBatch({ items, targetCountry, onBatchComplete }) {
+    async researchBatch({ items, targetCountry, rubrics, onBatchComplete }) {
       const results: ResearchResult[] = [];
       const batches = chunk(items, BATCH_SIZE);
       for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
         const batch = batches[batchIndex];
-        const batchResults: ResearchResult[] = batch.map((item) => ({
-          itemId: item.id,
-          targetCountry,
-          findings: mockFindingsFor(item),
-        }));
+        const batchResults: ResearchResult[] = batch.map((item) =>
+          mockResultFor(item, targetCountry, rubrics),
+        );
         results.push(...batchResults);
         onBatchComplete?.({
           batchIndex,

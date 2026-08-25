@@ -78,19 +78,22 @@ describe('ProjectDetailView', () => {
             {
               itemId: 'i1',
               targetCountry: 'Japan',
-              findings: [
+              scores: [
                 {
                   rubricId: 'food-aversion',
-                  reasonToChange: 'reason',
+                  score: 9,
+                  reasoning: 'reason',
                   evidence: 'evidence',
                   sources: ['https://example.com'],
-                  changeDirection: 'direction',
                 },
               ],
+              summary: 'this should change',
+              shouldTranscreate: true,
+              suggestedReplacement: { text: 'replacement text', justification: 'because' },
             },
           ],
         },
-        { type: 'done', summary: { totalItems: 1, totalFindings: 1 } },
+        { type: 'done', summary: { totalItems: 1, totalRecommendedForChange: 1 } },
       ];
       for (const e of events) onEvent(e);
     });
