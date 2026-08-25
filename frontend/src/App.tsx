@@ -8,6 +8,9 @@ import { AnalyzeView } from './views/AnalyzeView';
 import { ProjectsListView } from './views/ProjectsListView';
 import { NewProjectView } from './views/NewProjectView';
 import { ProjectDetailView } from './views/ProjectDetailView';
+import { FilmsListView } from './views/FilmsListView';
+import { NewFilmView } from './views/NewFilmView';
+import { FilmDetailView } from './views/FilmDetailView';
 import { useResultsStore } from './store/resultsStore';
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
@@ -40,6 +43,9 @@ function App() {
           <NavLink to="/projects" className={navLinkClass}>
             Projects
           </NavLink>
+          <NavLink to="/films" className={navLinkClass}>
+            Films
+          </NavLink>
         </nav>
         <HeaderSettings testMode={testMode} onTestModeChange={setTestMode} />
       </header>
@@ -52,6 +58,9 @@ function App() {
             path="/projects/:id"
             element={<ProjectDetailView passcode={passcode} testMode={testMode} />}
           />
+          <Route path="/films" element={<FilmsListView passcode={passcode} />} />
+          <Route path="/films/new" element={<NewFilmView passcode={passcode} />} />
+          <Route path="/films/:id" element={<FilmDetailView passcode={passcode} />} />
         </Routes>
       </main>
     </>

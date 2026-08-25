@@ -1,39 +1,8 @@
 import type { Project, ResearchStreamEvent, Rubric } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
+import { resolveBaseUrl, describeError, throwOnError, type ApiClientOptions } from './httpHelpers';
 
-export interface ApiClientOptions {
-  baseUrl?: string;
-  fetchImpl?: typeof fetch;
-}
-
-function resolveBaseUrl(options: ApiClientOptions): string {
-  return options.baseUrl ?? (import.meta.env.VITE_BACKEND_URL as string | undefined) ?? '';
-}
-
-async function describeError(res: Response): Promise<string> {
-  let detail = '';
-  try {
-    const text = await res.text();
-    if (text) {
-      try {
-        const parsed = JSON.parse(text) as { error?: unknown };
-        detail = typeof parsed.error === 'string' ? parsed.error : text;
-      } catch {
-        detail = text;
-      }
-    }
-  } catch {
-    // response body unreadable — fall back to a status-only message
-  }
-  return detail;
-}
-
-async function throwOnError(res: Response): Promise<void> {
-  if (!res.ok) {
-    const detail = await describeError(res);
-    throw new Error(`request failed with status ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-}
+export type { ApiClientOptions };
 
 export interface CreateProjectPayload {
   passcode: string;

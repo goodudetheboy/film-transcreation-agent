@@ -80,3 +80,23 @@ export type ResearchStreamEvent =
     }
   | { type: 'done'; summary: { totalItems: number; totalFindings: number } }
   | { type: 'error'; message: string };
+
+/** Mirrors Film/FilmDetail in backend/src/services/filmStore.ts. Mocked "Discovery" —
+ * every film gets the same canned details regardless of the submitted script/video. */
+export interface FilmDetail {
+  id: string;
+  scriptLine: string;
+  sceneDescription: string;
+}
+
+export type FilmStatus = 'processing' | 'processed';
+
+export interface Film {
+  id: string;
+  title: string;
+  script: string;
+  videoUrl: string;
+  status: FilmStatus;
+  details: FilmDetail[];
+  createdAt: string;
+}

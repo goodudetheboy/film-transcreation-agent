@@ -4,6 +4,7 @@ import { healthRoute } from './routes/health.js';
 import { analyzeRoute } from './routes/analyze.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
+import { filmsRoute } from './routes/films.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
@@ -12,7 +13,9 @@ import { createMockDialogflowClient } from './services/mockDialogflowClient.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
 import { createProjectStore, type ProjectStore } from './services/projectStore.js';
+import { createFilmStore, type FilmStore } from './services/filmStore.js';
 import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
+import { INSIDE_OUT_DETAILS } from './fixtures/insideOutDetails.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
@@ -21,6 +24,7 @@ export interface AppDeps {
   researchAgent?: ResearchAgent;
   mockResearchAgent?: ResearchAgent;
   projectStore?: ProjectStore;
+  filmStore?: FilmStore;
 }
 
 const notConfiguredClient: DialogflowClient = {
@@ -42,6 +46,15 @@ export function createApp(deps: AppDeps = {}): Express {
   const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
   const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
   const projectStore = deps.projectStore ?? createProjectStore();
+  const filmStore =
+    deps.filmStore ??
+    createFilmStore(INSIDE_OUT_DETAILS, [
+      {
+        title: 'Inside Out',
+        script: '(sample script placeholder — mock data, not the real screenplay)',
+        videoUrl: 'https://example.com/videos/inside-out-mock.mp4',
+      },
+    ]);
 
   const app = express();
   app.use(cors());
@@ -69,6 +82,13 @@ export function createApp(deps: AppDeps = {}): Express {
       store: projectStore,
       researchAgent,
       mockResearchAgent,
+      defaultRubrics: DEFAULT_RUBRICS,
+    }),
+  );
+  guarded.use(
+    filmsRoute({
+      filmStore,
+      projectStore,
       defaultRubrics: DEFAULT_RUBRICS,
     }),
   );
