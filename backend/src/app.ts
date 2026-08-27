@@ -1,7 +1,6 @@
 import express, { type Express, Router } from 'express';
 import cors from 'cors';
 import { healthRoute } from './routes/health.js';
-import { analyzeRoute } from './routes/analyze.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { filmsRoute } from './routes/films.js';
@@ -9,8 +8,6 @@ import { preprocessVideoRoute } from './routes/preprocessVideo.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
-import type { DialogflowClient } from './services/dialogflowClient.js';
-import { createMockDialogflowClient } from './services/mockDialogflowClient.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
 import { createProjectStore, type ProjectStore } from './services/projectStore.js';
@@ -19,24 +16,18 @@ import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
 import { INSIDE_OUT_DETAILS } from './fixtures/insideOutDetails.js';
 import type { CaptioningClient } from './services/captioningClient.js';
 import { createMockCaptioningClient } from './services/mockCaptioningClient.js';
+import type { VideoBucketUploader } from './services/videoBucketUploader.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
-  dialogflowClient?: DialogflowClient;
-  mockDialogflowClient?: DialogflowClient;
   researchAgent?: ResearchAgent;
   mockResearchAgent?: ResearchAgent;
   projectStore?: ProjectStore;
   filmStore?: FilmStore;
   captioningClient?: CaptioningClient;
   mockCaptioningClient?: CaptioningClient;
+  videoBucketUploader?: VideoBucketUploader;
 }
-
-const notConfiguredClient: DialogflowClient = {
-  async analyzeScript() {
-    throw new Error('dialogflowClient not provided to createApp()');
-  },
-};
 
 const notConfiguredResearchAgent: ResearchAgent = {
   async researchBatch() {
@@ -50,10 +41,17 @@ const notConfiguredCaptioningClient: CaptioningClient = {
   },
 };
 
+const notConfiguredVideoBucketUploader: VideoBucketUploader = {
+  async uploadFromUrl() {
+    throw new Error('videoBucketUploader not provided to createApp()');
+  },
+  async uploadBuffer() {
+    throw new Error('videoBucketUploader not provided to createApp()');
+  },
+};
+
 export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
-  const dialogflowClient = deps.dialogflowClient ?? notConfiguredClient;
-  const mockDialogflowClient = deps.mockDialogflowClient ?? createMockDialogflowClient();
   const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
   const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
   const projectStore = deps.projectStore ?? createProjectStore();
@@ -68,6 +66,7 @@ export function createApp(deps: AppDeps = {}): Express {
     ]);
   const captioningClient = deps.captioningClient ?? notConfiguredCaptioningClient;
   const mockCaptioningClient = deps.mockCaptioningClient ?? createMockCaptioningClient();
+  const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
 
   const app = express();
   app.use(cors());
@@ -83,14 +82,6 @@ export function createApp(deps: AppDeps = {}): Express {
   guarded.use(passcodeMiddleware(config.sharedPasscode));
   guarded.use(verifyPasscodeRoute());
   guarded.use(
-    analyzeRoute({
-      dialogflowClient,
-      mockDialogflowClient,
-      maxScriptLines: config.maxScriptLines,
-      revealDelayMs: config.revealDelayMs,
-    }),
-  );
-  guarded.use(
     projectsRoute({
       store: projectStore,
       researchAgent,
@@ -103,6 +94,8 @@ export function createApp(deps: AppDeps = {}): Express {
       filmStore,
       projectStore,
       defaultRubrics: DEFAULT_RUBRICS,
+      videoBucketUploader,
+      maxVideoUploadBytes: config.maxVideoUploadBytes,
     }),
   );
   guarded.use(preprocessVideoRoute({ captioningClient, mockCaptioningClient }));

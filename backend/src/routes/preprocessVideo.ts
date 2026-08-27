@@ -11,7 +11,7 @@ export function preprocessVideoRoute(deps: PreprocessVideoRouteDeps): Router {
 
   router.post('/api/preprocess-video', async (req, res) => {
     const { videoUrl, testMode } = req.body ?? {};
-    // Same convention as /api/analyze: defaults to mock unless explicitly false.
+    // Same convention as elsewhere in this app: defaults to mock unless explicitly false.
     const useMock = testMode !== false;
     const client = useMock ? deps.mockCaptioningClient : deps.captioningClient;
 
@@ -21,8 +21,8 @@ export function preprocessVideoRoute(deps: PreprocessVideoRouteDeps): Router {
     }
 
     try {
-      const lines = await client.preprocessVideo({ videoUrl });
-      res.status(200).json({ lines });
+      const { dialogue, gestures } = await client.preprocessVideo({ videoUrl });
+      res.status(200).json({ dialogue, gestures });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'unknown error' });
     }

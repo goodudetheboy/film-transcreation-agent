@@ -19,3 +19,6 @@ venv/
 .firebase/
 firebase-debug.log
 *-key.json
+
+# Local film persistence (see docs/adr/0016) — not committed, dev-machine only
+backend/.data/

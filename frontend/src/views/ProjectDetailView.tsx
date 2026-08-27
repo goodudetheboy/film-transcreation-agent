@@ -65,7 +65,7 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
       <div className="view-header">
         <div>
           <p className="panel-label" style={{ marginBottom: 4 }}>
-            Project — {currentProject.country}
+            Project — {currentProject.name}
           </p>
           <p className="app-tagline">
             {currentProject.items.length} detail{currentProject.items.length === 1 ? '' : 's'}

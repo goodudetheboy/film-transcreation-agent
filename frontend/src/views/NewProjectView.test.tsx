@@ -17,6 +17,7 @@ vi.mock('react-router-dom', async () => {
 function fakeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'p1',
+    name: 'Japan',
     country: 'Japan',
     items: [],
     rubrics: [],

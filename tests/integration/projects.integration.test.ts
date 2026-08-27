@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createProject, streamResearch } from '../../frontend/src/api/projectsApiClient';
 import type { ResearchStreamEvent } from '../../frontend/src/api/apiClient.types';
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
-import { fakeDialogflowClient } from './helpers/fakeDialogflowClient';
 import { fakeResearchAgent } from './helpers/fakeResearchAgent';
 
 const TEST_PASSCODE = 'integration-test-passcode';
@@ -13,7 +12,6 @@ describe('frontend projectsApiClient -> real backend -> faked research agent', (
   beforeAll(async () => {
     backend = await startTestBackend({
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
-      dialogflowClient: fakeDialogflowClient([]),
       researchAgent: fakeResearchAgent([
         [
           {

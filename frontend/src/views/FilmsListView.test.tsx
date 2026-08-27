@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { FilmsListView } from './FilmsListView';
 import * as filmsApiClient from '../api/filmsApiClient';
@@ -15,6 +16,7 @@ function fakeFilm(overrides: Partial<Film> = {}): Film {
     videoUrl: 'https://example.com/io.mp4',
     status: 'processed',
     details: [{ id: 'd1', scriptLine: 'a', sceneDescription: 'b' }],
+    preprocessing: null,
     createdAt: '2026-08-25T00:00:00.000Z',
     ...overrides,
   };
@@ -23,6 +25,7 @@ function fakeFilm(overrides: Partial<Film> = {}): Film {
 describe('FilmsListView', () => {
   beforeEach(() => {
     vi.mocked(filmsApiClient.listFilms).mockReset();
+    vi.mocked(filmsApiClient.deleteFilm).mockReset();
   });
 
   it('shows a loading state, then the fetched films', async () => {
@@ -67,5 +70,38 @@ describe('FilmsListView', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByRole('link', { name: /new film/i })).toHaveAttribute('href', '/films/new');
+  });
+
+  it('deletes a film after confirming, and removes it from the list', async () => {
+    vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
+    vi.mocked(filmsApiClient.deleteFilm).mockResolvedValue(undefined);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <MemoryRouter>
+        <FilmsListView passcode="secret" />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Inside Out');
+
+    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    expect(filmsApiClient.deleteFilm).toHaveBeenCalledWith('f1', 'secret');
+    expect(await screen.findByText(/no films yet/i)).toBeInTheDocument();
+  });
+
+  it('does not delete when the confirm prompt is declined', async () => {
+    vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(
+      <MemoryRouter>
+        <FilmsListView passcode="secret" />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Inside Out');
+
+    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    expect(filmsApiClient.deleteFilm).not.toHaveBeenCalled();
+    expect(screen.getByText('Inside Out')).toBeInTheDocument();
   });
 });

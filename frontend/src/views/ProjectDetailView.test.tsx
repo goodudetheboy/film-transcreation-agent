@@ -12,6 +12,7 @@ vi.mock('../api/projectsApiClient');
 function fakeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'p1',
+    name: 'Japan',
     country: 'Japan',
     items: [{ id: 'i1', scriptLine: "I'm not eating that broccoli.", sceneDescription: 'Riley pushes a plate away' }],
     rubrics: [{ id: 'food-aversion', description: 'x' }],

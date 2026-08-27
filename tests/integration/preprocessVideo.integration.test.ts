@@ -15,15 +15,19 @@ describe('frontend apiClient -> real backend -> faked captioning client', () => 
         rateLimitWindowMs: 60_000,
         rateLimitMax: 1000,
       },
-      captioningClient: fakeCaptioningClient([
-        {
-          timecode: '00:01',
-          gesture: 'thumbs up',
-          character: 'RILEY',
-          narrativeLoad: 'load_bearing',
-          backgroundNote: '',
-        },
-      ]),
+      captioningClient: fakeCaptioningClient({
+        dialogue: [{ timecode: '00:00', character: 'RILEY', text: "You've got this." }],
+        gestures: [
+          {
+            timecode: '00:01',
+            character: 'RILEY',
+            gesture: 'thumbs up',
+            expression: '',
+            narrativeLoad: 'load_bearing',
+            backgroundNote: '',
+          },
+        ],
+      }),
     });
   });
 
@@ -31,7 +35,7 @@ describe('frontend apiClient -> real backend -> faked captioning client', () => 
     await backend.close();
   });
 
-  it('returns gesture logs end-to-end when the real apiClient calls the live backend', async () => {
+  it('returns dialogue and gesture logs end-to-end when the real apiClient calls the live backend', async () => {
     // No fetchImpl override — real fetch, real TCP, real Express app.
     // Only backend.captioningClient (injected above) is fake.
     const result = await preprocessVideo(
@@ -41,11 +45,13 @@ describe('frontend apiClient -> real backend -> faked captioning client', () => 
 
     expect(result).toEqual({
       ok: true,
-      lines: [
+      dialogue: [{ timecode: '00:00', character: 'RILEY', text: "You've got this." }],
+      gestures: [
         {
           timecode: '00:01',
-          gesture: 'thumbs up',
           character: 'RILEY',
+          gesture: 'thumbs up',
+          expression: '',
           narrativeLoad: 'load_bearing',
           backgroundNote: '',
         },
@@ -54,7 +60,7 @@ describe('frontend apiClient -> real backend -> faked captioning client', () => 
   });
 
   it('returns an error result when the passcode is wrong, and never reaches the fake captioning client', async () => {
-    const captioningClient = fakeCaptioningClient([]);
+    const captioningClient = fakeCaptioningClient();
     const wrongPasscodeBackend = await startTestBackend({
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
       captioningClient,

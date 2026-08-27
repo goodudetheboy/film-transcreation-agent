@@ -1,26 +1,8 @@
 /**
- * Mirrors AgentEvent/FlaggedLine in backend/src/routes/analyze.ts and
- * backend/src/services/dialogflowClient.ts. Not literally shared via a workspace
- * package (kept dead-simple for the hackathon scaffold, per docs/adr/0006) — if
- * this shape changes, update both sides by hand.
- */
-export interface FlaggedLine {
-  line: string;
-  reason: string;
-  suggestedReplacement: string;
-  [key: string]: unknown;
-}
-
-export type AgentEvent =
-  | { type: 'progress'; message: string }
-  | { type: 'line_flagged'; line: FlaggedLine }
-  | { type: 'done'; summary: { totalFlagged: number } }
-  | { type: 'error'; message: string };
-
-/**
  * Mirrors ProjectItem/Project/researchAgent types in backend/src/services/projectStore.ts
  * and researchAgent.ts, and ResearchStreamEvent in backend/src/routes/projects.ts. Not
- * literally shared, same rationale as FlaggedLine/AgentEvent above.
+ * literally shared via a workspace package (kept dead-simple for the hackathon
+ * scaffold, per docs/adr/0006) — if this shape changes, update both sides by hand.
  */
 export interface Rubric {
   id: string;
@@ -72,6 +54,7 @@ export type ProjectStatus = 'draft' | 'researching' | 'done' | 'error';
 
 export interface Project {
   id: string;
+  name: string;
   country: string;
   items: ProjectItem[];
   rubrics: Rubric[];
@@ -104,6 +87,11 @@ export interface FilmDetail {
 
 export type FilmStatus = 'processing' | 'processed';
 
+export interface FilmPreprocessing {
+  dialogue: DialogueLine[];
+  gestures: GestureLog[];
+}
+
 export interface Film {
   id: string;
   title: string;
@@ -111,14 +99,23 @@ export interface Film {
   videoUrl: string;
   status: FilmStatus;
   details: FilmDetail[];
+  preprocessing: FilmPreprocessing | null;
   createdAt: string;
+}
+
+/** Mirrors DialogueLine in backend/src/services/captioningClient.ts. */
+export interface DialogueLine {
+  timecode: string;
+  character: string;
+  text: string;
 }
 
 /** Mirrors GestureLog in backend/src/services/captioningClient.ts. */
 export interface GestureLog {
   timecode: string;
-  gesture: string;
   character: string;
+  gesture: string;
+  expression: string;
   narrativeLoad: string;
   backgroundNote: string;
 }

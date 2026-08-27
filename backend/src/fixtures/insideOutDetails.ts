@@ -7,10 +7,9 @@
  * well-known scenes) — not excerpts from the actual screenplay. `scriptLine` is
  * left empty for visual-only candidates, matching the schema's own convention
  * (see docs/adr/0012's prompt spec). The one exception is the broccoli line,
- * which mirrors the existing short paraphrase already used elsewhere in this
- * codebase (mockDialogflowClient.ts, mockResearchAgent.ts) for the same
- * real, widely-reported case: Pixar swapped broccoli for green peppers in the
- * Japanese release.
+ * which mirrors the same short paraphrase used in mockResearchAgent.ts for the
+ * same real, widely-reported case: Pixar swapped broccoli for green peppers in
+ * the Japanese release.
  */
 export interface FixtureDetail {
   scriptLine: string;

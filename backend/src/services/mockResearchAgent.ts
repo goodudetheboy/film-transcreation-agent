@@ -8,7 +8,7 @@ import type {
 } from './researchAgent.js';
 
 /** Canned food-aversion score referencing the same documented Inside Out case used
- * by mockDialogflowClient.ts, so a demo run always has something recognizable to show. */
+ * by insideOutDetails.ts, so a demo run always has something recognizable to show. */
 function mockScoreFor(rubric: Rubric, isBroccoli: boolean): RubricScore {
   if (isBroccoli && rubric.id === 'food-aversion') {
     return {

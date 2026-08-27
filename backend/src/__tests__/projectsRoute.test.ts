@@ -32,7 +32,6 @@ function buildApp(overrides: { researchAgent?: ResearchAgent; mockResearchAgent?
       rateLimitWindowMs: 60_000,
       rateLimitMax: 1000,
     },
-    dialogflowClient: { analyzeScript: vi.fn() },
     researchAgent: overrides.researchAgent,
     mockResearchAgent: overrides.mockResearchAgent,
   });
@@ -65,6 +64,7 @@ describe('POST /api/projects', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.id).toBeTruthy();
+    expect(res.body.name).toBe('Japan');
     expect(res.body.country).toBe('Japan');
     expect(res.body.status).toBe('draft');
     expect(res.body.items[0].id).toBeTruthy();

@@ -44,7 +44,7 @@ export function ProjectsListView({ passcode }: ProjectsListViewProps) {
           {projects.map((p) => (
             <li key={p.id} className="project-card">
               <Link to={`/projects/${p.id}`} className="project-card__link">
-                <span className="project-card__country">{p.country}</span>
+                <span className="project-card__country">{p.name}</span>
                 <span className="project-card__meta">
                   {p.items.length} detail{p.items.length === 1 ? '' : 's'}
                 </span>

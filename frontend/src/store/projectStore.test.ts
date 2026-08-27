@@ -5,6 +5,7 @@ import type { Project } from '../api/apiClient.types';
 function fakeProject(overrides: Partial<Project> = {}): Project {
   return {
     id: 'p1',
+    name: 'Japan',
     country: 'Japan',
     items: [{ id: 'i1', scriptLine: 'a', sceneDescription: 'b' }],
     rubrics: [{ id: 'food-aversion', description: 'x' }],

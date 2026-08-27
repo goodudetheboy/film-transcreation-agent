@@ -19,6 +19,7 @@ export type ProjectStatus = 'draft' | 'researching' | 'done' | 'error';
 
 export interface Project {
   id: string;
+  name: string;
   country: string;
   items: ProjectItem[];
   rubrics: Rubric[];
@@ -30,6 +31,8 @@ export interface Project {
 }
 
 export interface CreateProjectInput {
+  /** Defaults to `country` when omitted (the plain "New Project" flow doesn't have a film name to build one from). */
+  name?: string;
   country: string;
   items: Array<{ scriptLine: string; sceneDescription: string }>;
   rubrics: Rubric[];
@@ -53,6 +56,7 @@ export function createProjectStore(): ProjectStore {
     createProject(input) {
       const project: Project = {
         id: randomUUID(),
+        name: input.name ?? input.country,
         country: input.country,
         items: input.items.map((item) => ({ id: randomUUID(), ...item })),
         rubrics: input.rubrics,

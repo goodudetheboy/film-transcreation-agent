@@ -1,5 +1,5 @@
-/** Extracted from apiClient.ts's original streamAnalyze loop — the frame-reassembly
- * logic is shared verbatim by every SSE endpoint, only the response/event types differ.
+/** Shared SSE frame-reassembly logic, used by every streaming endpoint (currently just
+ * streamResearch) — only the response/event types differ per caller.
  * See docs/adr/0009 for why this is fetch+ReadableStream, not EventSource. */
 export async function parseSSEStream<TEvent extends { type: string }>(
   res: Response,

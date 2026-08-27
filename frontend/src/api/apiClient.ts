@@ -1,13 +1,4 @@
-import type { AgentEvent, GestureLog } from './apiClient.types';
-import { parseSSEStream } from './sseStream';
-
-export interface StreamAnalyzePayload {
-  script: string;
-  targetCountry: string;
-  passcode: string;
-  /** When true (or omitted server-side), the backend returns mock data instead of calling Dialogflow CX. */
-  testMode: boolean;
-}
+import type { DialogueLine, GestureLog } from './apiClient.types';
 
 export interface ApiClientOptions {
   baseUrl?: string;
@@ -35,37 +26,6 @@ async function describeError(res: Response): Promise<string> {
     // response body unreadable — fall back to a status-only message
   }
   return detail;
-}
-
-export async function streamAnalyze(
-  payload: StreamAnalyzePayload,
-  onEvent: (event: AgentEvent) => void,
-  options: ApiClientOptions = {},
-): Promise<void> {
-  const baseUrl = resolveBaseUrl(options);
-  const fetchImpl = options.fetchImpl ?? fetch;
-
-  const res = await fetchImpl(`${baseUrl}/api/analyze`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const detail = await describeError(res);
-    onEvent({
-      type: 'error',
-      message: `request failed with status ${res.status}${detail ? `: ${detail}` : ''}`,
-    });
-    return;
-  }
-
-  if (!res.body) {
-    onEvent({ type: 'error', message: `request failed with status ${res.status}` });
-    return;
-  }
-
-  await parseSSEStream<AgentEvent>(res, onEvent, (event) => event.type === 'done');
 }
 
 export interface VerifyPasscodeResult {
@@ -103,7 +63,7 @@ export interface PreprocessVideoPayload {
 }
 
 export type PreprocessVideoResult =
-  | { ok: true; lines: GestureLog[] }
+  | { ok: true; dialogue: DialogueLine[]; gestures: GestureLog[] }
   | { ok: false; message: string };
 
 export async function preprocessVideo(
@@ -124,6 +84,6 @@ export async function preprocessVideo(
     return { ok: false, message: detail || `request failed with status ${res.status}` };
   }
 
-  const body = JSON.parse(await res.text()) as { lines: GestureLog[] };
-  return { ok: true, lines: body.lines };
+  const body = JSON.parse(await res.text()) as { dialogue: DialogueLine[]; gestures: GestureLog[] };
+  return { ok: true, dialogue: body.dialogue, gestures: body.gestures };
 }

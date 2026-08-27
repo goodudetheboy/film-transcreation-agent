@@ -132,8 +132,7 @@ function buildPrompt(batch: ResearchItem[], targetCountry: string, rubrics: Rubr
   return PROMPT_TEMPLATE.replace('{{INPUT_JSON}}', JSON.stringify(payload, null, 2));
 }
 
-/** Mirrors stripJsonFences() in dialogflowClient.ts (duplicated, not imported, to keep
- * Research decoupled from Discovery). */
+/** Strips a ```json ... ``` (or bare ```) code fence Gemini sometimes wraps its JSON response in. */
 export function stripJsonFences(text: string): string {
   let t = text.trim();
   if (t.startsWith('```')) {

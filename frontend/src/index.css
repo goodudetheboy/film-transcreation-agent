@@ -224,6 +224,19 @@ textarea {
   padding-bottom: 8px;
 }
 
+.output-details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.output-details summary::-webkit-details-marker {
+  color: var(--text-dim);
+}
+
+.output-details[open] summary {
+  margin-bottom: 4px;
+}
+
 /* ---------- Form fields ---------- */
 
 .field {
@@ -260,6 +273,35 @@ textarea {
 .field textarea {
   min-height: 220px;
   resize: vertical;
+}
+
+/* ---------- Drop zone ---------- */
+
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--border-strong);
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.drop-zone--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.drop-zone--disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.drop-zone__filename {
+  color: var(--text);
 }
 
 .checkbox-field {
@@ -582,6 +624,19 @@ textarea {
   flex-direction: column;
   gap: 20px;
   max-width: 720px;
+}
+
+.app-body-inner--centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 0 auto;
+}
+
+.app-body-inner--centered .new-project-form {
+  text-align: left;
+  width: 100%;
 }
 
 .item-rows {
