@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// This app's backend talks to Firestore server-side only, via Application
+// Default Credentials (see docs/adr/0003-google-auth-via-adc.md and
+// docs/adr/0018-films-firestore-persistence.md) — there is no browser client
+// reading Firestore directly (see docs/adr/0020, which chose backend-owned SSE
+// over frontend Firestore listeners specifically to avoid needing a real
+// per-user security-rules story). Client access is denied outright so a
+// future accidental client-SDK usage fails closed instead of silently
+// exposing data.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

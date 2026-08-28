@@ -1,6 +1,7 @@
 /**
  * Mirrors ProjectItem/Project/researchAgent types in backend/src/services/projectStore.ts
- * and researchAgent.ts, and ResearchStreamEvent in backend/src/routes/projects.ts. Not
+ * and researchAgent.ts, ResearchStreamEvent in backend/src/routes/projects.ts, and
+ * Film/SubtitleEntry/DetailRow/DiscoveryJob in backend/src/services/filmTypes.ts. Not
  * literally shared via a workspace package (kept dead-simple for the hackathon
  * scaffold, per docs/adr/0006) — if this shape changes, update both sides by hand.
  */
@@ -77,45 +78,158 @@ export type ResearchStreamEvent =
   | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
   | { type: 'error'; message: string };
 
-/** Mirrors Film/FilmDetail in backend/src/services/filmStore.ts. Mocked "Discovery" —
- * every film gets the same canned details regardless of the submitted script/video. */
-export interface FilmDetail {
+// ---- Films / subtitle / details / discovery jobs (docs/adr/0018-0022) --------------
+
+export interface SubtitleEntry {
   id: string;
-  scriptLine: string;
-  sceneDescription: string;
+  index: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+}
+
+export interface FilmSubtitle {
+  fileUrl: string;
+  format: 'srt' | 'vtt';
+  entries: SubtitleEntry[];
+}
+
+export type FilmPrepStage =
+  | 'video_uploading'
+  | 'subtitle_uploading'
+  | 'discovery_running'
+  | 'finalizing'
+  | 'ready'
+  | 'error';
+
+export interface FilmPrepLogEntry {
+  ts: string;
+  message: string;
+}
+
+export interface FilmPrep {
+  stage: FilmPrepStage;
+  videoDone: boolean;
+  subtitleDone: boolean;
+  discoveryJobId: string | null;
+  discoveryDone: boolean;
+  finalizeDone: boolean;
+  log: FilmPrepLogEntry[];
+  errorMessage?: string;
 }
 
 export type FilmStatus = 'processing' | 'processed';
 
-export interface FilmPreprocessing {
-  dialogue: DialogueLine[];
-  gestures: GestureLog[];
-}
-
 export interface Film {
   id: string;
   title: string;
-  script: string;
   videoUrl: string;
+  subtitle: FilmSubtitle | null;
+  runDiscoveryOnCreate: boolean;
+  prep: FilmPrep;
   status: FilmStatus;
-  details: FilmDetail[];
-  preprocessing: FilmPreprocessing | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FilmPrepStreamEvent = { type: 'prep_update'; prep: FilmPrep };
+
+export const BUILTIN_COLUMN_KEYS = ['segmentDescription', 'gesture', 'notes'] as const;
+export type BuiltinColumnKey = (typeof BUILTIN_COLUMN_KEYS)[number];
+
+export const BUILTIN_COLUMN_LABELS: Record<BuiltinColumnKey, string> = {
+  segmentDescription: 'Segment Description',
+  gesture: 'Gesture',
+  notes: 'Notes',
+};
+
+export interface ColumnDoc {
+  id: string;
+  filmId: string;
+  name: string;
+  key: string;
   createdAt: string;
 }
 
-/** Mirrors DialogueLine in backend/src/services/captioningClient.ts. */
-export interface DialogueLine {
-  timecode: string;
-  character: string;
-  text: string;
+export type DetailRowProvenance =
+  | { type: 'user-marked' }
+  | { type: 'agent-discovered'; jobId: string; agentNumber: number; passNumber: number }
+  | { type: 'ai-assisted'; jobId: string; agentNumber: number; passNumber: number };
+
+export interface DetailRowValues {
+  segmentDescription: string;
+  gesture: string;
+  notes: string;
+  custom: Record<string, string>;
 }
 
-/** Mirrors GestureLog in backend/src/services/captioningClient.ts. */
-export interface GestureLog {
-  timecode: string;
-  character: string;
-  gesture: string;
-  expression: string;
-  narrativeLoad: string;
-  backgroundNote: string;
+export interface DetailRow {
+  id: string;
+  filmId: string;
+  subtitleEntryId: string;
+  timestamp: string;
+  subtitleText: string;
+  values: DetailRowValues;
+  provenance: DetailRowProvenance;
+  createdAt: string;
+  updatedAt: string;
 }
+
+export type DiscoveryJobStatus = 'queued' | 'running' | 'done' | 'error';
+
+export interface DiscoveryResultRowValues {
+  segmentDescription?: string;
+  gesture?: string;
+  notes?: string;
+  custom?: Record<string, string>;
+}
+
+export interface DiscoveryResultRow {
+  tempId: string;
+  subtitleEntryId: string;
+  timestamp: string;
+  subtitleText: string;
+  values: DiscoveryResultRowValues;
+}
+
+/** Full job detail, as returned by GET .../discovery-jobs/:jobId and the stream. */
+export interface DiscoveryJob {
+  id: string;
+  filmId: string;
+  agentNumber: number;
+  passNumber: number;
+  name: string | null;
+  specialInstruction: string;
+  targetColumns: string[];
+  status: DiscoveryJobStatus;
+  testMode: boolean;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  updatedAt: string;
+  log: FilmPrepLogEntry[];
+  resultRows: DiscoveryResultRow[];
+  commentHistory: Array<{ ts: string; comment: string }>;
+  errorMessage?: string;
+}
+
+/** Lightweight shape from the list endpoint — no log/resultRows/commentHistory. */
+export type DiscoveryJobSummary = Pick<
+  DiscoveryJob,
+  | 'id'
+  | 'filmId'
+  | 'agentNumber'
+  | 'passNumber'
+  | 'name'
+  | 'specialInstruction'
+  | 'targetColumns'
+  | 'status'
+  | 'testMode'
+  | 'createdAt'
+  | 'startedAt'
+  | 'finishedAt'
+  | 'updatedAt'
+  | 'errorMessage'
+>;
+
+export type DiscoveryJobStreamEvent = { type: 'job_update'; job: DiscoveryJob };

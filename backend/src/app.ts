@@ -4,18 +4,20 @@ import { healthRoute } from './routes/health.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { filmsRoute } from './routes/films.js';
-import { preprocessVideoRoute } from './routes/preprocessVideo.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
 import { createProjectStore, type ProjectStore } from './services/projectStore.js';
-import { createFilmStore, type FilmStore } from './services/filmStore.js';
+import { createInMemoryFilmStore, type FilmStore } from './services/filmStore.js';
+import { createInMemoryDetailRowsStore, type DetailRowsStore } from './services/detailRowsStore.js';
+import { createInMemoryDiscoveryJobStore, type DiscoveryJobStore } from './services/discoveryJobStore.js';
+import type { DiscoveryAgent } from './services/discoveryAgent.js';
+import { createMockDiscoveryAgent } from './services/mockDiscoveryAgent.js';
+import { createDiscoveryEventBus, type DiscoveryEventBus } from './services/discoveryEventBus.js';
+import { createFilmPrepPipeline, type FilmPrepPipeline } from './services/filmPrepPipeline.js';
 import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
-import { INSIDE_OUT_DETAILS } from './fixtures/insideOutDetails.js';
-import type { CaptioningClient } from './services/captioningClient.js';
-import { createMockCaptioningClient } from './services/mockCaptioningClient.js';
 import type { VideoBucketUploader } from './services/videoBucketUploader.js';
 
 export interface AppDeps {
@@ -24,8 +26,11 @@ export interface AppDeps {
   mockResearchAgent?: ResearchAgent;
   projectStore?: ProjectStore;
   filmStore?: FilmStore;
-  captioningClient?: CaptioningClient;
-  mockCaptioningClient?: CaptioningClient;
+  detailRowsStore?: DetailRowsStore;
+  discoveryJobStore?: DiscoveryJobStore;
+  discoveryAgent?: DiscoveryAgent;
+  mockDiscoveryAgent?: DiscoveryAgent;
+  eventBus?: DiscoveryEventBus;
   videoBucketUploader?: VideoBucketUploader;
 }
 
@@ -35,9 +40,9 @@ const notConfiguredResearchAgent: ResearchAgent = {
   },
 };
 
-const notConfiguredCaptioningClient: CaptioningClient = {
-  async preprocessVideo() {
-    throw new Error('captioningClient not provided to createApp()');
+const notConfiguredDiscoveryAgent: DiscoveryAgent = {
+  async runPass() {
+    throw new Error('discoveryAgent not provided to createApp()');
   },
 };
 
@@ -50,23 +55,33 @@ const notConfiguredVideoBucketUploader: VideoBucketUploader = {
   },
 };
 
+/**
+ * `createApp` never starts the discovery queue worker itself (see
+ * discoveryQueueWorker.ts) — that's a background polling loop with real side
+ * effects, started explicitly by server.ts, matching this app's existing
+ * convention that createApp() stays side-effect-free for tests.
+ */
 export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
   const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
   const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
   const projectStore = deps.projectStore ?? createProjectStore();
-  const filmStore =
-    deps.filmStore ??
-    createFilmStore(INSIDE_OUT_DETAILS, [
-      {
-        title: 'Inside Out',
-        script: '(sample script placeholder — mock data, not the real screenplay)',
-        videoUrl: 'https://example.com/videos/inside-out-mock.mp4',
-      },
-    ]);
-  const captioningClient = deps.captioningClient ?? notConfiguredCaptioningClient;
-  const mockCaptioningClient = deps.mockCaptioningClient ?? createMockCaptioningClient();
+  const filmStore = deps.filmStore ?? createInMemoryFilmStore();
+  const detailRowsStore = deps.detailRowsStore ?? createInMemoryDetailRowsStore();
+  const discoveryJobStore = deps.discoveryJobStore ?? createInMemoryDiscoveryJobStore();
+  const discoveryAgent = deps.discoveryAgent ?? notConfiguredDiscoveryAgent;
+  const mockDiscoveryAgent = deps.mockDiscoveryAgent ?? createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
+  const eventBus = deps.eventBus ?? createDiscoveryEventBus();
   const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
+
+  const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({
+    filmStore,
+    detailRowsStore,
+    discoveryAgent,
+    mockDiscoveryAgent,
+    eventBus,
+    mockDelayScale: config.mockDelayScale,
+  });
 
   const app = express();
   app.use(cors());
@@ -92,13 +107,19 @@ export function createApp(deps: AppDeps = {}): Express {
   guarded.use(
     filmsRoute({
       filmStore,
+      detailRowsStore,
+      discoveryJobStore,
       projectStore,
       defaultRubrics: DEFAULT_RUBRICS,
       videoBucketUploader,
       maxVideoUploadBytes: config.maxVideoUploadBytes,
+      maxSubtitleUploadBytes: config.maxSubtitleUploadBytes,
+      subtitleUploadPrefix: config.subtitleUploadPrefix,
+      eventBus,
+      filmPrepPipeline,
+      mockDelayScale: config.mockDelayScale,
     }),
   );
-  guarded.use(preprocessVideoRoute({ captioningClient, mockCaptioningClient }));
   app.use(guarded);
 
   return app;

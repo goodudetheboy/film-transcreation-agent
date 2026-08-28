@@ -7,8 +7,9 @@ import { ProjectsListView } from './views/ProjectsListView';
 import { NewProjectView } from './views/NewProjectView';
 import { ProjectDetailView } from './views/ProjectDetailView';
 import { FilmsListView } from './views/FilmsListView';
-import { NewFilmView } from './views/NewFilmView';
-import { FilmDetailView } from './views/FilmDetailView';
+import { ImportFilmModal } from './views/ImportFilmModal';
+import { FilmPreparingView } from './views/FilmPreparingView';
+import { FilmWorkspaceView } from './views/FilmWorkspaceView';
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   return `app-nav__link${isActive ? ' app-nav__link--active' : ''}`;
@@ -43,10 +44,11 @@ function App() {
       <main className="app-body">
         <Routes>
           <Route path="/" element={<FilmsListView passcode={passcode} />} />
-          <Route path="/films/new" element={<NewFilmView passcode={passcode} testMode={testMode} />} />
+          <Route path="/films/new" element={<ImportFilmModal passcode={passcode} testMode={testMode} />} />
+          <Route path="/films/:id/preparing" element={<FilmPreparingView passcode={passcode} />} />
           <Route
             path="/films/:id"
-            element={<FilmDetailView passcode={passcode} testMode={testMode} />}
+            element={<FilmWorkspaceView passcode={passcode} testMode={testMode} />}
           />
           <Route path="/projects" element={<ProjectsListView passcode={passcode} />} />
           <Route path="/projects/new" element={<NewProjectView passcode={passcode} />} />

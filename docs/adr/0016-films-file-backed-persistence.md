@@ -1,6 +1,6 @@
 # 0016. Films: file-backed local persistence, plus delete
 
-Status: Accepted
+Status: Superseded by 0018
 
 ## Context
 

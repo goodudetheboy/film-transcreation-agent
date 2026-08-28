@@ -18,23 +18,23 @@ describe('PasscodeGate', () => {
 
   it('renders an input and a submit button', () => {
     render(<PasscodeGate onUnlock={() => {}} />);
-    expect(screen.getByLabelText(/passcode/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /unlock/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument();
   });
 
   it('calls onUnlock with the entered passcode once the backend confirms it', async () => {
     vi.mocked(apiClient.verifyPasscode).mockResolvedValue({ ok: true });
     const onUnlock = vi.fn();
     render(<PasscodeGate onUnlock={onUnlock} />);
-    await userEvent.type(screen.getByLabelText(/passcode/i), 'secret');
-    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+    await userEvent.type(screen.getByLabelText(/password/i), 'secret');
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }));
     expect(onUnlock).toHaveBeenCalledWith('secret');
   });
 
   it('does not call onUnlock or the backend when the field is empty', async () => {
     const onUnlock = vi.fn();
     render(<PasscodeGate onUnlock={onUnlock} />);
-    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }));
     expect(onUnlock).not.toHaveBeenCalled();
     expect(apiClient.verifyPasscode).not.toHaveBeenCalled();
   });
@@ -46,8 +46,8 @@ describe('PasscodeGate', () => {
     });
     const onUnlock = vi.fn();
     render(<PasscodeGate onUnlock={onUnlock} />);
-    await userEvent.type(screen.getByLabelText(/passcode/i), 'wrong');
-    await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+    await userEvent.type(screen.getByLabelText(/password/i), 'wrong');
+    await userEvent.click(screen.getByRole('button', { name: /log in/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/invalid passcode/i);
     expect(onUnlock).not.toHaveBeenCalled();
   });
@@ -56,8 +56,8 @@ describe('PasscodeGate', () => {
     it('saves the passcode to localStorage after a successful manual submit', async () => {
       vi.mocked(apiClient.verifyPasscode).mockResolvedValue({ ok: true });
       render(<PasscodeGate onUnlock={() => {}} />);
-      await userEvent.type(screen.getByLabelText(/passcode/i), 'secret');
-      await userEvent.click(screen.getByRole('button', { name: /unlock/i }));
+      await userEvent.type(screen.getByLabelText(/password/i), 'secret');
+      await userEvent.click(screen.getByRole('button', { name: /log in/i }));
       expect(localStorage.getItem(PASSCODE_STORAGE_KEY)).toBe('secret');
     });
 
@@ -82,7 +82,7 @@ describe('PasscodeGate', () => {
       await waitFor(() => expect(apiClient.verifyPasscode).toHaveBeenCalledWith('stale'));
       expect(onUnlock).not.toHaveBeenCalled();
       expect(localStorage.getItem(PASSCODE_STORAGE_KEY)).toBeNull();
-      expect(screen.getByLabelText(/passcode/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     });
   });
 });

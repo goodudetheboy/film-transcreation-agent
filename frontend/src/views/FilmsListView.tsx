@@ -64,15 +64,15 @@ export function FilmsListView({ passcode }: FilmsListViewProps) {
           {films.map((f) => (
             <li key={f.id} className="content-card content-card--interactive">
               <div className="content-card__top">
-                <Link to={`/films/${f.id}`} className="content-card__link">
+                <Link to={f.prep.stage === 'ready' || f.status === 'processed' ? `/films/${f.id}` : `/films/${f.id}/preparing`} className="content-card__link">
                   <div className="content-card__body">
                     <p className="content-card__primary">{f.title}</p>
                     <p className="content-card__caption">
-                      {f.details.length} detail{f.details.length === 1 ? '' : 's'}
+                      {f.subtitle ? `${f.subtitle.entries.length} subtitle line${f.subtitle.entries.length === 1 ? '' : 's'}` : 'No subtitle'}
                     </p>
                   </div>
                   <div className="content-card__badges">
-                    <span className={`status-badge status-badge--${f.status}`}>{f.status}</span>
+                    <span className={`status-badge status-badge--${f.status === 'processed' ? 'done' : 'running'}`}>{f.status}</span>
                   </div>
                 </Link>
                 <button

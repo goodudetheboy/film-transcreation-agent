@@ -1,133 +1,169 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import type { FixtureDetail } from '../fixtures/insideOutDetails.js';
-import type { DialogueLine, GestureLog } from './captioningClient.js';
+import type { Firestore } from '@google-cloud/firestore';
+import type { CreateFilmInput, Film, FilmPrep } from './filmTypes.js';
 
-export interface FilmDetail {
-  id: string;
-  scriptLine: string;
-  sceneDescription: string;
-}
-
-export type FilmStatus = 'processing' | 'processed';
-
-export interface FilmPreprocessing {
-  dialogue: DialogueLine[];
-  gestures: GestureLog[];
-}
-
-export interface Film {
-  id: string;
-  title: string;
-  script: string;
-  videoUrl: string;
-  status: FilmStatus;
-  details: FilmDetail[];
-  preprocessing: FilmPreprocessing | null;
-  createdAt: string;
-}
-
-export interface CreateFilmInput {
-  title: string;
-  script: string;
-  videoUrl: string;
-}
+export type { Film, CreateFilmInput, FilmPrep, FilmSubtitle, FilmStatus, FilmPrepStage } from './filmTypes.js';
 
 /**
- * File-backed (see docs/adr/0016): films persist to a local JSON file across
- * restarts — no real database. "Discovery" is still entirely mocked — every film
- * gets the same canned candidate details regardless of the script/video actually
- * submitted, same "fixed content, not derived from input" convention as
- * mockResearchAgent.ts (docs/adr/0010).
+ * Firestore-backed film store (see docs/adr/0018, supersedes the file-backed
+ * approach in docs/adr/0016). A film's `detailRows`/`columns`/`discoveryJobs`
+ * live in Firestore subcollections owned by detailRowsStore.ts/
+ * discoveryJobStore.ts, not here — this store only owns the `films/{id}`
+ * document itself.
  */
 export interface FilmStore {
-  createFilm(input: CreateFilmInput): Film;
-  getFilm(id: string): Film | undefined;
-  listFilms(): Film[];
-  updatePreprocessing(id: string, preprocessing: FilmPreprocessing): Film | undefined;
-  deleteFilm(id: string): boolean;
+  createFilm(input: CreateFilmInput): Promise<Film>;
+  getFilm(id: string): Promise<Film | undefined>;
+  listFilms(): Promise<Film[]>;
+  updateFilm(id: string, patch: Partial<Omit<Film, 'id' | 'createdAt'>>): Promise<Film | undefined>;
+  deleteFilm(id: string): Promise<boolean>;
 }
 
-export function createFilmStore(
-  mockDetails: FixtureDetail[],
-  seedFilms: Array<Omit<Film, 'id' | 'createdAt' | 'details' | 'status' | 'preprocessing'>> = [],
-  persistPath?: string,
-): FilmStore {
-  const films = new Map<string, Film>();
+const FILMS_COLLECTION = 'films';
 
-  function detailsFromFixture(): FilmDetail[] {
-    return mockDetails.map((d) => ({ id: randomUUID(), ...d }));
-  }
+/**
+ * Films are created via POST /api/films only after the video and subtitle were
+ * already uploaded through their own endpoints — so by the time the film
+ * document exists, both are already done, and the pipeline (filmPrepPipeline.ts)
+ * picks up from either the discovery or finalize stage.
+ */
+function initialPrep(runDiscoveryOnCreate: boolean, now: string): FilmPrep {
+  return {
+    stage: runDiscoveryOnCreate ? 'discovery_running' : 'finalizing',
+    videoDone: true,
+    subtitleDone: true,
+    discoveryJobId: null,
+    discoveryDone: false,
+    finalizeDone: false,
+    log: [{ ts: now, message: 'Video and subtitle uploaded.' }],
+  };
+}
 
-  function persist(): void {
-    if (!persistPath) return;
-    mkdirSync(dirname(persistPath), { recursive: true });
-    writeFileSync(persistPath, JSON.stringify([...films.values()], null, 2));
-  }
+/** Only used to seed already-fully-processed films for local dev/tests. */
+function readyPrep(now: string): FilmPrep {
+  return {
+    stage: 'ready',
+    videoDone: true,
+    subtitleDone: true,
+    discoveryJobId: null,
+    discoveryDone: false,
+    finalizeDone: true,
+    log: [{ ts: now, message: 'Seeded as ready.' }],
+  };
+}
 
-  let loadedFromDisk = false;
-  if (persistPath && existsSync(persistPath)) {
-    const saved = JSON.parse(readFileSync(persistPath, 'utf-8')) as Film[];
-    for (const film of saved) {
-      films.set(film.id, film);
-    }
-    loadedFromDisk = true;
-  }
-
-  if (!loadedFromDisk) {
-    for (const seed of seedFilms) {
-      const film: Film = {
-        id: randomUUID(),
-        ...seed,
-        status: 'processed',
-        details: detailsFromFixture(),
-        preprocessing: null,
-        createdAt: new Date().toISOString(),
-      };
-      films.set(film.id, film);
-    }
-    persist();
-  }
+export function createFirestoreFilmStore(firestore: Firestore): FilmStore {
+  const collection = firestore.collection(FILMS_COLLECTION);
 
   return {
-    createFilm(input) {
+    async createFilm(input) {
+      const now = new Date().toISOString();
       const film: Film = {
         id: randomUUID(),
         title: input.title,
-        script: input.script,
         videoUrl: input.videoUrl,
-        status: 'processed',
-        details: detailsFromFixture(),
-        preprocessing: null,
-        createdAt: new Date().toISOString(),
+        subtitle: input.subtitle,
+        runDiscoveryOnCreate: input.runDiscoveryOnCreate,
+        prep: initialPrep(input.runDiscoveryOnCreate, now),
+        status: 'processing',
+        createdAt: now,
+        updatedAt: now,
       };
-      films.set(film.id, film);
-      persist();
+      await collection.doc(film.id).set(film);
       return film;
     },
 
-    getFilm(id) {
-      return films.get(id);
+    async getFilm(id) {
+      const doc = await collection.doc(id).get();
+      return doc.exists ? (doc.data() as Film) : undefined;
     },
 
-    listFilms() {
-      return [...films.values()];
+    async listFilms() {
+      const snapshot = await collection.orderBy('createdAt', 'desc').get();
+      return snapshot.docs.map((d) => d.data() as Film);
     },
 
-    updatePreprocessing(id, preprocessing) {
-      const film = films.get(id);
-      if (!film) return undefined;
-      const updated: Film = { ...film, preprocessing };
-      films.set(id, updated);
-      persist();
+    async updateFilm(id, patch) {
+      const ref = collection.doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return undefined;
+      const updated: Film = { ...(doc.data() as Film), ...patch, updatedAt: new Date().toISOString() };
+      await ref.set(updated);
       return updated;
     },
 
-    deleteFilm(id) {
-      const deleted = films.delete(id);
-      if (deleted) persist();
-      return deleted;
+    async deleteFilm(id) {
+      const ref = collection.doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return false;
+      await firestore.recursiveDelete(ref);
+      return true;
+    },
+  };
+}
+
+/**
+ * In-memory fake with the identical interface/semantics, for unit tests and
+ * anywhere a real Firestore connection isn't wanted — the only thing CLAUDE.md
+ * permits faking is exactly this kind of external Google client.
+ */
+export function createInMemoryFilmStore(seedFilms: CreateFilmInput[] = []): FilmStore {
+  const films = new Map<string, Film>();
+
+  function seed(input: CreateFilmInput): Film {
+    const now = new Date().toISOString();
+    const film: Film = {
+      id: randomUUID(),
+      title: input.title,
+      videoUrl: input.videoUrl,
+      subtitle: input.subtitle,
+      runDiscoveryOnCreate: input.runDiscoveryOnCreate,
+      prep: readyPrep(now),
+      status: 'processed',
+      createdAt: now,
+      updatedAt: now,
+    };
+    films.set(film.id, film);
+    return film;
+  }
+  for (const s of seedFilms) seed(s);
+
+  return {
+    async createFilm(input) {
+      const now = new Date().toISOString();
+      const film: Film = {
+        id: randomUUID(),
+        title: input.title,
+        videoUrl: input.videoUrl,
+        subtitle: input.subtitle,
+        runDiscoveryOnCreate: input.runDiscoveryOnCreate,
+        prep: initialPrep(input.runDiscoveryOnCreate, now),
+        status: 'processing',
+        createdAt: now,
+        updatedAt: now,
+      };
+      films.set(film.id, film);
+      return film;
+    },
+
+    async getFilm(id) {
+      return films.get(id);
+    },
+
+    async listFilms() {
+      return [...films.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    },
+
+    async updateFilm(id, patch) {
+      const film = films.get(id);
+      if (!film) return undefined;
+      const updated: Film = { ...film, ...patch, updatedAt: new Date().toISOString() };
+      films.set(id, updated);
+      return updated;
+    },
+
+    async deleteFilm(id) {
+      return films.delete(id);
     },
   };
 }

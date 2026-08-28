@@ -12,12 +12,25 @@ function fakeFilm(overrides: Partial<Film> = {}): Film {
   return {
     id: 'f1',
     title: 'Inside Out',
-    script: 'placeholder',
     videoUrl: 'https://example.com/io.mp4',
+    subtitle: {
+      fileUrl: 'https://example.com/io.srt',
+      format: 'srt',
+      entries: [{ id: 'e1', index: 0, startMs: 0, endMs: 1000, text: 'Hi' }],
+    },
+    runDiscoveryOnCreate: false,
+    prep: {
+      stage: 'ready',
+      videoDone: true,
+      subtitleDone: true,
+      discoveryJobId: null,
+      discoveryDone: false,
+      finalizeDone: true,
+      log: [],
+    },
     status: 'processed',
-    details: [{ id: 'd1', scriptLine: 'a', sceneDescription: 'b' }],
-    preprocessing: null,
     createdAt: '2026-08-25T00:00:00.000Z',
+    updatedAt: '2026-08-25T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -38,7 +51,7 @@ describe('FilmsListView', () => {
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
     expect(await screen.findByText('Inside Out')).toBeInTheDocument();
-    expect(screen.getByText('1 detail')).toBeInTheDocument();
+    expect(screen.getByText('1 subtitle line')).toBeInTheDocument();
     expect(screen.getByText('processed')).toBeInTheDocument();
   });
 

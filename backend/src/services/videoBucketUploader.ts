@@ -6,8 +6,13 @@ import { Storage } from '@google-cloud/storage';
 export interface VideoBucketUploader {
   /** Downloads an http(s) video and uploads it to the configured bucket, returning its gs:// URI. */
   uploadFromUrl(url: string): Promise<string>;
-  /** Uploads an already-in-memory video (e.g. a drag-and-dropped file) to the configured bucket. */
-  uploadBuffer(input: { buffer: Buffer; filename: string; contentType: string }): Promise<string>;
+  /**
+   * Uploads an already-in-memory file (a drag-and-dropped video, or a subtitle
+   * file) to the configured bucket. `objectPrefix` (e.g. `'subtitles/'`) scopes
+   * non-video uploads into their own "folder" of the same bucket, instead of
+   * standing up a second bucket/IAM binding just for subtitles.
+   */
+  uploadBuffer(input: { buffer: Buffer; filename: string; contentType: string; objectPrefix?: string }): Promise<string>;
 }
 
 /** Blocks loopback, private, link-local (incl. the GCP/AWS metadata address), and unspecified ranges. */
@@ -127,12 +132,12 @@ export function createVideoBucketUploader(config: {
       return `gs://${config.bucketName}/${objectName}`;
     },
 
-    async uploadBuffer({ buffer, filename, contentType }): Promise<string> {
+    async uploadBuffer({ buffer, filename, contentType, objectPrefix }): Promise<string> {
       if (buffer.byteLength > config.maxUploadBytes) {
         throw new Error(`video is too large (${buffer.byteLength} bytes, max ${config.maxUploadBytes})`);
       }
 
-      const objectName = `${randomUUID()}${guessExtension(filename)}`;
+      const objectName = `${objectPrefix ?? ''}${randomUUID()}${guessExtension(filename)}`;
       const file = bucket.file(objectName);
       try {
         await file.save(buffer, { resumable: false, contentType: contentType || 'video/mp4' });

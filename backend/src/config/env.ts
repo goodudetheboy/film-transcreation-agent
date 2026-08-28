@@ -10,6 +10,10 @@ export interface Config {
   videoClipsBucket: string;
   maxVideoUploadBytes: number;
   filmsDataFile: string;
+  firestoreLocation: string;
+  subtitleUploadPrefix: string;
+  maxSubtitleUploadBytes: number;
+  mockDelayScale: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -25,5 +29,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     videoClipsBucket: env.VIDEO_CLIPS_BUCKET ?? 'silent-scholar-505618-u6-clips',
     maxVideoUploadBytes: Number(env.MAX_VIDEO_UPLOAD_BYTES ?? 500_000_000),
     filmsDataFile: env.FILMS_DATA_FILE ?? '.data/films.json',
+    firestoreLocation: env.FIRESTORE_LOCATION ?? 'us-central1',
+    subtitleUploadPrefix: env.SUBTITLE_UPLOAD_PREFIX ?? 'subtitles/',
+    maxSubtitleUploadBytes: Number(env.MAX_SUBTITLE_UPLOAD_BYTES ?? 5_000_000),
+    mockDelayScale: Number(env.MOCK_DELAY_SCALE ?? 1),
   };
 }

@@ -55,9 +55,13 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
   return (
     <div className="passcode-gate">
       <form className="passcode-gate__card" onSubmit={handleSubmit}>
-        <p className="passcode-gate__title">Access Required</p>
+        <p className="passcode-gate__title">Login</p>
         <div className="field">
-          <label htmlFor="passcode">Passcode</label>
+          <label htmlFor="user">User</label>
+          <input id="user" type="text" value="Shared workspace" disabled />
+        </div>
+        <div className="field">
+          <label htmlFor="passcode">Password</label>
           <input
             id="passcode"
             type="password"
@@ -72,7 +76,7 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
           </p>
         )}
         <button type="submit" className="btn btn--primary" disabled={checking}>
-          {checking ? 'Checking…' : 'Unlock'}
+          {checking ? 'Checking…' : 'Log in'}
         </button>
       </form>
     </div>

@@ -1,5 +1,3 @@
-import type { DialogueLine, GestureLog } from './apiClient.types';
-
 export interface ApiClientOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
@@ -53,37 +51,4 @@ export async function verifyPasscode(
 
   const detail = await describeError(res);
   return { ok: false, message: detail || `request failed with status ${res.status}` };
-}
-
-export interface PreprocessVideoPayload {
-  videoUrl: string;
-  passcode: string;
-  /** When true (or omitted server-side), the backend returns mock data instead of calling Gemini. */
-  testMode: boolean;
-}
-
-export type PreprocessVideoResult =
-  | { ok: true; dialogue: DialogueLine[]; gestures: GestureLog[] }
-  | { ok: false; message: string };
-
-export async function preprocessVideo(
-  payload: PreprocessVideoPayload,
-  options: ApiClientOptions = {},
-): Promise<PreprocessVideoResult> {
-  const baseUrl = resolveBaseUrl(options);
-  const fetchImpl = options.fetchImpl ?? fetch;
-
-  const res = await fetchImpl(`${baseUrl}/api/preprocess-video`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const detail = await describeError(res);
-    return { ok: false, message: detail || `request failed with status ${res.status}` };
-  }
-
-  const body = JSON.parse(await res.text()) as { dialogue: DialogueLine[]; gestures: GestureLog[] };
-  return { ok: true, dialogue: body.dialogue, gestures: body.gestures };
 }
