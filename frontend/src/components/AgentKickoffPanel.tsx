@@ -14,6 +14,8 @@ export interface AgentKickoffPanelProps {
 
 const DEFAULT_COLUMNS = ['segmentDescription', 'gesture'];
 
+/** Kicking off a pass is a modal, not an inline panel — matches the
+ * wireframe's dedicated "Kick off Discover agent" dialog. */
 export function AgentKickoffPanel({ filmId, passcode, testMode, existingAgentNumbers, columns, onCreated, onClose }: AgentKickoffPanelProps) {
   const [agentChoice, setAgentChoice] = useState<string>('new');
   const [name, setName] = useState('');
@@ -55,59 +57,66 @@ export function AgentKickoffPanel({ filmId, passcode, testMode, existingAgentNum
   }
 
   return (
-    <form className="agent-panel" onSubmit={handleSubmit}>
-      <p className="section-heading">Kick off Discover agent to find new line?</p>
-
-      <div className="field">
-        <label htmlFor="agent-choice">Agent name</label>
-        <select id="agent-choice" value={agentChoice} onChange={(e) => setAgentChoice(e.target.value)}>
-          <option value="new">New agent (Agent #{existingAgentNumbers.length + 1})</option>
-          {existingAgentNumbers.map((n) => (
-            <option key={n} value={n}>
-              Agent #{n} (new pass)
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="field">
-        <label htmlFor="agent-name">Label (optional)</label>
-        <input id="agent-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
-      </div>
-
-      <div className="field">
-        <label htmlFor="special-instruction">Special instruction</label>
-        <input
-          id="special-instruction"
-          type="text"
-          placeholder="Focus on the first half, second half, …"
-          value={specialInstruction}
-          onChange={(e) => setSpecialInstruction(e.target.value)}
-        />
-      </div>
-
-      <div className="field">
-        <label>Metadata column for AI agent to add more details?</label>
-        <div className="column-checklist">
-          {allColumns.map((c) => (
-            <label key={c.key} className="checkbox-field">
-              <input type="checkbox" checked={selectedColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} />
-              {c.label}
-            </label>
-          ))}
+    <div className="modal-backdrop" onClick={() => !submitting && onClose()}>
+      <form className="modal kickoff-modal" onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()}>
+        <div className="modal__header">
+          <p className="modal__title">Kick off Discover agent to find new line?</p>
+          <button type="button" className="modal__close" onClick={onClose} disabled={submitting}>
+            ×
+          </button>
         </div>
-      </div>
 
-      {error && <p className="passcode-gate__error">{error}</p>}
+        <div className="field">
+          <label htmlFor="agent-choice">Agent name</label>
+          <select id="agent-choice" value={agentChoice} onChange={(e) => setAgentChoice(e.target.value)}>
+            <option value="new">New agent (Agent #{existingAgentNumbers.length + 1})</option>
+            {existingAgentNumbers.map((n) => (
+              <option key={n} value={n}>
+                Agent #{n} (new pass)
+              </option>
+            ))}
+          </select>
+        </div>
 
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button type="submit" className="btn btn--primary" disabled={submitting || selectedColumns.length === 0}>
-          {submitting ? 'Kicking off…' : 'Kick off agent'}
-        </button>
-        <button type="button" className="btn" onClick={onClose} disabled={submitting}>
-          Cancel
-        </button>
-      </div>
-    </form>
+        <div className="field">
+          <label htmlFor="agent-name">Label (optional)</label>
+          <input id="agent-name" type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+
+        <div className="field">
+          <label htmlFor="special-instruction">Special instruction</label>
+          <input
+            id="special-instruction"
+            type="text"
+            placeholder="Focus on the first half, second half, …"
+            value={specialInstruction}
+            onChange={(e) => setSpecialInstruction(e.target.value)}
+          />
+        </div>
+
+        <div className="field">
+          <label>Metadata column for AI agent to add more details?</label>
+          <div className="column-checklist">
+            {allColumns.map((c) => (
+              <label key={c.key} className="checkbox-field">
+                <input type="checkbox" checked={selectedColumns.includes(c.key)} onChange={() => toggleColumn(c.key)} />
+                {c.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {error && <p className="passcode-gate__error">{error}</p>}
+
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button type="submit" className="btn btn--primary" disabled={submitting || selectedColumns.length === 0}>
+            {submitting ? 'Kicking off…' : 'Kick off agent'}
+          </button>
+          <button type="button" className="btn" onClick={onClose} disabled={submitting}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

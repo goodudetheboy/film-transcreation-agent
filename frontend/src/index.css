@@ -1099,41 +1099,6 @@ textarea {
 
 /* ---------- Film workspace ---------- */
 
-.workspace-tabs {
-  display: flex;
-  gap: var(--space-tight);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: var(--space-default);
-}
-
-.workspace-tabs__tab {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-dim);
-  font-weight: 600;
-  font-size: 13px;
-  padding: 8px 4px;
-  cursor: pointer;
-  transition: var(--transition-fast);
-  transition-property: color, border-color;
-}
-
-.workspace-tabs__tab:hover {
-  color: var(--text);
-}
-
-.workspace-tabs__tab--active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-.video-controls {
-  display: flex;
-  gap: var(--space-tight);
-  margin: var(--space-snug) 0;
-}
-
 .subtitle-display {
   min-height: 20px;
   text-align: center;
@@ -1286,4 +1251,537 @@ textarea {
   max-height: 160px;
   overflow-y: auto;
   gap: 4px;
+}
+
+/* ==========================================================================
+   Prep-screen animations
+   ========================================================================== */
+
+.prep-scene {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-default);
+  padding: var(--space-loose) 0;
+}
+
+.prep-scene__svg {
+  width: 260px;
+  height: 210px;
+}
+
+.prep-scene__svg g {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---- Upload scene (video / script -> cloud) ---- */
+
+.prep-cloud {
+  fill: var(--panel-2);
+  stroke: var(--accent);
+  animation: prepCloudFloat 3s ease-in-out infinite;
+}
+
+.prep-beam {
+  stroke: var(--accent-dim);
+  stroke-dasharray: 4 5;
+  animation: prepBeamFlow 1s linear infinite;
+}
+
+.prep-upload-icon {
+  fill: var(--panel);
+  stroke: var(--accent);
+  transform-origin: 110px 140px;
+  animation: prepUploadRise 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes prepCloudFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes prepBeamFlow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes prepUploadRise {
+  0% {
+    transform: translateY(20px) scale(0.85);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  75% {
+    transform: translateY(-55px) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-65px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* ---- Discovery scene (magnifier sweeping the video) ---- */
+
+.prep-video-icon {
+  fill: var(--panel);
+  stroke: var(--text-dim);
+}
+
+.prep-magnifier {
+  stroke: var(--accent);
+  stroke-width: 4;
+  fill: rgba(59, 130, 246, 0.08);
+  transform-origin: 0 0;
+  animation: prepMagnifierSweep 2.6s ease-in-out infinite;
+}
+
+.prep-sparkle {
+  fill: var(--warning);
+  stroke: none;
+  transform-origin: 0 0;
+  animation: prepSparkleTwinkle 1.3s ease-in-out infinite;
+}
+
+@keyframes prepMagnifierSweep {
+  0% {
+    transform: translate(70px, 60px) rotate(-8deg);
+  }
+  25% {
+    transform: translate(115px, 90px) rotate(4deg);
+  }
+  50% {
+    transform: translate(150px, 65px) rotate(10deg);
+  }
+  75% {
+    transform: translate(100px, 55px) rotate(-4deg);
+  }
+  100% {
+    transform: translate(70px, 60px) rotate(-8deg);
+  }
+}
+
+@keyframes prepSparkleTwinkle {
+  0%,
+  100% {
+    transform: translate(170px, 45px) scale(0.6);
+    opacity: 0.3;
+  }
+  50% {
+    transform: translate(170px, 45px) scale(1.2);
+    opacity: 1;
+  }
+}
+
+.prep-progress-bar {
+  width: 220px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.prep-progress-bar__sweep {
+  width: 40%;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  animation: prepProgressSweep 1.4s ease-in-out infinite;
+}
+
+@keyframes prepProgressSweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+/* ---- Packing scene (finalizing) ---- */
+
+.prep-pack-video,
+.prep-pack-script {
+  fill: var(--panel);
+  stroke: var(--text-dim);
+  animation: prepPackVideo 2.4s ease-in infinite;
+}
+
+.prep-pack-script {
+  animation-name: prepPackScript;
+}
+
+@keyframes prepPackVideo {
+  0%,
+  15% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: translate(55px, 75px) scale(0.35);
+    opacity: 0;
+  }
+}
+
+@keyframes prepPackScript {
+  0%,
+  15% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  70%,
+  100% {
+    transform: translate(-55px, 75px) scale(0.35);
+    opacity: 0;
+  }
+}
+
+.prep-gift-box {
+  stroke: var(--success);
+}
+
+.prep-gift-box__body {
+  fill: var(--panel-2);
+}
+
+.prep-gift-box__lid {
+  fill: var(--success-dim);
+  transform-origin: 110px 106px;
+  animation: prepGiftLidClose 2.4s ease-in-out infinite;
+}
+
+@keyframes prepGiftLidClose {
+  0%,
+  70% {
+    transform: translateY(-14px) rotate(0deg);
+  }
+  90%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+.prep-gift-box__ribbon,
+.prep-gift-box__bow {
+  stroke: var(--success);
+}
+
+/* ---- Ready scene (gift opening, one-shot) ---- */
+
+.prep-scene--ready .prep-gift-lid-fly {
+  fill: var(--success-dim);
+  stroke: var(--success);
+  transform-origin: 110px 90px;
+  animation: prepLidFlyOff 900ms cubic-bezier(0.3, 1.4, 0.6, 1) forwards;
+}
+
+.prep-scene--ready .prep-gift-box-open {
+  fill: var(--panel-2);
+  stroke: var(--success);
+}
+
+@keyframes prepLidFlyOff {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(30px, -60px) rotate(-35deg);
+    opacity: 0;
+  }
+}
+
+.prep-scene--ready .prep-burst line {
+  stroke: var(--warning);
+  stroke-width: 3;
+  opacity: 0;
+  animation: prepBurst 700ms ease-out 250ms forwards;
+}
+
+@keyframes prepBurst {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.prep-scene--ready .prep-check {
+  stroke: var(--success);
+  stroke-width: 5;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: prepCheckDraw 500ms ease-out 500ms forwards;
+}
+
+@keyframes prepCheckDraw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ---- Step-dot indicator (replaces the plain checklist) ---- */
+
+.prep-steps {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prep-steps__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: var(--transition-base);
+  transition-property: background, transform;
+}
+
+.prep-steps__dot--done {
+  background: var(--success);
+}
+
+.prep-steps__dot--active {
+  background: var(--accent);
+  transform: scale(1.4);
+}
+
+.prep-steps__dot--error {
+  background: var(--danger);
+}
+
+.prep-stage-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: center;
+}
+
+/* ==========================================================================
+   Film workspace — split editor layout (video-editor-style panels)
+   ========================================================================== */
+
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  padding: var(--space-loose);
+  max-width: 1440px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.workspace__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-default);
+  flex-wrap: wrap;
+}
+
+.workspace__split {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(440px, 1.3fr);
+  gap: var(--space-snug);
+  min-height: 480px;
+}
+
+@media (max-width: 960px) {
+  .workspace__split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workspace__panel {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-default);
+  overflow-y: auto;
+  max-height: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+}
+
+.workspace__panel--video {
+  flex-direction: row;
+  padding: var(--space-tight);
+  background: var(--panel-2);
+  align-items: stretch;
+  gap: 4px;
+}
+
+.video-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-tight);
+  min-width: 0;
+  background: #000;
+  border-radius: var(--radius-sm);
+  padding: var(--space-tight);
+  overflow: hidden;
+}
+
+.video-stage__frame {
+  overflow: hidden;
+  transition: transform 0.2s ease;
+  transform-origin: center;
+}
+
+.video-stage .film-video {
+  width: 100%;
+  display: block;
+  border-radius: var(--radius-sm);
+  background: #000;
+  box-shadow: none;
+}
+
+.video-stage .subtitle-display {
+  color: var(--text-dim);
+}
+
+/* ---- Vertical toolbar (right edge of the video panel) ---- */
+
+.v-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-tight) 6px;
+  width: 44px;
+  flex: 0 0 auto;
+}
+
+.v-toolbar__btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.v-toolbar__btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.v-toolbar__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.v-toolbar__btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+
+.v-toolbar__btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  color: var(--accent-on);
+}
+
+.v-toolbar__divider {
+  width: 24px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.v-toolbar__zoom {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Workspace tabs (override the earlier simpler definition — tighter,
+   editor-panel styled tab strip sitting directly above the split) ---- */
+
+.workspace-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+  width: fit-content;
+}
+
+.workspace-tabs__tab {
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, background;
+}
+
+.workspace-tabs__tab:hover {
+  color: var(--text);
+}
+
+.workspace-tabs__tab--active {
+  background: var(--panel);
+  color: var(--accent);
+  box-shadow: var(--shadow-card);
+}
+
+/* ---- Timeline scrubber — full width beneath the split, dark bezel ---- */
+
+.workspace > .scrubber {
+  margin: 0;
+  height: 32px;
+  background: linear-gradient(var(--panel-2), var(--bg));
+  border-color: var(--border-strong);
+}
+
+.workspace > .scrubber .scrubber__handle {
+  height: 38px;
+  top: -3px;
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* ---- Kickoff modal sizing ---- */
+
+.kickoff-modal {
+  width: 440px;
 }

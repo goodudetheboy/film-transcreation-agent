@@ -2,12 +2,21 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getFilm, streamFilmPrep } from '../api/filmsApiClient';
 import { useFilmPrepStore } from '../store/filmPrepStore';
-import { PrepStage, type PrepStageState } from '../components/PrepStage';
-import type { Film } from '../api/apiClient.types';
+import { PrepAnimation } from '../components/PrepAnimation';
+import type { Film, FilmPrepStage } from '../api/apiClient.types';
 
 export interface FilmPreparingViewProps {
   passcode: string;
 }
+
+const STAGE_LABELS: Record<FilmPrepStage, string> = {
+  video_uploading: 'Uploading your video…',
+  subtitle_uploading: 'Uploading your script…',
+  discovery_running: 'Searching the video for details…',
+  finalizing: 'Wrapping up the last few details…',
+  ready: 'Your film is up and ready!',
+  error: 'Something went wrong.',
+};
 
 export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
   const { id } = useParams<{ id: string }>();
@@ -45,16 +54,10 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
   if (!prep) return <p className="results-placeholder">Loading…</p>;
 
-  const stageOrder = ['video_uploading', 'subtitle_uploading', 'discovery_running', 'finalizing', 'ready'];
+  const stageOrder: FilmPrepStage[] = runDiscoveryOnCreate
+    ? ['video_uploading', 'subtitle_uploading', 'discovery_running', 'finalizing', 'ready']
+    : ['video_uploading', 'subtitle_uploading', 'finalizing', 'ready'];
   const currentIndex = stageOrder.indexOf(prep.stage);
-
-  function stateFor(stage: string, done: boolean): PrepStageState {
-    if (prep!.stage === 'error') return currentIndex === -1 || stageOrder.indexOf(stage) <= 0 ? 'done' : 'pending';
-    if (done) return 'done';
-    if (stage === prep!.stage) return 'active';
-    return stageOrder.indexOf(stage) < currentIndex ? 'done' : 'pending';
-  }
-
   const isReady = prep.stage === 'ready';
   const isError = prep.stage === 'error';
 
@@ -65,22 +68,26 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
         <p className="page-header__subtitle">Hang tight — we're uploading and processing everything.</p>
       </div>
 
-      <div className="prep-stage-list">
-        <PrepStage label="Uploading your video" state={prep.videoDone ? 'done' : 'active'} />
-        <PrepStage label="Uploading your script" state={prep.subtitleDone ? 'done' : 'active'} />
-        <PrepStage
-          label="Searching the video for details"
-          state={runDiscoveryOnCreate ? stateFor('discovery_running', prep.discoveryDone) : 'skipped'}
-        />
-        <PrepStage label="Finalizing" state={stateFor('finalizing', prep.finalizeDone)} />
-        <PrepStage label="Your film is up and ready!" state={isReady ? 'done' : isError ? 'error' : 'pending'} />
-      </div>
+      <PrepAnimation stage={isError ? 'finalizing' : prep.stage} />
 
-      {isError && (
-        <p className="passcode-gate__error" role="alert">
-          {prep.errorMessage ?? 'Something went wrong while preparing this film.'}
-        </p>
-      )}
+      <p className="prep-stage-label">{isError ? prep.errorMessage ?? STAGE_LABELS.error : STAGE_LABELS[prep.stage]}</p>
+
+      <div className="prep-steps">
+        {stageOrder.map((stage, i) => (
+          <span
+            key={stage}
+            className={`prep-steps__dot${
+              isError && i === currentIndex
+                ? ' prep-steps__dot--error'
+                : i < currentIndex || isReady
+                  ? ' prep-steps__dot--done'
+                  : i === currentIndex
+                    ? ' prep-steps__dot--active'
+                    : ''
+            }`}
+          />
+        ))}
+      </div>
 
       {prep.log.length > 0 && (
         <details className="output-details">

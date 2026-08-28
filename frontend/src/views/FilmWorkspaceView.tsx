@@ -9,7 +9,7 @@ import {
 } from '../api/filmsApiClient';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
-import { VideoControls } from '../components/VideoControls';
+import { VerticalToolbar } from '../components/VerticalToolbar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber } from '../components/VideoScrubber';
 import { DetailsTable } from '../components/DetailsTable';
@@ -34,6 +34,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showKickoff, setShowKickoff] = useState(false);
@@ -138,8 +139,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const agentNumbers = [...new Set(jobs.map((j) => j.agentNumber))].sort((a, b) => a - b);
 
   return (
-    <div className="app-body-inner">
-      <div className="page-header">
+    <div className="workspace">
+      <div className="workspace__header">
         <div className="page-header__heading">
           <h1 className="page-header__title">{film.title}</h1>
         </div>
@@ -160,92 +161,107 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         </button>
       </nav>
 
-      <video
-        ref={videoRef}
-        className="film-video"
-        src={toPlayableUrl(film.videoUrl)}
-        onLoadedMetadata={(e) => setDurationMs(e.currentTarget.duration * 1000)}
-        onTimeUpdate={(e) => setCurrentTimeMs(e.currentTarget.currentTime * 1000)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-      />
-      <VideoControls playing={playing} onTogglePlay={togglePlay} onSeekRelative={handleSeekRelative} onBack={() => navigate('/')} />
-      <SubtitleDisplay entries={film.subtitle?.entries ?? []} currentTimeMs={currentTimeMs} />
+      <div className="workspace__split">
+        <div className="workspace__panel workspace__panel--left">
+          {tab === 'details' && (
+            <>
+              <p className="section-heading">Details</p>
+              <DetailsTable
+                film={film}
+                passcode={passcode}
+                rows={rows}
+                columns={columns}
+                onRowAdded={addRow}
+                onRowUpdated={updateRow}
+                onRowDeleted={removeRow}
+                onColumnAdded={addColumn}
+              />
+
+              <button type="button" className="btn btn--primary" style={{ width: 'fit-content' }} onClick={() => setShowKickoff(true)}>
+                ✨ Kick off agentic discovery
+              </button>
+
+              {rows.length > 0 && (
+                <form onSubmit={handleCreateProject} className="new-project-form" style={{ maxWidth: 480, marginTop: 20 }}>
+                  <div className="field">
+                    <label htmlFor="country">Target country</label>
+                    <input id="country" type="text" value={country} onChange={(e) => setCountry(e.target.value)} />
+                  </div>
+                  {projectError && <p className="passcode-gate__error">{projectError}</p>}
+                  <button type="submit" className="btn btn--primary" disabled={creatingProject || country.trim() === ''}>
+                    {creatingProject ? 'Creating…' : 'Create Project'}
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+
+          {tab === 'progress' && (
+            <>
+              <p className="section-heading">Agent running</p>
+              <AgentRunningList jobs={jobs} activeJobId={activeJobId} onSelect={setActiveJobId} />
+              <div style={{ marginTop: 20 }}>
+                {activeJobId ? (
+                  <AgentStatusPanel
+                    filmId={film.id}
+                    passcode={passcode}
+                    jobId={activeJobId}
+                    job={activeJob}
+                    columns={columns}
+                    onJobEvent={applyJobEvent}
+                    onRowMerged={addRow}
+                  />
+                ) : (
+                  <p className="results-placeholder">Select a pass from the list to see its status.</p>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="workspace__panel workspace__panel--video">
+          <div className="video-stage">
+            <div className="video-stage__frame" style={{ transform: `scale(${zoom})` }}>
+              <video
+                ref={videoRef}
+                className="film-video"
+                src={toPlayableUrl(film.videoUrl)}
+                onLoadedMetadata={(e) => setDurationMs(e.currentTarget.duration * 1000)}
+                onTimeUpdate={(e) => setCurrentTimeMs(e.currentTarget.currentTime * 1000)}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+              />
+            </div>
+            <SubtitleDisplay entries={film.subtitle?.entries ?? []} currentTimeMs={currentTimeMs} />
+          </div>
+          <VerticalToolbar
+            playing={playing}
+            zoom={zoom}
+            onTogglePlay={togglePlay}
+            onSeekRelative={handleSeekRelative}
+            onZoomIn={() => setZoom((z) => Math.min(2, z + 0.25))}
+            onZoomOut={() => setZoom((z) => Math.max(1, z - 0.25))}
+            onBack={() => navigate('/')}
+          />
+        </div>
+      </div>
+
       <VideoScrubber entries={film.subtitle?.entries ?? []} durationMs={durationMs} currentTimeMs={currentTimeMs} onSeek={handleSeek} />
 
-      {tab === 'details' && (
-        <>
-          <p className="section-heading" style={{ marginTop: 24 }}>
-            Details
-          </p>
-          <DetailsTable
-            film={film}
-            passcode={passcode}
-            rows={rows}
-            columns={columns}
-            onRowAdded={addRow}
-            onRowUpdated={updateRow}
-            onRowDeleted={removeRow}
-            onColumnAdded={addColumn}
-          />
-
-          {!showKickoff && (
-            <button type="button" className="btn btn--primary" style={{ width: 'fit-content' }} onClick={() => setShowKickoff(true)}>
-              ✨ Kick off agentic discovery
-            </button>
-          )}
-          {showKickoff && (
-            <AgentKickoffPanel
-              filmId={film.id}
-              passcode={passcode}
-              testMode={testMode}
-              existingAgentNumbers={agentNumbers}
-              columns={columns}
-              onCreated={(job) => {
-                applyJobEvent({ type: 'job_update', job });
-                setActiveJobId(job.id);
-              }}
-              onClose={() => setShowKickoff(false)}
-            />
-          )}
-
-          {rows.length > 0 && (
-            <form onSubmit={handleCreateProject} className="new-project-form" style={{ maxWidth: 480, marginTop: 20 }}>
-              <div className="field">
-                <label htmlFor="country">Target country</label>
-                <input id="country" type="text" value={country} onChange={(e) => setCountry(e.target.value)} />
-              </div>
-              {projectError && <p className="passcode-gate__error">{projectError}</p>}
-              <button type="submit" className="btn btn--primary" disabled={creatingProject || country.trim() === ''}>
-                {creatingProject ? 'Creating…' : 'Create Project'}
-              </button>
-            </form>
-          )}
-        </>
-      )}
-
-      {tab === 'progress' && (
-        <div className="agent-progress-grid">
-          <div>
-            <p className="section-heading">Agent running</p>
-            <AgentRunningList jobs={jobs} activeJobId={activeJobId} onSelect={setActiveJobId} />
-          </div>
-          <div>
-            {activeJobId ? (
-              <AgentStatusPanel
-                filmId={film.id}
-                passcode={passcode}
-                jobId={activeJobId}
-                job={activeJob}
-                columns={columns}
-                onJobEvent={applyJobEvent}
-                onRowMerged={addRow}
-              />
-            ) : (
-              <p className="results-placeholder">Select a pass from the list to see its status.</p>
-            )}
-          </div>
-        </div>
+      {showKickoff && (
+        <AgentKickoffPanel
+          filmId={film.id}
+          passcode={passcode}
+          testMode={testMode}
+          existingAgentNumbers={agentNumbers}
+          columns={columns}
+          onCreated={(job) => {
+            applyJobEvent({ type: 'job_update', job });
+            setActiveJobId(job.id);
+            setTab('progress');
+          }}
+          onClose={() => setShowKickoff(false)}
+        />
       )}
     </div>
   );
