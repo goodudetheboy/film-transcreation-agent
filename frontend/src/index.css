@@ -112,9 +112,10 @@ body {
 }
 
 #root {
-  min-height: 100svh;
+  height: 100svh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 button,
@@ -143,27 +144,55 @@ textarea {
   color: var(--text-faint);
 }
 
-/* ---------- App shell ---------- */
+/* ---------- App shell: cosmetic menu bar (Premiere-style chrome) ---------- */
 
-.app-header {
+.menu-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px 24px;
-  padding: 16px var(--space-loose);
+  gap: var(--space-loose);
+  flex: 0 0 auto;
+  height: 38px;
+  padding: 0 var(--space-default);
   border-bottom: 1px solid var(--border-strong);
   background: var(--panel-2);
 }
 
-.app-nav {
+.menu-bar__brand {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.menu-bar__brand::before {
+  color: var(--accent);
+}
+
+.menu-bar__menus {
   display: flex;
-  gap: var(--space-loose);
+  gap: var(--space-default);
+}
+
+.menu-bar__menu {
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: default;
+  user-select: none;
+}
+
+.menu-bar__menu:hover {
+  color: var(--text);
+}
+
+.menu-bar__nav {
+  display: flex;
+  gap: var(--space-default);
+  margin-left: auto;
 }
 
 .app-nav__link {
   padding: 4px 2px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-dim);
   text-decoration: none;
@@ -179,25 +208,6 @@ textarea {
 .app-nav__link--active {
   color: var(--text);
   border-color: var(--accent);
-}
-
-.app-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-.app-title::before {
-  content: '● ';
-  color: var(--accent);
-}
-
-.app-tagline {
-  margin: 0;
-  font-size: 12px;
-  color: var(--text-faint);
 }
 
 .modal-backdrop {
@@ -1581,14 +1591,16 @@ textarea {
    Film workspace — split editor layout (video-editor-style panels)
    ========================================================================== */
 
+/* Fullscreen, edge-to-edge — fills .app-body completely instead of reading
+   as a padded, centered "page inside a page". */
 .workspace {
   display: flex;
   flex-direction: column;
-  gap: var(--space-snug);
-  padding: var(--space-loose);
-  max-width: 1440px;
+  gap: var(--space-tight);
+  padding: var(--space-snug) var(--space-default);
   width: 100%;
-  margin: 0 auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .workspace__header {
@@ -1597,13 +1609,15 @@ textarea {
   justify-content: space-between;
   gap: var(--space-default);
   flex-wrap: wrap;
+  flex: 0 0 auto;
 }
 
 .workspace__split {
   display: grid;
-  grid-template-columns: minmax(340px, 1fr) minmax(440px, 1.3fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.3fr);
   gap: var(--space-snug);
-  min-height: 480px;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 960px) {
@@ -1619,7 +1633,6 @@ textarea {
   box-shadow: var(--shadow-card);
   padding: var(--space-default);
   overflow-y: auto;
-  max-height: 640px;
   display: flex;
   flex-direction: column;
   gap: var(--space-snug);
@@ -1784,4 +1797,102 @@ textarea {
 
 .kickoff-modal {
   width: 440px;
+}
+
+/* ==========================================================================
+   Start screen — fullscreen, split in half (import | library), not a modal
+   ========================================================================== */
+
+.start-screen {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.start-screen__half {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-roomy);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.start-screen__half--import {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-snug);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--transition-base);
+  transition-property: background;
+}
+
+.start-screen__half--import:hover {
+  background: var(--panel);
+}
+
+.start-screen__icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px dashed var(--border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 300;
+  color: var(--accent);
+  transition: var(--transition-base);
+  transition-property: border-color, transform;
+}
+
+.start-screen__half--import:hover .start-screen__icon {
+  border-color: var(--accent);
+  transform: scale(1.06);
+}
+
+.start-screen__label {
+  margin: 0;
+  font-size: var(--text-h2-size);
+  font-weight: var(--text-h2-weight);
+  color: var(--text);
+}
+
+.start-screen__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 32ch;
+}
+
+.start-screen__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  background: var(--border-strong);
+}
+
+.start-screen__half--library {
+  align-items: stretch;
+  gap: var(--space-default);
+}
+
+.start-screen__half--library .start-screen__label {
+  text-align: left;
+}
+
+.start-screen__library-list {
+  max-width: 640px;
+}
+
+@media (max-width: 760px) {
+  .start-screen {
+    flex-direction: column;
+  }
+  .start-screen__divider {
+    width: auto;
+    height: 1px;
+  }
 }
