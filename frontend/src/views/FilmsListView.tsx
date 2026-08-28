@@ -42,11 +42,16 @@ export function FilmsListView({ passcode }: FilmsListViewProps) {
 
   return (
     <div className="app-body-inner">
-      <div className="view-header">
-        <p className="panel-label">Films</p>
-        <Link to="/films/new" className="btn btn--primary">
-          New Film
-        </Link>
+      <div className="page-header">
+        <div className="page-header__heading">
+          <h1 className="page-header__title">Films</h1>
+          <p className="page-header__subtitle">Films submitted for localization triage.</p>
+        </div>
+        <div className="page-header__actions">
+          <Link to="/films/new" className="btn btn--primary">
+            New Film
+          </Link>
+        </div>
       </div>
 
       {error && <p className="passcode-gate__error">{error}</p>}
@@ -55,24 +60,30 @@ export function FilmsListView({ passcode }: FilmsListViewProps) {
         <p className="results-placeholder">No films yet — add one to get started.</p>
       )}
       {films !== null && films.length > 0 && (
-        <ul className="project-list">
+        <ul className="content-list">
           {films.map((f) => (
-            <li key={f.id} className="project-card" style={{ display: 'flex', alignItems: 'center' }}>
-              <Link to={`/films/${f.id}`} className="project-card__link" style={{ flex: 1 }}>
-                <span className="project-card__country">{f.title}</span>
-                <span className="project-card__meta">
-                  {f.details.length} detail{f.details.length === 1 ? '' : 's'}
-                </span>
-                <span className={`status-badge status-badge--${f.status}`}>{f.status}</span>
-              </Link>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => handleDelete(f)}
-                disabled={deletingId === f.id}
-              >
-                {deletingId === f.id ? 'Deleting…' : 'Delete'}
-              </button>
+            <li key={f.id} className="content-card content-card--interactive">
+              <div className="content-card__top">
+                <Link to={`/films/${f.id}`} className="content-card__link">
+                  <div className="content-card__body">
+                    <p className="content-card__primary">{f.title}</p>
+                    <p className="content-card__caption">
+                      {f.details.length} detail{f.details.length === 1 ? '' : 's'}
+                    </p>
+                  </div>
+                  <div className="content-card__badges">
+                    <span className={`status-badge status-badge--${f.status}`}>{f.status}</span>
+                  </div>
+                </Link>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => handleDelete(f)}
+                  disabled={deletingId === f.id}
+                >
+                  {deletingId === f.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </li>
           ))}
         </ul>

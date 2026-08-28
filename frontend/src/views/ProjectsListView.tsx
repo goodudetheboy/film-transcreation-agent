@@ -27,11 +27,16 @@ export function ProjectsListView({ passcode }: ProjectsListViewProps) {
 
   return (
     <div className="app-body-inner">
-      <div className="view-header">
-        <p className="panel-label">Projects</p>
-        <Link to="/projects/new" className="btn btn--primary">
-          New Project
-        </Link>
+      <div className="page-header">
+        <div className="page-header__heading">
+          <h1 className="page-header__title">Projects</h1>
+          <p className="page-header__subtitle">Localization projects, one per target country.</p>
+        </div>
+        <div className="page-header__actions">
+          <Link to="/projects/new" className="btn btn--primary">
+            New Project
+          </Link>
+        </div>
       </div>
 
       {error && <p className="passcode-gate__error">{error}</p>}
@@ -40,15 +45,19 @@ export function ProjectsListView({ passcode }: ProjectsListViewProps) {
         <p className="results-placeholder">No projects yet — create one to get started.</p>
       )}
       {projects !== null && projects.length > 0 && (
-        <ul className="project-list">
+        <ul className="content-list">
           {projects.map((p) => (
-            <li key={p.id} className="project-card">
-              <Link to={`/projects/${p.id}`} className="project-card__link">
-                <span className="project-card__country">{p.name}</span>
-                <span className="project-card__meta">
-                  {p.items.length} detail{p.items.length === 1 ? '' : 's'}
-                </span>
-                <span className={`status-badge status-badge--${p.status}`}>{p.status}</span>
+            <li key={p.id} className="content-card content-card--interactive">
+              <Link to={`/projects/${p.id}`} className="content-card__link">
+                <div className="content-card__body">
+                  <p className="content-card__primary">{p.name}</p>
+                  <p className="content-card__caption">
+                    {p.items.length} detail{p.items.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="content-card__badges">
+                  <span className={`status-badge status-badge--${p.status}`}>{p.status}</span>
+                </div>
               </Link>
             </li>
           ))}

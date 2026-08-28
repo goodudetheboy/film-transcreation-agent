@@ -58,11 +58,13 @@ export function NewFilmView({ passcode, testMode }: NewFilmViewProps) {
 
   return (
     <div className="app-body-inner app-body-inner--centered">
-      <p className="panel-label">New Film</p>
-      <p className="app-tagline" style={{ marginTop: -8 }}>
-        Discovery is mocked for now — every film gets the same sample candidate details,
-        regardless of what's submitted below.
-      </p>
+      <div className="page-header__heading">
+        <h1 className="page-header__title">New Film</h1>
+        <p className="page-header__subtitle">
+          Discovery is mocked for now — every film gets the same sample candidate details,
+          regardless of what's submitted below.
+        </p>
+      </div>
       <form onSubmit={handleSubmit} className="new-project-form">
         <div className="field">
           <label htmlFor="title">Title</label>

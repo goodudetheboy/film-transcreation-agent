@@ -73,7 +73,6 @@ describe('FilmDetailView', () => {
     renderAtFilm();
 
     expect(await screen.findByText('Inside Out')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /manual/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /discover agent/i })).toBeInTheDocument();
   });
 
@@ -87,7 +86,7 @@ describe('FilmDetailView', () => {
     vi.mocked(filmsApiClient.getFilm).mockResolvedValue(fakeFilm());
     renderAtFilm('f1', true);
     await screen.findByText('Inside Out');
-    expect(screen.getByText("I'm not eating that broccoli.")).toBeInTheDocument();
+    expect(screen.getByText(/I'm not eating that broccoli\./)).toBeInTheDocument();
   });
 
   it('hides the mocked candidate details in real mode', async () => {

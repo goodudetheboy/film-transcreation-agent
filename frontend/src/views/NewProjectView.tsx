@@ -53,7 +53,9 @@ export function NewProjectView({ passcode }: NewProjectViewProps) {
 
   return (
     <div className="app-body-inner">
-      <p className="panel-label">New Project</p>
+      <div className="page-header__heading">
+        <h1 className="page-header__title">New Project</h1>
+      </div>
       <form onSubmit={handleSubmit} className="new-project-form">
         <div className="field">
           <label htmlFor="country">Target country</label>

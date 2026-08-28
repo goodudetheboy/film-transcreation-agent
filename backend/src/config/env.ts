@@ -17,7 +17,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: Number(env.PORT ?? 8787),
     sharedPasscode: env.SHARED_PASSCODE ?? 'dev-passcode',
     rateLimitWindowMs: Number(env.RATE_LIMIT_WINDOW_MS ?? 60_000),
-    rateLimitMax: Number(env.RATE_LIMIT_MAX ?? 20),
+    rateLimitMax: Number(env.RATE_LIMIT_MAX ?? 1000),
     googleCloudProject: env.GOOGLE_CLOUD_PROJECT ?? 'silent-scholar-505618-u6',
     geminiLocation: env.GEMINI_LOCATION ?? 'us-central1',
     geminiModel: env.GEMINI_MODEL ?? 'gemini-2.5-flash',

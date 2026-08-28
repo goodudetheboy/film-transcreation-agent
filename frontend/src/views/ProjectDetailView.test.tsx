@@ -46,7 +46,7 @@ describe('ProjectDetailView', () => {
     renderAtProject();
 
     expect(await screen.findByText(/project — japan/i)).toBeInTheDocument();
-    expect(screen.getByText("I'm not eating that broccoli.")).toBeInTheDocument();
+    expect(screen.getByText(/I'm not eating that broccoli./)).toBeInTheDocument();
     expect(screen.getByText('pending')).toBeInTheDocument();
   });
 
@@ -59,7 +59,7 @@ describe('ProjectDetailView', () => {
   it('expands an item to show "not yet researched" before results arrive', async () => {
     vi.mocked(projectsApiClient.getProject).mockResolvedValue(fakeProject());
     renderAtProject();
-    await screen.findByText("I'm not eating that broccoli.");
+    await screen.findByText(/I'm not eating that broccoli./);
 
     await userEvent.click(screen.getByRole('button', { expanded: false }));
     expect(screen.getByText(/not yet researched/i)).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('ProjectDetailView', () => {
     });
 
     renderAtProject();
-    await screen.findByText("I'm not eating that broccoli.");
+    await screen.findByText(/I'm not eating that broccoli./);
 
     await userEvent.click(screen.getByRole('button', { name: /start research/i }));
 

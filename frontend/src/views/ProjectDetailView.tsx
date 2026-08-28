@@ -62,23 +62,23 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
 
   return (
     <div className="app-body-inner">
-      <div className="view-header">
-        <div>
-          <p className="panel-label" style={{ marginBottom: 4 }}>
-            Project — {currentProject.name}
-          </p>
-          <p className="app-tagline">
+      <div className="page-header">
+        <div className="page-header__heading">
+          <h1 className="page-header__title">Project — {currentProject.name}</h1>
+          <p className="page-header__subtitle">
             {currentProject.items.length} detail{currentProject.items.length === 1 ? '' : 's'}
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn--primary"
-          onClick={handleStartResearch}
-          disabled={researchStatus === 'streaming'}
-        >
-          {researchStatus === 'streaming' ? 'Researching…' : 'Start Research'}
-        </button>
+        <div className="page-header__actions">
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={handleStartResearch}
+            disabled={researchStatus === 'streaming'}
+          >
+            {researchStatus === 'streaming' ? 'Researching…' : 'Start Research'}
+          </button>
+        </div>
       </div>
 
       {researchStatus === 'streaming' && (
@@ -88,33 +88,27 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
       )}
       {researchStatus === 'error' && errorMessage && <p className="passcode-gate__error">{errorMessage}</p>}
 
-      <ul className="results-list item-list">
+      <ul className="content-list">
         {currentProject.items.map((item) => {
           const result = itemResults[item.id];
           const status = result ? 'done' : 'pending';
           const isExpanded = expandedId === item.id;
 
           return (
-            <li className="result-card" key={item.id}>
+            <li className="content-card" key={item.id}>
               <button
                 type="button"
                 className="item-row__toggle"
                 onClick={() => setExpandedId(isExpanded ? null : item.id)}
                 aria-expanded={isExpanded}
               >
-                <div className="item-row__body">
-                  <div className="result-card__row result-card__row--line">
-                    <span className="result-card__key">Line</span>
-                    <span className="result-card__value">
-                      {item.scriptLine || <em>(visual only)</em>}
-                    </span>
-                  </div>
-                  <div className="result-card__row">
-                    <span className="result-card__key">Scene</span>
-                    <span className="result-card__value">{item.sceneDescription}</span>
-                  </div>
+                <div className="content-card__body">
+                  <p className="content-card__primary">
+                    {item.scriptLine ? `“${item.scriptLine}”` : <em>Visual only</em>}
+                  </p>
+                  <p className="content-card__secondary">{item.sceneDescription}</p>
                 </div>
-                <div className="item-row__badges">
+                <div className="content-card__badges">
                   <span className={`status-badge status-badge--${status}`}>{status}</span>
                   {result && (
                     <span
@@ -143,49 +137,43 @@ export function ProjectDetailView({ passcode, testMode }: ProjectDetailViewProps
 
                   {result?.shouldTranscreate && result.suggestedReplacement && (
                     <div className="replacement-card">
-                      <div className="result-card__row">
-                        <span className="result-card__key">Suggested</span>
-                        <span className="result-card__value">{result.suggestedReplacement.text}</span>
-                      </div>
-                      <div className="result-card__row">
-                        <span className="result-card__key">Why</span>
-                        <span className="result-card__value">{result.suggestedReplacement.justification}</span>
-                      </div>
+                      <p className="replacement-card__label">Suggested replacement</p>
+                      <p className="replacement-card__text">{result.suggestedReplacement.text}</p>
+                      <p className="replacement-card__why">{result.suggestedReplacement.justification}</p>
                     </div>
                   )}
 
+                  {result && result.scores.length > 0 && (
+                    <p className="hint-text">
+                      Score reflects how strongly this line matches each rubric&rsquo;s concern —
+                      higher means a stronger signal to localize.
+                    </p>
+                  )}
                   {result &&
                     result.scores.map((s) => {
                       const rubric = rubricsById[s.rubricId];
                       const tier = s.score >= 7 ? 'high' : s.score >= 4 ? 'mid' : 'low';
                       return (
                         <div className="finding-card" key={s.rubricId}>
-                          <div className="result-card__row">
-                            <span className="result-card__key">Rubric</span>
-                            <span className="result-card__value">{rubric?.description ?? s.rubricId}</span>
+                          <div className="finding-card__top">
+                            <p className="finding-card__rubric">{rubric?.description ?? s.rubricId}</p>
+                            <span className={`score-chip score-chip--${tier}`}>
+                              {s.score}
+                              <span className="score-chip__max">/10</span>
+                            </span>
                           </div>
-                          <div className="result-card__row">
-                            <span className="result-card__key">Score</span>
-                            <span className={`score-value score-value--${tier}`}>{s.score} / 10</span>
-                          </div>
-                          <div className="result-card__row">
-                            <span className="result-card__key">Reasoning</span>
-                            <span className="result-card__value">{s.reasoning}</span>
-                          </div>
-                          <div className="result-card__row">
-                            <span className="result-card__key">Evidence</span>
-                            <span className="result-card__value">{s.evidence}</span>
-                          </div>
+                          <p className="finding-card__text">{s.reasoning}</p>
+                          <p className="finding-card__text">
+                            <strong>Evidence: </strong>
+                            {s.evidence}
+                          </p>
                           {s.sources.length > 0 && (
-                            <div className="result-card__row">
-                              <span className="result-card__key">Sources</span>
-                              <span className="result-card__value source-list">
-                                {s.sources.map((src, si) => (
-                                  <a key={si} href={src} target="_blank" rel="noreferrer" className="source-link">
-                                    {src}
-                                  </a>
-                                ))}
-                              </span>
+                            <div className="source-list">
+                              {s.sources.map((src, si) => (
+                                <a key={si} href={src} target="_blank" rel="noreferrer" className="source-link">
+                                  {src}
+                                </a>
+                              ))}
                             </div>
                           )}
                         </div>

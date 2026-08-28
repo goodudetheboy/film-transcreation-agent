@@ -5,6 +5,7 @@ import { preprocessVideo } from '../api/apiClient';
 import { buildTimeline, type TimelineEntry } from '../utils/timeline';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { TimelineList } from '../components/TimelineList';
+import { VideoMarkerTrack } from '../components/VideoMarkerTrack';
 import type { Film } from '../api/apiClient.types';
 
 export interface FilmDetailViewProps {
@@ -24,6 +25,7 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [videoDuration, setVideoDuration] = useState(0);
 
   const [country, setCountry] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
@@ -53,10 +55,6 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
       cancelled = true;
     };
   }, [id, passcode]);
-
-  function handleManual() {
-    // Stub — manual entry flow comes later.
-  }
 
   async function handleDiscoverAgent() {
     if (!film) return;
@@ -120,11 +118,11 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
   return (
     <div className="panel-grid">
       <section className="panel panel--source">
-        <div className="view-header">
-          <p className="panel-label" style={{ marginBottom: 4 }}>
-            {film.title}
-          </p>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="page-header">
+          <div className="page-header__heading">
+            <h1 className="page-header__title">{film.title}</h1>
+          </div>
+          <div className="page-header__actions">
             <span className={`status-badge status-badge--${film.status}`}>{film.status}</span>
             <button type="button" className="btn" onClick={handleDelete} disabled={deleting}>
               {deleting ? 'Deleting…' : 'Delete Film'}
@@ -132,12 +130,15 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
           </div>
         </div>
 
-        <video src={toPlayableUrl(film.videoUrl)} controls style={{ width: '100%' }} />
+        <video
+          className="film-video"
+          src={toPlayableUrl(film.videoUrl)}
+          controls
+          onLoadedMetadata={(e) => setVideoDuration(e.currentTarget.duration)}
+        />
+        <VideoMarkerTrack duration={videoDuration} entries={timeline} />
 
         <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-          <button type="button" className="btn" onClick={handleManual}>
-            Manual
-          </button>
           <button
             type="button"
             className="btn btn--primary"
@@ -149,17 +150,13 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
         </div>
 
         {testMode && (
-          <ul className="results-list item-list">
+          <ul className="content-list">
             {film.details.map((d) => (
-              <li className="result-card" key={d.id}>
-                <div className="result-card__row result-card__row--line">
-                  <span className="result-card__key">Line</span>
-                  <span className="result-card__value">{d.scriptLine || <em>(visual only)</em>}</span>
-                </div>
-                <div className="result-card__row">
-                  <span className="result-card__key">Scene</span>
-                  <span className="result-card__value">{d.sceneDescription}</span>
-                </div>
+              <li className="content-card" key={d.id}>
+                <p className="content-card__primary">
+                  {d.scriptLine ? `“${d.scriptLine}”` : <em>Visual only</em>}
+                </p>
+                <p className="content-card__secondary">{d.sceneDescription}</p>
               </li>
             ))}
           </ul>
@@ -167,7 +164,7 @@ export function FilmDetailView({ passcode, testMode }: FilmDetailViewProps) {
       </section>
       <section className="panel panel--output">
         <details className="output-details" open>
-          <summary className="panel-label">Preprocessing Output</summary>
+          <summary className="section-heading">Preprocessing Output</summary>
           {discoverStatus === 'loading' && (
             <p className="results-status" role="status">
               Processing (using Discovery agent)
