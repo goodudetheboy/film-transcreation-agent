@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   createProjectFromFilm,
@@ -22,13 +22,26 @@ export interface FilmWorkspaceViewProps {
   testMode: boolean;
 }
 
-type Tab = 'details' | 'progress';
+type Tab = 'details' | 'progress' | 'project';
+
+const LEFT_WIDTH_STORAGE_KEY = 'workspace.leftPanelWidth';
+const MIN_LEFT = 360;
+const MIN_RIGHT = 360;
+const DIVIDER_WIDTH = 6;
+const DEFAULT_LEFT_RATIO = 0.62;
+const DESKTOP_BREAKPOINT = 960;
+
+function clampLeftWidth(value: number, containerWidth: number): number {
+  const maxLeft = Math.max(MIN_LEFT, containerWidth - MIN_RIGHT - DIVIDER_WIDTH);
+  return Math.min(Math.max(value, MIN_LEFT), maxLeft);
+}
 
 export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tab: Tab = searchParams.get('tab') === 'progress' ? 'progress' : 'details';
+  const tabParam = searchParams.get('tab');
+  const tab: Tab = tabParam === 'progress' ? 'progress' : tabParam === 'project' ? 'project' : 'details';
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -41,6 +54,11 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [country, setCountry] = useState('');
   const [creatingProject, setCreatingProject] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
+
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [leftWidth, setLeftWidth] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(true);
 
   const {
     film,
@@ -83,6 +101,66 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, passcode]);
+
+  useLayoutEffect(() => {
+    const container = splitRef.current;
+    if (!container) return;
+
+    function readStored(): number | null {
+      try {
+        const raw = window.localStorage.getItem(LEFT_WIDTH_STORAGE_KEY);
+        const parsed = raw ? Number(raw) : NaN;
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function apply(width: number) {
+      const desktop = width > DESKTOP_BREAKPOINT;
+      setIsDesktop(desktop);
+      // Below the breakpoint, CSS owns the (stacked, single-column) layout and this
+      // value isn't rendered — skip reclamping so a narrow excursion doesn't pin
+      // leftWidth down near MIN_LEFT and lose the desktop split once width returns.
+      if (!desktop) return;
+      setLeftWidth((prev) => {
+        const base = prev ?? readStored() ?? width * DEFAULT_LEFT_RATIO;
+        return clampLeftWidth(base, width);
+      });
+    }
+
+    apply(container.getBoundingClientRect().width);
+
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (width != null) apply(width);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [film]);
+
+  function handleDividerPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+  }
+
+  function handleDividerPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!isDragging || !splitRef.current) return;
+    const rect = splitRef.current.getBoundingClientRect();
+    setLeftWidth(clampLeftWidth(e.clientX - rect.left, rect.width));
+  }
+
+  function handleDividerPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setIsDragging(false);
+    if (leftWidth != null) {
+      try {
+        window.localStorage.setItem(LEFT_WIDTH_STORAGE_KEY, String(leftWidth));
+      } catch {
+        // private mode / storage disabled — resize still works, just won't persist
+      }
+    }
+  }
 
   function setTab(next: Tab) {
     setSearchParams(next === 'details' ? {} : { tab: next });
@@ -159,9 +237,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         <button type="button" className={`workspace-tabs__tab${tab === 'progress' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('progress')}>
           Progress
         </button>
+        <button type="button" className={`workspace-tabs__tab${tab === 'project' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('project')}>
+          Project
+        </button>
       </nav>
 
-      <div className="workspace__split">
+      <div
+        className="workspace__split"
+        ref={splitRef}
+        style={isDesktop && leftWidth != null ? { gridTemplateColumns: `${leftWidth}px 6px 1fr` } : undefined}
+      >
         <div className="workspace__panel workspace__panel--left">
           {tab === 'details' && (
             <>
@@ -171,6 +256,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                 passcode={passcode}
                 rows={rows}
                 columns={columns}
+                currentTimeMs={currentTimeMs}
+                onSeek={handleSeek}
                 onRowAdded={addRow}
                 onRowUpdated={updateRow}
                 onRowDeleted={removeRow}
@@ -180,8 +267,13 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               <button type="button" className="btn btn--primary" style={{ width: 'fit-content' }} onClick={() => setShowKickoff(true)}>
                 ✨ Kick off agentic discovery
               </button>
+            </>
+          )}
 
-              {rows.length > 0 && (
+          {tab === 'project' && (
+            <>
+              <p className="section-heading">Project</p>
+              {rows.length > 0 ? (
                 <form onSubmit={handleCreateProject} className="new-project-form" style={{ maxWidth: 480, marginTop: 20 }}>
                   <div className="field">
                     <label htmlFor="country">Target country</label>
@@ -192,6 +284,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                     {creatingProject ? 'Creating…' : 'Create Project'}
                   </button>
                 </form>
+              ) : (
+                <p className="results-placeholder">Add at least one detail row before creating a project.</p>
               )}
             </>
           )}
@@ -218,6 +312,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
             </>
           )}
         </div>
+
+        <div
+          className={`workspace__divider${isDragging ? ' workspace__divider--dragging' : ''}`}
+          onPointerDown={handleDividerPointerDown}
+          onPointerMove={handleDividerPointerMove}
+          onPointerUp={handleDividerPointerUp}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize details and video panels"
+        />
 
         <div className="workspace__panel workspace__panel--video">
           <div className="video-stage">

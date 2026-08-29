@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   BUILTIN_COLUMN_LABELS,
   type ColumnDoc,
@@ -13,11 +13,26 @@ export interface DetailsTableProps {
   passcode: string;
   rows: DetailRow[];
   columns: ColumnDoc[];
+  currentTimeMs: number;
+  onSeek: (ms: number) => void;
   onRowAdded: (row: DetailRow) => void;
   onRowUpdated: (row: DetailRow) => void;
   onRowDeleted: (rowId: string) => void;
   onColumnAdded: (column: ColumnDoc) => void;
 }
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  timestamp: 110,
+  subtitle: 260,
+  segmentDescription: 260,
+  gesture: 170,
+  notes: 220,
+  source: 190,
+  actions: 130,
+};
+const DEFAULT_CUSTOM_COL_WIDTH = 200;
+const MIN_COL_WIDTH = 60;
+const MAX_COL_WIDTH = 640;
 
 function provenanceLabel(row: DetailRow): string {
   if (row.provenance.type === 'user-marked') return 'Marked by you';
@@ -34,13 +49,81 @@ function provenanceModifier(row: DetailRow): string {
   return row.provenance.type === 'user-marked' ? 'user-marked' : row.provenance.type === 'agent-discovered' ? 'agent-discovered' : 'ai-assisted';
 }
 
-export function DetailsTable({ film, passcode, rows, columns, onRowAdded, onRowUpdated, onRowDeleted, onColumnAdded }: DetailsTableProps) {
+export function DetailsTable({
+  film,
+  passcode,
+  rows,
+  columns,
+  currentTimeMs,
+  onSeek,
+  onRowAdded,
+  onRowUpdated,
+  onRowDeleted,
+  onColumnAdded,
+}: DetailsTableProps) {
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ subtitleEntryId: string; values: DetailRowValues } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const dragRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const entries = film.subtitle?.entries ?? [];
+
+  function colWidth(key: string): number {
+    return colWidths[key] ?? DEFAULT_COL_WIDTHS[key] ?? DEFAULT_CUSTOM_COL_WIDTH;
+  }
+
+  function handleResizerPointerDown(e: React.PointerEvent<HTMLSpanElement>, key: string) {
+    e.stopPropagation();
+    dragRef.current = { key, startX: e.clientX, startWidth: colWidth(key) };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleResizerPointerMove(e: React.PointerEvent<HTMLSpanElement>) {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const next = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, drag.startWidth + (e.clientX - drag.startX)));
+    setColWidths((prev) => ({ ...prev, [drag.key]: next }));
+  }
+
+  function handleResizerPointerUp(e: React.PointerEvent<HTMLSpanElement>) {
+    dragRef.current = null;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }
+
+  function ResizableTh({ colKey, children }: { colKey: string; children: ReactNode }) {
+    return (
+      <th>
+        {children}
+        <span
+          className="details-table__col-resizer"
+          onPointerDown={(e) => handleResizerPointerDown(e, colKey)}
+          onPointerMove={handleResizerPointerMove}
+          onPointerUp={handleResizerPointerUp}
+        />
+      </th>
+    );
+  }
+
+  function entryForRow(row: DetailRow) {
+    return entries.find((e) => e.id === row.subtitleEntryId);
+  }
+
+  function isRowActive(row: DetailRow) {
+    const entry = entryForRow(row);
+    return !!entry && currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs;
+  }
+
+  const activeRowId = rows.find(isRowActive)?.id ?? null;
+
+  useEffect(() => {
+    if (!activeRowId || !scrollRef.current) return;
+    scrollRef.current
+      .querySelector<HTMLElement>(`[data-row-id="${activeRowId}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeRowId]);
 
   function startEdit(row: DetailRow) {
     setEditingRowId(row.id);
@@ -134,28 +217,55 @@ export function DetailsTable({ film, passcode, rows, columns, onRowAdded, onRowU
   return (
     <div className="details-table-wrap">
       {error && <p className="passcode-gate__error">{error}</p>}
-      <div className="details-table-scroll">
+      <div className="details-table-scroll" ref={scrollRef}>
         <table className="details-table">
+          <colgroup>
+            <col style={{ width: colWidth('timestamp') }} />
+            <col style={{ width: colWidth('subtitle') }} />
+            <col style={{ width: colWidth('segmentDescription') }} />
+            <col style={{ width: colWidth('gesture') }} />
+            <col style={{ width: colWidth('notes') }} />
+            {columns.map((c) => (
+              <col key={c.id} style={{ width: colWidth(c.key) }} />
+            ))}
+            <col style={{ width: colWidth('source') }} />
+            <col style={{ width: colWidth('actions') }} />
+          </colgroup>
           <thead>
             <tr>
-              <th>Timestamp</th>
-              <th>Subtitle</th>
-              <th>Segment Description</th>
-              <th>Gesture</th>
-              <th>Notes</th>
+              <ResizableTh colKey="timestamp">Timestamp</ResizableTh>
+              <ResizableTh colKey="subtitle">Subtitle</ResizableTh>
+              <ResizableTh colKey="segmentDescription">Segment Description</ResizableTh>
+              <ResizableTh colKey="gesture">Gesture</ResizableTh>
+              <ResizableTh colKey="notes">Notes</ResizableTh>
               {columns.map((c) => (
-                <th key={c.id}>{c.name}</th>
+                <ResizableTh key={c.id} colKey={c.key}>
+                  {c.name}
+                </ResizableTh>
               ))}
-              <th>Source</th>
+              <ResizableTh colKey="source">Source</ResizableTh>
               <th />
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
               const isEditing = editingRowId === row.id;
+              const isActive = row.id === activeRowId;
+              const rowClassName = [isEditing && 'details-table__row--editing', isActive && 'details-table__row--active']
+                .filter(Boolean)
+                .join(' ');
               return (
-                <tr key={row.id} onClick={() => !isEditing && startEdit(row)} className={isEditing ? 'details-table__row--editing' : ''}>
-                  <td>
+                <tr
+                  key={row.id}
+                  data-row-id={row.id}
+                  className={rowClassName}
+                  onClick={() => {
+                    if (!isEditing) startEdit(row);
+                    const entry = entryForRow(row);
+                    if (entry) onSeek(entry.startMs);
+                  }}
+                >
+                  <td title={!isEditing ? row.timestamp : undefined}>
                     {isEditing && draft ? (
                       <select
                         value={draft.subtitleEntryId}
@@ -172,13 +282,13 @@ export function DetailsTable({ film, passcode, rows, columns, onRowAdded, onRowU
                       row.timestamp
                     )}
                   </td>
-                  <td>
+                  <td title={isEditing ? undefined : row.subtitleText}>
                     {isEditing && draft
                       ? entries.find((e) => e.id === draft.subtitleEntryId)?.text
                       : row.subtitleText}
                   </td>
                   {(['segmentDescription', 'gesture', 'notes'] as const).map((key) => (
-                    <td key={key}>
+                    <td key={key} title={!isEditing ? row.values[key] : undefined}>
                       {isEditing ? (
                         <input
                           type="text"
@@ -192,7 +302,7 @@ export function DetailsTable({ film, passcode, rows, columns, onRowAdded, onRowU
                     </td>
                   ))}
                   {columns.map((c) => (
-                    <td key={c.id}>
+                    <td key={c.id} title={!isEditing ? (row.values.custom[c.key] ?? '') : undefined}>
                       {isEditing ? (
                         <input
                           type="text"
@@ -205,10 +315,10 @@ export function DetailsTable({ film, passcode, rows, columns, onRowAdded, onRowU
                       )}
                     </td>
                   ))}
-                  <td>
+                  <td className="details-table__cell--nowrap-exempt">
                     <span className={`status-badge status-badge--${provenanceModifier(row)}`}>{provenanceLabel(row)}</span>
                   </td>
-                  <td onClick={(e) => e.stopPropagation()}>
+                  <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
                     {isEditing ? (
                       <span style={{ display: 'flex', gap: 6 }}>
                         <button type="button" className="btn" disabled={busy} onClick={() => saveEdit(row.id)}>

@@ -14,6 +14,7 @@ export interface Config {
   subtitleUploadPrefix: string;
   maxSubtitleUploadBytes: number;
   mockDelayScale: number;
+  mockUploadsDir: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -33,5 +34,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     subtitleUploadPrefix: env.SUBTITLE_UPLOAD_PREFIX ?? 'subtitles/',
     maxSubtitleUploadBytes: Number(env.MAX_SUBTITLE_UPLOAD_BYTES ?? 5_000_000),
     mockDelayScale: Number(env.MOCK_DELAY_SCALE ?? 1),
+    mockUploadsDir: env.MOCK_UPLOADS_DIR ?? '.data/mock-uploads',
   };
 }

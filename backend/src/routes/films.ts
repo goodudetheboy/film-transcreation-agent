@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
 import { Router, type Response } from 'express';
 import multer from 'multer';
 import type { DetailRowsStore } from '../services/detailRowsStore.js';
@@ -27,6 +29,7 @@ export interface FilmsRouteDeps {
   eventBus: DiscoveryEventBus;
   filmPrepPipeline: FilmPrepPipeline;
   mockDelayScale: number;
+  mockUploadsDir: string;
 }
 
 function isMockRequest(testMode: unknown): boolean {
@@ -84,7 +87,18 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
       if (isMockRequest(req.body?.testMode)) {
         await simulateDelay({ minMs: 800, maxMs: 1500 }, deps.mockDelayScale);
-        res.status(200).json({ videoUrl: `gs://mock-bucket/${randomUUID()}${guessExtension(file.originalname)}` });
+
+        const filename = `${randomUUID()}${guessExtension(file.originalname)}`;
+        await mkdir(deps.mockUploadsDir, { recursive: true });
+        await writeFile(path.join(deps.mockUploadsDir, filename), file.buffer);
+
+        // A <video> GET can't carry a passcode header/body — ride along as a query
+        // param, same lookup passcodeMiddleware already used to authorize this POST.
+        const passcode = req.body?.passcode ?? req.query?.passcode ?? '';
+        const origin = `${req.protocol}://${req.get('host')}`;
+        const videoUrl = `${origin}/mock-uploads/${filename}?passcode=${encodeURIComponent(String(passcode))}`;
+
+        res.status(200).json({ videoUrl });
         return;
       }
 

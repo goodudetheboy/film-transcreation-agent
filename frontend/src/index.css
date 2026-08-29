@@ -1119,7 +1119,7 @@ textarea {
 
 .scrubber {
   position: relative;
-  height: 24px;
+  height: 44px;
   border-radius: var(--radius-sm);
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -1134,19 +1134,44 @@ textarea {
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 
-.scrubber__tick {
+.scrubber__block {
   position: absolute;
   top: 4px;
-  width: 2px;
-  height: 16px;
-  background: var(--border-strong);
+  bottom: 4px;
+  min-width: 4px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.scrubber__block-label {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scrubber__block--active {
+  background: var(--warning-dim);
+  border-color: var(--warning);
+}
+
+.scrubber__block--active .scrubber__block-label {
+  color: var(--warning);
 }
 
 .scrubber__handle {
   position: absolute;
   top: -3px;
   width: 3px;
-  height: 30px;
+  height: 50px;
   background: var(--accent);
   transform: translateX(-1.5px);
   border-radius: 2px;
@@ -1170,26 +1195,66 @@ textarea {
 .details-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  table-layout: fixed;
+  font-size: 12px;
 }
 
 .details-table th {
+  position: relative;
   text-align: left;
   font-size: var(--eyebrow-size);
   font-weight: var(--eyebrow-weight);
   letter-spacing: var(--eyebrow-tracking);
   text-transform: uppercase;
   color: var(--text-dim);
-  padding: 10px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--border-strong);
+  border-right: 1px solid var(--border);
   white-space: nowrap;
+}
+.details-table th:last-child {
+  border-right: none;
+}
+
+.details-table__col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.details-table__col-resizer:hover,
+.details-table__col-resizer:active {
+  background: var(--accent);
+  opacity: 0.6;
 }
 
 .details-table td {
-  padding: 8px 12px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   color: var(--text);
-  vertical-align: top;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.details-table td:last-child {
+  border-right: none;
+}
+
+.details-table tbody tr {
+  height: 30px;
+}
+
+.details-table__cell--nowrap-exempt {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
 }
 
 .details-table tbody tr:hover {
@@ -1199,6 +1264,14 @@ textarea {
 
 .details-table__row--editing {
   background: var(--panel-2);
+}
+
+.details-table__row--active {
+  background: var(--warning-dim);
+}
+
+.details-table__row--active td {
+  color: var(--warning);
 }
 
 .details-table input[type='text'],
@@ -1614,8 +1687,8 @@ textarea {
 
 .workspace__split {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.3fr);
-  gap: var(--space-snug);
+  grid-template-columns: minmax(360px, 1.6fr) 6px minmax(360px, 1fr);
+  gap: 0;
   flex: 1;
   min-height: 0;
 }
@@ -1624,6 +1697,37 @@ textarea {
   .workspace__split {
     grid-template-columns: 1fr;
   }
+  .workspace__divider {
+    display: none;
+  }
+}
+
+.workspace__divider {
+  flex: 0 0 auto;
+  width: 6px;
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.workspace__divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition: var(--transition-fast);
+}
+
+.workspace__divider:hover::after,
+.workspace__divider--dragging::after {
+  background: var(--accent);
+  width: 3px;
 }
 
 .workspace__panel {
@@ -1782,13 +1886,13 @@ textarea {
 
 .workspace > .scrubber {
   margin: 0;
-  height: 32px;
+  height: 52px;
   background: linear-gradient(var(--panel-2), var(--bg));
   border-color: var(--border-strong);
 }
 
 .workspace > .scrubber .scrubber__handle {
-  height: 38px;
+  height: 58px;
   top: -3px;
   box-shadow: 0 0 6px var(--accent);
 }

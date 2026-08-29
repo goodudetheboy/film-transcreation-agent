@@ -104,6 +104,9 @@ export function createApp(deps: AppDeps = {}): Express {
       defaultRubrics: DEFAULT_RUBRICS,
     }),
   );
+  // Serves mock-mode uploaded video bytes back over HTTP. Sits behind the same
+  // passcode gate as everything else in `guarded` (passcodeMiddleware runs first).
+  guarded.use('/mock-uploads', express.static(config.mockUploadsDir));
   guarded.use(
     filmsRoute({
       filmStore,
@@ -118,6 +121,7 @@ export function createApp(deps: AppDeps = {}): Express {
       eventBus,
       filmPrepPipeline,
       mockDelayScale: config.mockDelayScale,
+      mockUploadsDir: config.mockUploadsDir,
     }),
   );
   app.use(guarded);

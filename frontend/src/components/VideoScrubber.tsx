@@ -8,10 +8,10 @@ export interface VideoScrubberProps {
   onSeek: (ms: number) => void;
 }
 
-/** A draggable timeline scrubber with a tick per subtitle entry — dragging it
- * seeks the video (and, via the parent's currentTime state, the active
- * subtitle line updates too). Evolves VideoMarkerTrack's passive-tick idea
- * into something interactive now that it has exactly one caller. */
+/** A draggable timeline scrubber with a labeled duration-block per subtitle
+ * entry (highlighted while it's the active line) — dragging it seeks the
+ * video, and clicking anywhere (including on a block) does too, since block
+ * children are pointer-events:none and the click always lands on the track. */
 export function VideoScrubber({ entries, durationMs, currentTimeMs, onSeek }: VideoScrubberProps) {
   const trackRef = useRef<HTMLDivElement>(null);
 
@@ -50,9 +50,21 @@ export function VideoScrubber({ entries, durationMs, currentTimeMs, onSeek }: Vi
     >
       <div className="scrubber__fill" style={{ width: `${progressPct}%` }} />
       {durationMs > 0 &&
-        entries.map((entry) => (
-          <div key={entry.id} className="scrubber__tick" style={{ left: `${(entry.startMs / durationMs) * 100}%` }} />
-        ))}
+        entries.map((entry) => {
+          const isActive = currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs;
+          const leftPct = (entry.startMs / durationMs) * 100;
+          const widthPct = ((entry.endMs - entry.startMs) / durationMs) * 100;
+          return (
+            <div
+              key={entry.id}
+              className={`scrubber__block${isActive ? ' scrubber__block--active' : ''}`}
+              style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+              title={entry.text}
+            >
+              <span className="scrubber__block-label">{entry.text}</span>
+            </div>
+          );
+        })}
       <div className="scrubber__handle" style={{ left: `${progressPct}%` }} />
     </div>
   );

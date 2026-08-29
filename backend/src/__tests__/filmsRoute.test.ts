@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app.js';
@@ -23,6 +26,7 @@ function buildApp(
     videoBucketUploader?: { uploadFromUrl: ReturnType<typeof vi.fn>; uploadBuffer: ReturnType<typeof vi.fn> };
     maxVideoUploadBytes?: number;
     maxSubtitleUploadBytes?: number;
+    mockUploadsDir?: string;
     discoveryAgent?: DiscoveryAgent;
     mockDiscoveryAgent?: DiscoveryAgent;
   } = {},
@@ -42,6 +46,7 @@ function buildApp(
       mockDelayScale: 0.001,
       ...(overrides.maxVideoUploadBytes !== undefined ? { maxVideoUploadBytes: overrides.maxVideoUploadBytes } : {}),
       ...(overrides.maxSubtitleUploadBytes !== undefined ? { maxSubtitleUploadBytes: overrides.maxSubtitleUploadBytes } : {}),
+      ...(overrides.mockUploadsDir !== undefined ? { mockUploadsDir: overrides.mockUploadsDir } : {}),
     },
     filmStore,
     detailRowsStore,
@@ -344,5 +349,30 @@ describe('POST /api/films/:id/create-project', () => {
 
     expect((await request(app).post('/api/films/nope/create-project').send({ passcode: TEST_PASSCODE, country: 'Japan' })).status).toBe(404);
     expect((await request(app).post(`/api/films/${filmId}/create-project`).send({ passcode: TEST_PASSCODE })).status).toBe(400);
+  });
+});
+
+describe('POST /api/films/upload-video', () => {
+  it('mock mode writes the uploaded bytes to disk and serves them back over HTTP', async () => {
+    const mockUploadsDir = await mkdtemp(path.join(tmpdir(), 'film-mock-uploads-'));
+    try {
+      const { app } = buildApp({ mockUploadsDir });
+      const fileBytes = Buffer.from('fake video bytes');
+
+      const uploadRes = await request(app)
+        .post(`/api/films/upload-video?passcode=${TEST_PASSCODE}`)
+        .field('testMode', 'true')
+        .attach('video', fileBytes, { filename: 'clip.mp4', contentType: 'video/mp4' });
+
+      expect(uploadRes.status).toBe(200);
+      expect(uploadRes.body.videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4\?passcode=test-passcode$/);
+
+      const url = new URL(uploadRes.body.videoUrl);
+      const getRes = await request(app).get(url.pathname + url.search);
+      expect(getRes.status).toBe(200);
+      expect(getRes.headers['content-length']).toBe(String(fileBytes.length));
+    } finally {
+      await rm(mockUploadsDir, { recursive: true, force: true });
+    }
   });
 });
