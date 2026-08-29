@@ -51,9 +51,16 @@ export function VideoScrubber({ entries, durationMs, currentTimeMs, onSeek }: Vi
       <div className="scrubber__fill" style={{ width: `${progressPct}%` }} />
       {durationMs > 0 &&
         entries.map((entry) => {
+          // Subtitle files aren't guaranteed to fit inside the video's actual
+          // duration (e.g. a script authored/edited separately) — clamp to
+          // [0, 100]% so a stray out-of-range entry can't blow out this
+          // absolutely-positioned block past the track and inflate the
+          // page's scrollable width.
+          if (entry.startMs >= durationMs) return null;
           const isActive = currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs;
-          const leftPct = (entry.startMs / durationMs) * 100;
-          const widthPct = ((entry.endMs - entry.startMs) / durationMs) * 100;
+          const leftPct = Math.max(0, (entry.startMs / durationMs) * 100);
+          const rawWidthPct = ((entry.endMs - entry.startMs) / durationMs) * 100;
+          const widthPct = Math.max(0, Math.min(100 - leftPct, rawWidthPct));
           return (
             <div
               key={entry.id}
