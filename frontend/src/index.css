@@ -1767,6 +1767,8 @@ textarea {
 }
 
 .video-stage__frame {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   transition: transform 0.2s ease;
   transform-origin: center;
@@ -1774,6 +1776,8 @@ textarea {
 
 .video-stage .film-video {
   width: 100%;
+  height: 100%;
+  object-fit: contain;
   display: block;
   border-radius: var(--radius-sm);
   background: #000;
