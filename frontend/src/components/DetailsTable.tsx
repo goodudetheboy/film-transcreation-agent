@@ -360,6 +360,11 @@ export function DetailsTable({
               {columns.map((c) => (
                 <ResizableTh key={c.id} colKey={c.key} title={c.description || undefined} {...resizerHandlers}>
                   {c.name}
+                  {c.description && (
+                    <span className="details-table__col-info" title={c.description}>
+                      ⓘ
+                    </span>
+                  )}
                 </ResizableTh>
               ))}
               <ResizableTh colKey="source" {...resizerHandlers}>Source</ResizableTh>
@@ -509,7 +514,7 @@ export function DetailsTable({
       {showAddColumnModal && (
         <div className="modal-backdrop" onClick={() => !busy && cancelAddColumn()}>
           <form
-            className="modal"
+            className="modal add-column-modal"
             onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => {
               e.preventDefault();

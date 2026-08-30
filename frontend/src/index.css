@@ -1455,6 +1455,18 @@ textarea {
   touch-action: none;
   z-index: 1;
 }
+
+.details-table__col-info {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--text-faint);
+  cursor: help;
+  transition: var(--transition-fast);
+  transition-property: color;
+}
+.details-table__col-info:hover {
+  color: var(--accent);
+}
 .details-table__col-resizer:hover,
 .details-table__col-resizer:active {
   background: var(--accent);
@@ -2222,6 +2234,10 @@ textarea {
   width: 560px;
   max-height: 85vh;
   overflow-y: auto;
+}
+
+.add-column-modal {
+  width: 440px;
 }
 
 .detail-row-modal .field textarea {
