@@ -97,6 +97,21 @@ function ResizableTh({
   );
 }
 
+/** Small info-icon tooltip trigger — visible affordance that a header has
+ * more context on hover, since a bare `title` attribute gives no visual cue. */
+function ColInfoIcon({ text }: { text: string }) {
+  return (
+    <span className="details-table__col-info" title={text}>
+      ⓘ
+    </span>
+  );
+}
+
+const SEGMENT_DESCRIPTION_HINT =
+  "What's happening on screen during this moment — the visual/narrative context for the localizer, beyond just the dialogue.";
+const GESTURE_HINT = 'Any notable gesture, body language, or physical action during this moment worth flagging for localization.';
+const SOURCE_HINT = 'How this row was found — added by hand, discovered automatically on import, or found by a Discovery Agent pass.';
+
 export function DetailsTable({
   film,
   passcode,
@@ -354,20 +369,25 @@ export function DetailsTable({
               <ResizableTh colKey="start" {...resizerHandlers}>Start</ResizableTh>
               <ResizableTh colKey="end" {...resizerHandlers}>End</ResizableTh>
               <ResizableTh colKey="subtitle" {...resizerHandlers}>Subtitle</ResizableTh>
-              <ResizableTh colKey="segmentDescription" {...resizerHandlers}>Segment Description</ResizableTh>
-              <ResizableTh colKey="gesture" {...resizerHandlers}>Gesture</ResizableTh>
+              <ResizableTh colKey="segmentDescription" title={SEGMENT_DESCRIPTION_HINT} {...resizerHandlers}>
+                Segment Description
+                <ColInfoIcon text={SEGMENT_DESCRIPTION_HINT} />
+              </ResizableTh>
+              <ResizableTh colKey="gesture" title={GESTURE_HINT} {...resizerHandlers}>
+                Gesture
+                <ColInfoIcon text={GESTURE_HINT} />
+              </ResizableTh>
               <ResizableTh colKey="notes" {...resizerHandlers}>Notes</ResizableTh>
               {columns.map((c) => (
                 <ResizableTh key={c.id} colKey={c.key} title={c.description || undefined} {...resizerHandlers}>
                   {c.name}
-                  {c.description && (
-                    <span className="details-table__col-info" title={c.description}>
-                      ⓘ
-                    </span>
-                  )}
+                  {c.description && <ColInfoIcon text={c.description} />}
                 </ResizableTh>
               ))}
-              <ResizableTh colKey="source" {...resizerHandlers}>Source</ResizableTh>
+              <ResizableTh colKey="source" title={SOURCE_HINT} {...resizerHandlers}>
+                Source
+                <ColInfoIcon text={SOURCE_HINT} />
+              </ResizableTh>
               <th />
             </tr>
           </thead>
