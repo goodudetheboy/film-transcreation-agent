@@ -649,6 +649,31 @@ textarea {
   }
 }
 
+.upload-progress {
+  width: 100%;
+  height: 6px;
+  border: none;
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 0 0 var(--space-snug);
+}
+
+.upload-progress::-webkit-progress-bar {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+.upload-progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.15s ease;
+}
+
+.upload-progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 3px;
+}
+
 /* ---------- Content cards ----------
    The one shared card pattern for a list of things: a film, a project, a script
    line, a rubric score. Primary sentence reads as content, not a labeled table row.

@@ -68,6 +68,7 @@ export function ImportFilmModal({ passcode, testMode }: ImportFilmModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const canSubmit = title.trim() !== '' && videoFile !== null && subtitleFile !== null;
 
@@ -79,7 +80,9 @@ export function ImportFilmModal({ passcode, testMode }: ImportFilmModalProps) {
     setError(null);
     try {
       setStatus('Uploading your video…');
-      const { videoUrl } = await uploadVideoFile(videoFile, { passcode, testMode });
+      setUploadProgress(testMode ? null : 0);
+      const { videoUrl } = await uploadVideoFile(videoFile, { passcode, testMode }, undefined, setUploadProgress);
+      setUploadProgress(null);
 
       setStatus('Uploading your script…');
       const { subtitleUrl, format, entries } = await uploadSubtitleFile(subtitleFile, { passcode, testMode });
@@ -146,6 +149,9 @@ export function ImportFilmModal({ passcode, testMode }: ImportFilmModalProps) {
           <p className="results-status" role="status">
             {status}
           </p>
+        )}
+        {uploadProgress !== null && (
+          <progress className="upload-progress" value={uploadProgress} max={1} aria-label="Video upload progress" />
         )}
         {error && <p className="passcode-gate__error">{error}</p>}
 

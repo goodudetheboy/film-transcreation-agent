@@ -135,6 +135,45 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
     },
   );
 
+  // Real-mode video uploads never touch this backend's body at all: Cloud Run
+  // enforces a hard, non-configurable 32MB request-size limit (GFE-level, "cannot
+  // be increased" per Google's quotas docs) that a multipart video upload blows
+  // past instantly. This route just mints a GCS resumable-upload session; the
+  // browser then PUTs the bytes straight to storage.googleapis.com. Mock mode
+  // keeps using the multer route above unchanged — it's for small test clips.
+  router.post('/api/films/upload-video/init', async (req, res) => {
+    const { filename, contentType, size, testMode } = req.body ?? {};
+
+    if (isMockRequest(testMode)) {
+      res.status(400).json({ error: 'upload-video/init is not used in mock mode' });
+      return;
+    }
+    if (typeof filename !== 'string' || filename.trim() === '') {
+      res.status(400).json({ error: 'filename is required' });
+      return;
+    }
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+      res.status(400).json({ error: 'size is required and must be a positive number' });
+      return;
+    }
+    if (size > deps.maxVideoUploadBytes) {
+      res.status(413).json({ error: `video exceeds the ${deps.maxVideoUploadBytes}-byte upload limit` });
+      return;
+    }
+
+    try {
+      const { uploadUrl, videoUrl } = await deps.videoBucketUploader.createResumableUploadSession({
+        filename,
+        contentType: typeof contentType === 'string' ? contentType : 'video/mp4',
+      });
+      res.status(200).json({ uploadUrl, videoUrl });
+    } catch (err) {
+      res.status(502).json({
+        error: `failed to start video upload session: ${err instanceof Error ? err.message : 'unknown error'}`,
+      });
+    }
+  });
+
   router.post(
     '/api/films/upload-subtitle',
     (req, res, next) => {

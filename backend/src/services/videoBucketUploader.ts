@@ -13,6 +13,13 @@ export interface VideoBucketUploader {
    * standing up a second bucket/IAM binding just for subtitles.
    */
   uploadBuffer(input: { buffer: Buffer; filename: string; contentType: string; objectPrefix?: string }): Promise<string>;
+  /**
+   * Mints a GCS resumable-upload session so the browser can PUT the video bytes
+   * straight to Google Cloud Storage, bypassing Cloud Run's 32MB request-size
+   * limit entirely. `videoUrl` is the eventual gs:// URI, known upfront since
+   * the object name is chosen here, before the upload completes.
+   */
+  createResumableUploadSession(input: { filename: string; contentType: string }): Promise<{ uploadUrl: string; videoUrl: string }>;
 }
 
 /** Blocks loopback, private, link-local (incl. the GCP/AWS metadata address), and unspecified ranges. */
@@ -147,6 +154,15 @@ export function createVideoBucketUploader(config: {
       }
 
       return `gs://${config.bucketName}/${objectName}`;
+    },
+
+    async createResumableUploadSession({ filename, contentType }): Promise<{ uploadUrl: string; videoUrl: string }> {
+      const objectName = `${randomUUID()}${guessExtension(filename)}`;
+      const file = bucket.file(objectName);
+      const [uploadUrl] = await file.createResumableUpload({
+        metadata: { contentType: contentType || 'video/mp4' },
+      });
+      return { uploadUrl, videoUrl: `gs://${config.bucketName}/${objectName}` };
     },
   };
 }

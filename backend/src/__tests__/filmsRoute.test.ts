@@ -23,7 +23,11 @@ function noResultsAgent(): DiscoveryAgent {
 function buildApp(
   overrides: {
     seedFilms?: CreateFilmInput[];
-    videoBucketUploader?: { uploadFromUrl: ReturnType<typeof vi.fn>; uploadBuffer: ReturnType<typeof vi.fn> };
+    videoBucketUploader?: {
+      uploadFromUrl: ReturnType<typeof vi.fn>;
+      uploadBuffer: ReturnType<typeof vi.fn>;
+      createResumableUploadSession: ReturnType<typeof vi.fn>;
+    };
     maxVideoUploadBytes?: number;
     maxSubtitleUploadBytes?: number;
     mockUploadsDir?: string;
@@ -54,7 +58,11 @@ function buildApp(
     eventBus,
     discoveryAgent,
     mockDiscoveryAgent,
-    videoBucketUploader: overrides.videoBucketUploader ?? { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn() },
+    videoBucketUploader: overrides.videoBucketUploader ?? {
+      uploadFromUrl: vi.fn(),
+      uploadBuffer: vi.fn(),
+      createResumableUploadSession: vi.fn(),
+    },
   });
 
   return { app, filmStore, detailRowsStore, discoveryJobStore };
@@ -402,5 +410,72 @@ describe('POST /api/films/upload-video', () => {
     } finally {
       await rm(mockUploadsDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('POST /api/films/upload-video/init', () => {
+  it('mints a resumable upload session for a real (non-mock) upload', async () => {
+    const createResumableUploadSession = vi.fn().mockResolvedValue({
+      uploadUrl: 'https://storage.googleapis.com/upload/session-abc',
+      videoUrl: 'gs://test-bucket/abc.mp4',
+    });
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', contentType: 'video/mp4', size: 1000, testMode: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      uploadUrl: 'https://storage.googleapis.com/upload/session-abc',
+      videoUrl: 'gs://test-bucket/abc.mp4',
+    });
+    expect(createResumableUploadSession).toHaveBeenCalledWith({ filename: 'clip.mp4', contentType: 'video/mp4' });
+  });
+
+  it('requires the passcode', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: 'wrong', filename: 'clip.mp4', size: 1000, testMode: false });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects mock-mode requests — this endpoint is real-mode only', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 1000, testMode: true });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a missing filename', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: TEST_PASSCODE, size: 1000, testMode: false });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a size over the configured max with 413', async () => {
+    const { app } = buildApp({ maxVideoUploadBytes: 1000 });
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 5000, testMode: false });
+    expect(res.status).toBe(413);
+  });
+
+  it('returns 502 when the uploader fails to mint a session', async () => {
+    const createResumableUploadSession = vi.fn().mockRejectedValue(new Error('gcs unreachable'));
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 1000, testMode: false });
+    expect(res.status).toBe(502);
   });
 });

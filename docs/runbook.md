@@ -26,6 +26,29 @@ for how the deploy itself works (`scripts/deploy.sh`).
       Research agent (`docs/adr/0012`) call Gemini via `@google/genai` in
       production. Without it, real (non-test-mode) research requests will fail the
       same way real analyze requests do without the Dialogflow role above.
+- [ ] Configure CORS on the video clips bucket (`silent-scholar-505618-u6-clips`
+      by default — `VIDEO_CLIPS_BUCKET`) so the browser can `PUT` directly to
+      `storage.googleapis.com` for real (non-mock) video uploads — see
+      `docs/adr/0024-direct-to-gcs-video-uploads.md`. Without this, the browser's
+      direct-to-GCS upload fails as a CORS error instead of a clean response.
+      One-time, run after the first Firebase Hosting deploy (so the hosting URL
+      is known):
+      ```bash
+      cat > /tmp/gcs-cors.json <<'EOF'
+      [
+        {
+          "origin": ["https://silent-scholar-505618-u6.web.app", "http://localhost:5173"],
+          "method": ["PUT"],
+          "responseHeader": ["Content-Type", "Content-Range", "x-goog-resumable"],
+          "maxAgeSeconds": 3600
+        }
+      ]
+      EOF
+      gcloud storage buckets update gs://silent-scholar-505618-u6-clips --cors-file=/tmp/gcs-cors.json
+      ```
+      Safe to re-run any time (it replaces the bucket's CORS config wholesale,
+      not additive) — add any additional preview/custom-domain origins to the
+      `origin` array as needed.
 
 ## One-time setup for GitHub Actions auto-deploy (optional)
 

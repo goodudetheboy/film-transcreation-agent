@@ -174,4 +174,38 @@ describe('createVideoBucketUploader', () => {
       expect(deleteMock).toHaveBeenCalledWith({ ignoreNotFound: true });
     });
   });
+
+  describe('createResumableUploadSession', () => {
+    it('mints a resumable session and returns the upload URL plus the eventual gs:// URI', async () => {
+      const createResumableUploadMock = vi.fn().mockResolvedValue(['https://storage.googleapis.com/upload/session-123']);
+      fileMock.mockReturnValue({
+        createWriteStream: createWriteStreamMock,
+        delete: deleteMock,
+        createResumableUpload: createResumableUploadMock,
+      });
+
+      const uploader = createVideoBucketUploader(config);
+      const result = await uploader.createResumableUploadSession({ filename: 'clip.mov', contentType: 'video/quicktime' });
+
+      expect(bucketMock).toHaveBeenCalledWith('test-bucket');
+      expect(fileMock).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f-]+\.mov$/));
+      expect(createResumableUploadMock).toHaveBeenCalledWith({ metadata: { contentType: 'video/quicktime' } });
+      expect(result.uploadUrl).toBe('https://storage.googleapis.com/upload/session-123');
+      expect(result.videoUrl).toMatch(/^gs:\/\/test-bucket\/[0-9a-f-]+\.mov$/);
+    });
+
+    it('defaults content type to video/mp4 when none is given', async () => {
+      const createResumableUploadMock = vi.fn().mockResolvedValue(['https://storage.googleapis.com/upload/session-456']);
+      fileMock.mockReturnValue({
+        createWriteStream: createWriteStreamMock,
+        delete: deleteMock,
+        createResumableUpload: createResumableUploadMock,
+      });
+
+      const uploader = createVideoBucketUploader(config);
+      await uploader.createResumableUploadSession({ filename: 'clip.mp4', contentType: '' });
+
+      expect(createResumableUploadMock).toHaveBeenCalledWith({ metadata: { contentType: 'video/mp4' } });
+    });
+  });
 });

@@ -13,6 +13,7 @@ import type {
 } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
 import { resolveBaseUrl, describeError, throwOnError, type ApiClientOptions } from './httpHelpers';
+import { uploadFileResumable } from './resumableUpload';
 
 export type { ApiClientOptions };
 
@@ -23,25 +24,47 @@ export interface UploadOptions {
   testMode: boolean;
 }
 
-/** Uploads a local video file (e.g. drag-and-dropped) and returns its gs:// URI. */
+/**
+ * Uploads a local video file (e.g. drag-and-dropped) and returns its gs:// URI.
+ *
+ * Mock mode keeps posting the file straight to the backend (fine for small test
+ * clips). Real mode uploads directly to GCS in chunks instead — Cloud Run has a
+ * hard, non-configurable 32MB request-size limit that any real film blows past,
+ * so the video bytes must never go through it. See
+ * docs/adr/0024-direct-to-gcs-video-uploads.md for the full writeup of why.
+ */
 export async function uploadVideoFile(
   file: File,
   { passcode, testMode }: UploadOptions,
   options: ApiClientOptions = {},
+  onProgress?: (fraction: number) => void,
 ): Promise<{ videoUrl: string }> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const form = new FormData();
-  form.append('video', file);
-  form.append('testMode', String(testMode));
+  if (testMode) {
+    const form = new FormData();
+    form.append('video', file);
+    form.append('testMode', String(testMode));
 
-  const res = await fetchImpl(`${baseUrl}/api/films/upload-video?passcode=${encodeURIComponent(passcode)}`, {
+    const res = await fetchImpl(`${baseUrl}/api/films/upload-video?passcode=${encodeURIComponent(passcode)}`, {
+      method: 'POST',
+      body: form,
+    });
+    await throwOnError(res);
+    return (await res.json()) as { videoUrl: string };
+  }
+
+  const initRes = await fetchImpl(`${baseUrl}/api/films/upload-video/init`, {
     method: 'POST',
-    body: form,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passcode, filename: file.name, contentType: file.type, size: file.size, testMode }),
   });
-  await throwOnError(res);
-  return (await res.json()) as { videoUrl: string };
+  await throwOnError(initRes);
+  const { uploadUrl, videoUrl } = (await initRes.json()) as { uploadUrl: string; videoUrl: string };
+
+  await uploadFileResumable(uploadUrl, file, { onProgress, fetchImpl });
+  return { videoUrl };
 }
 
 export interface UploadSubtitleResult {

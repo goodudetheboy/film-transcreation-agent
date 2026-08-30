@@ -28,7 +28,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     geminiModel: env.GEMINI_MODEL ?? 'gemini-2.5-flash',
     parallelApiKey: env.PARALLEL_API_KEY,
     videoClipsBucket: env.VIDEO_CLIPS_BUCKET ?? 'silent-scholar-505618-u6-clips',
-    maxVideoUploadBytes: Number(env.MAX_VIDEO_UPLOAD_BYTES ?? 500_000_000),
+    maxVideoUploadBytes: Number(env.MAX_VIDEO_UPLOAD_BYTES ?? 2_000_000_000),
     filmsDataFile: env.FILMS_DATA_FILE ?? '.data/films.json',
     firestoreLocation: env.FIRESTORE_LOCATION ?? 'us-central1',
     subtitleUploadPrefix: env.SUBTITLE_UPLOAD_PREFIX ?? 'subtitles/',

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import {
   createDiscoveryJob,
   createFilm,
@@ -12,6 +12,7 @@ import {
 import type { DiscoveryJobStreamEvent, FilmPrepStreamEvent } from '../../frontend/src/api/apiClient.types';
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
 import { fakeDiscoveryAgent } from './helpers/fakeDiscoveryAgent';
+import { startFakeGcsResumableServer } from './helpers/fakeGcsResumableServer';
 import { createInMemoryFilmStore } from '../../backend/src/services/filmStore';
 import { createInMemoryDetailRowsStore } from '../../backend/src/services/detailRowsStore';
 import { createInMemoryDiscoveryJobStore } from '../../backend/src/services/discoveryJobStore';
@@ -58,7 +59,8 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
       { passcode: TEST_PASSCODE, testMode: true },
       { baseUrl: backend.url },
     );
-    expect(videoUrl).toMatch(/^gs:\/\//);
+    // Mock mode saves to local disk and serves it back over HTTP — not GCS.
+    expect(videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4\?passcode=/);
 
     const { subtitleUrl, format, entries } = await uploadSubtitleFile(
       new File([SRT], 'clip.srt', { type: 'text/plain' }),
@@ -125,5 +127,42 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
         { baseUrl: backend.url },
       ),
     ).rejects.toThrow(/401/);
+  });
+});
+
+describe('frontend filmsApiClient -> real backend -> real chunked upload to a faked GCS endpoint (real/non-mock mode)', () => {
+  it('uploads a video directly to the GCS resumable session, bypassing the backend for the video bytes', async () => {
+    // The only fake here is videoBucketUploader.createResumableUploadSession
+    // (the external Google client) — everything else, including the multi-chunk
+    // PUT protocol in resumableUpload.ts, runs for real over a real TCP hop.
+    const gcs = await startFakeGcsResumableServer();
+    const createResumableUploadSession = vi
+      .fn()
+      .mockImplementation(async ({ filename }: { filename: string }) => ({
+        uploadUrl: gcs.url,
+        videoUrl: `gs://fake-bucket/${filename}`,
+      }));
+
+    const backend = await startTestBackend({
+      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession },
+    });
+
+    try {
+      // Big enough to span multiple 8MiB chunks in resumableUpload.ts.
+      const bytes = new Uint8Array(9 * 1024 * 1024);
+      const { videoUrl } = await uploadVideoFile(
+        new File([bytes], 'big-clip.mp4', { type: 'video/mp4' }),
+        { passcode: TEST_PASSCODE, testMode: false },
+        { baseUrl: backend.url },
+      );
+
+      expect(videoUrl).toBe('gs://fake-bucket/big-clip.mp4');
+      expect(gcs.receivedBytes()).toBe(bytes.length);
+      expect(createResumableUploadSession).toHaveBeenCalledWith({ filename: 'big-clip.mp4', contentType: 'video/mp4' });
+    } finally {
+      await backend.close();
+      await gcs.close();
+    }
   });
 });
