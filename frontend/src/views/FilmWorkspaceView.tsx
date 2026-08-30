@@ -9,7 +9,7 @@ import {
 } from '../api/filmsApiClient';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
-import { VerticalToolbar } from '../components/VerticalToolbar';
+import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber } from '../components/VideoScrubber';
 import { DetailsTable } from '../components/DetailsTable';
@@ -31,6 +31,15 @@ const DIVIDER_WIDTH = 6;
 const DEFAULT_LEFT_RATIO = 0.62;
 const DESKTOP_BREAKPOINT = 960;
 
+const SCRUBBER_HEIGHT_STORAGE_KEY = 'workspace.scrubberHeight';
+const MIN_SCRUBBER_HEIGHT = 84;
+const MAX_SCRUBBER_HEIGHT = 400;
+const DEFAULT_SCRUBBER_HEIGHT = 96;
+
+function clampScrubberHeight(value: number): number {
+  return Math.min(MAX_SCRUBBER_HEIGHT, Math.max(MIN_SCRUBBER_HEIGHT, value));
+}
+
 function clampLeftWidth(value: number, containerWidth: number): number {
   const maxLeft = Math.max(MIN_LEFT, containerWidth - MIN_RIGHT - DIVIDER_WIDTH);
   return Math.min(Math.max(value, MIN_LEFT), maxLeft);
@@ -48,6 +57,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [durationMs, setDurationMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showKickoff, setShowKickoff] = useState(false);
@@ -59,6 +70,10 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
+
+  const [scrubberHeight, setScrubberHeight] = useState(DEFAULT_SCRUBBER_HEIGHT);
+  const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
+  const scrubberDragStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   const {
     film,
@@ -139,6 +154,25 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     return () => observer.disconnect();
   }, [film]);
 
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(SCRUBBER_HEIGHT_STORAGE_KEY);
+      const parsed = raw ? Number(raw) : NaN;
+      if (Number.isFinite(parsed) && parsed > 0) setScrubberHeight(clampScrubberHeight(parsed));
+    } catch {
+      // private mode / storage disabled — default height still works
+    }
+  }, []);
+
+  // The <video> element's volume/muted aren't reactive props — they have to be
+  // pushed onto the element imperatively, same as currentTime elsewhere here.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.volume = volume;
+    video.muted = muted;
+  }, [volume, muted]);
+
   function handleDividerPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
@@ -162,6 +196,30 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     }
   }
 
+  function handleScrubberDividerPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    scrubberDragStartRef.current = { startY: e.clientY, startHeight: scrubberHeight };
+    setIsDraggingScrubber(true);
+  }
+
+  function handleScrubberDividerPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    const start = scrubberDragStartRef.current;
+    if (!start) return;
+    // The divider sits above the scrubber, so dragging it up should grow it.
+    setScrubberHeight(clampScrubberHeight(start.startHeight - (e.clientY - start.startY)));
+  }
+
+  function handleScrubberDividerPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setIsDraggingScrubber(false);
+    scrubberDragStartRef.current = null;
+    try {
+      window.localStorage.setItem(SCRUBBER_HEIGHT_STORAGE_KEY, String(scrubberHeight));
+    } catch {
+      // private mode / storage disabled — resize still works, just won't persist
+    }
+  }
+
   function setTab(next: Tab) {
     setSearchParams(next === 'details' ? {} : { tab: next });
   }
@@ -181,6 +239,17 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     if (!video) return;
     if (video.paused) void video.play();
     else video.pause();
+  }
+
+  function handleVolumeChange(next: number) {
+    setVolume(next);
+    // Dragging the slider up while muted should audibly un-mute, matching how
+    // every real media player's volume slider behaves.
+    if (next > 0 && muted) setMuted(false);
+  }
+
+  function toggleMute() {
+    setMuted((m) => !m);
   }
 
   async function handleDelete() {
@@ -339,19 +408,41 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
             </div>
             <SubtitleDisplay entries={film.subtitle?.entries ?? []} currentTimeMs={currentTimeMs} />
           </div>
-          <VerticalToolbar
+          <TransportBar
             playing={playing}
             zoom={zoom}
+            currentTimeMs={currentTimeMs}
+            durationMs={durationMs}
+            volume={volume}
+            muted={muted}
             onTogglePlay={togglePlay}
             onSeekRelative={handleSeekRelative}
             onZoomIn={() => setZoom((z) => Math.min(2, z + 0.25))}
             onZoomOut={() => setZoom((z) => Math.max(1, z - 0.25))}
-            onBack={() => navigate('/')}
+            onVolumeChange={handleVolumeChange}
+            onToggleMute={toggleMute}
           />
         </div>
       </div>
 
-      <VideoScrubber entries={film.subtitle?.entries ?? []} durationMs={durationMs} currentTimeMs={currentTimeMs} onSeek={handleSeek} />
+      <div
+        className={`workspace__scrubber-divider${isDraggingScrubber ? ' workspace__scrubber-divider--dragging' : ''}`}
+        onPointerDown={handleScrubberDividerPointerDown}
+        onPointerMove={handleScrubberDividerPointerMove}
+        onPointerUp={handleScrubberDividerPointerUp}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize the timeline scrubber"
+      />
+      <div className="workspace__scrubber-area" style={{ height: scrubberHeight }}>
+        <VideoScrubber
+          entries={film.subtitle?.entries ?? []}
+          detailRows={rows}
+          durationMs={durationMs}
+          currentTimeMs={currentTimeMs}
+          onSeek={handleSeek}
+        />
+      </div>
 
       {showKickoff && (
         <AgentKickoffPanel
