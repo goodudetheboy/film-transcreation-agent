@@ -28,7 +28,7 @@ describe('discoveryQueueWorker.processOne', () => {
     await jobStore.createJob({ filmId: film.id, specialInstruction: '', targetColumns: ['segmentDescription'], testMode: true });
 
     const mockAgent = fakeAgent(async () => ({
-      resultRows: [{ tempId: 't1', subtitleEntryId: 'e1', timestamp: '00:00', subtitleText: 'Hi', values: { segmentDescription: 'x' } }],
+      resultRows: [{ tempId: 't1', startMs: 0, endMs: 1000, subtitleText: 'Hi', values: { segmentDescription: 'x' } }],
       updatedConversation: [],
     }));
     const realAgent = fakeAgent(async () => {

@@ -5,8 +5,8 @@ import type { ColumnDoc, DetailRow, DetailRowProvenance, DetailRowValues } from 
 export type { ColumnDoc, DetailRow, DetailRowProvenance, DetailRowValues } from './filmTypes.js';
 
 export interface CreateDetailRowInput {
-  subtitleEntryId: string;
-  timestamp: string;
+  startMs: number;
+  endMs: number;
   subtitleText: string;
   values: Partial<DetailRowValues>;
   provenance: DetailRowProvenance;
@@ -33,7 +33,7 @@ export interface DetailRowsStore {
   updateRow(
     filmId: string,
     rowId: string,
-    patch: Partial<Pick<DetailRow, 'subtitleEntryId' | 'timestamp' | 'subtitleText' | 'values'>>,
+    patch: Partial<Pick<DetailRow, 'startMs' | 'endMs' | 'subtitleText' | 'values'>>,
   ): Promise<DetailRow | undefined>;
   deleteRow(filmId: string, rowId: string): Promise<boolean>;
   listColumns(filmId: string): Promise<ColumnDoc[]>;
@@ -67,8 +67,8 @@ export function createFirestoreDetailRowsStore(firestore: Firestore): DetailRows
       const row: DetailRow = {
         id: randomUUID(),
         filmId,
-        subtitleEntryId: input.subtitleEntryId,
-        timestamp: input.timestamp,
+        startMs: input.startMs,
+        endMs: input.endMs,
         subtitleText: input.subtitleText,
         values: fillValues(input.values),
         provenance: input.provenance,
@@ -138,8 +138,8 @@ export function createInMemoryDetailRowsStore(): DetailRowsStore {
       const row: DetailRow = {
         id: randomUUID(),
         filmId,
-        subtitleEntryId: input.subtitleEntryId,
-        timestamp: input.timestamp,
+        startMs: input.startMs,
+        endMs: input.endMs,
         subtitleText: input.subtitleText,
         values: fillValues(input.values),
         provenance: input.provenance,

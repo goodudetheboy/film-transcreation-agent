@@ -12,8 +12,8 @@ import type { FilmPrepPipeline } from '../services/filmPrepPipeline.js';
 import type { ProjectStore } from '../services/projectStore.js';
 import type { Rubric } from '../services/researchAgent.js';
 import { parseSubtitleFile } from '../services/subtitleParser.js';
+import { subtitleTextForRange } from '../services/subtitleOverlap.js';
 import { simulateDelay } from '../services/testDelay.js';
-import { formatMsAsTimestamp } from '../services/timeFormat.js';
 import { guessExtension, type VideoBucketUploader } from '../services/videoBucketUploader.js';
 
 export interface FilmsRouteDeps {
@@ -299,17 +299,16 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       res.status(404).json({ error: 'film not found' });
       return;
     }
-    const { subtitleEntryId, values } = req.body ?? {};
-    const entry = film.subtitle?.entries.find((e) => e.id === subtitleEntryId);
-    if (!entry) {
-      res.status(400).json({ error: 'subtitleEntryId must reference a parsed subtitle entry on this film' });
+    const { startMs, endMs, values } = req.body ?? {};
+    if (typeof startMs !== 'number' || typeof endMs !== 'number' || startMs < 0 || endMs <= startMs) {
+      res.status(400).json({ error: 'startMs/endMs must be numbers with endMs > startMs >= 0' });
       return;
     }
 
     const row = await deps.detailRowsStore.addRow(film.id, {
-      subtitleEntryId: entry.id,
-      timestamp: formatMsAsTimestamp(entry.startMs),
-      subtitleText: entry.text,
+      startMs,
+      endMs,
+      subtitleText: subtitleTextForRange(film.subtitle?.entries ?? [], startMs, endMs),
       values: values ?? {},
       provenance: { type: 'user-marked' },
     });
@@ -322,18 +321,17 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       res.status(404).json({ error: 'film not found' });
       return;
     }
-    const { subtitleEntryId, values } = req.body ?? {};
+    const { startMs, endMs, values } = req.body ?? {};
 
-    const patch: { subtitleEntryId?: string; timestamp?: string; subtitleText?: string; values?: unknown } = {};
-    if (subtitleEntryId !== undefined) {
-      const entry = film.subtitle?.entries.find((e) => e.id === subtitleEntryId);
-      if (!entry) {
-        res.status(400).json({ error: 'subtitleEntryId must reference a parsed subtitle entry on this film' });
+    const patch: { startMs?: number; endMs?: number; subtitleText?: string; values?: unknown } = {};
+    if (startMs !== undefined || endMs !== undefined) {
+      if (typeof startMs !== 'number' || typeof endMs !== 'number' || startMs < 0 || endMs <= startMs) {
+        res.status(400).json({ error: 'startMs/endMs must be numbers with endMs > startMs >= 0' });
         return;
       }
-      patch.subtitleEntryId = entry.id;
-      patch.timestamp = formatMsAsTimestamp(entry.startMs);
-      patch.subtitleText = entry.text;
+      patch.startMs = startMs;
+      patch.endMs = endMs;
+      patch.subtitleText = subtitleTextForRange(film.subtitle?.entries ?? [], startMs, endMs);
     }
     if (values !== undefined) patch.values = values;
 
@@ -505,8 +503,8 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
     }
 
     const row = await deps.detailRowsStore.addRow(job.filmId, {
-      subtitleEntryId: result.subtitleEntryId,
-      timestamp: result.timestamp,
+      startMs: result.startMs,
+      endMs: result.endMs,
       subtitleText: result.subtitleText,
       values: {
         segmentDescription: result.values.segmentDescription,

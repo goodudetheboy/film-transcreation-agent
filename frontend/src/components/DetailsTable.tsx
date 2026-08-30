@@ -7,6 +7,7 @@ import {
   type Film,
 } from '../api/apiClient.types';
 import { addColumn, addDetailRow, deleteDetailRow, updateDetailRow } from '../api/filmsApiClient';
+import { formatClock, parseClockToMs } from '../utils/timeFormat';
 
 export interface DetailsTableProps {
   film: Film;
@@ -14,6 +15,7 @@ export interface DetailsTableProps {
   rows: DetailRow[];
   columns: ColumnDoc[];
   currentTimeMs: number;
+  durationMs: number;
   onSeek: (ms: number) => void;
   onRowAdded: (row: DetailRow) => void;
   onRowUpdated: (row: DetailRow) => void;
@@ -22,7 +24,8 @@ export interface DetailsTableProps {
 }
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  timestamp: 110,
+  start: 90,
+  end: 90,
   subtitle: 260,
   segmentDescription: 260,
   gesture: 170,
@@ -33,6 +36,8 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 const DEFAULT_CUSTOM_COL_WIDTH = 200;
 const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 640;
+
+const NEW_ROW_DEFAULT_SPAN_MS = 2000;
 
 function provenanceLabel(row: DetailRow): string {
   if (row.provenance.type === 'user-marked') return 'Marked by you';
@@ -49,12 +54,21 @@ function provenanceModifier(row: DetailRow): string {
   return row.provenance.type === 'user-marked' ? 'user-marked' : row.provenance.type === 'agent-discovered' ? 'agent-discovered' : 'ai-assisted';
 }
 
+interface Draft {
+  startMs: number;
+  endMs: number;
+  startText: string;
+  endText: string;
+  values: DetailRowValues;
+}
+
 export function DetailsTable({
   film,
   passcode,
   rows,
   columns,
   currentTimeMs,
+  durationMs,
   onSeek,
   onRowAdded,
   onRowUpdated,
@@ -62,7 +76,7 @@ export function DetailsTable({
   onColumnAdded,
 }: DetailsTableProps) {
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ subtitleEntryId: string; values: DetailRowValues } | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
@@ -70,6 +84,14 @@ export function DetailsTable({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const entries = film.subtitle?.entries ?? [];
+
+  function subtitleTextForRange(startMs: number, endMs: number): string {
+    return entries
+      .filter((e) => e.startMs < endMs && e.endMs > startMs)
+      .sort((a, b) => a.startMs - b.startMs)
+      .map((e) => e.text)
+      .join(' ');
+  }
 
   function colWidth(key: string): number {
     return colWidths[key] ?? DEFAULT_COL_WIDTHS[key] ?? DEFAULT_CUSTOM_COL_WIDTH;
@@ -107,13 +129,8 @@ export function DetailsTable({
     );
   }
 
-  function entryForRow(row: DetailRow) {
-    return entries.find((e) => e.id === row.subtitleEntryId);
-  }
-
   function isRowActive(row: DetailRow) {
-    const entry = entryForRow(row);
-    return !!entry && currentTimeMs >= entry.startMs && currentTimeMs < entry.endMs;
+    return currentTimeMs >= row.startMs && currentTimeMs < row.endMs;
   }
 
   const activeRowId = rows.find(isRowActive)?.id ?? null;
@@ -127,13 +144,51 @@ export function DetailsTable({
 
   function startEdit(row: DetailRow) {
     setEditingRowId(row.id);
-    setDraft({ subtitleEntryId: row.subtitleEntryId, values: { ...row.values, custom: { ...row.values.custom } } });
+    setDraft({
+      startMs: row.startMs,
+      endMs: row.endMs,
+      startText: formatClock(row.startMs),
+      endText: formatClock(row.endMs),
+      values: { ...row.values, custom: { ...row.values.custom } },
+    });
     setError(null);
   }
 
   function cancelEdit() {
     setEditingRowId(null);
     setDraft(null);
+  }
+
+  function commitStart(rawText: string) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const ms = parseClockToMs(rawText);
+      if (ms === null || ms < 0 || ms >= prev.endMs) return { ...prev, startText: formatClock(prev.startMs) };
+      return { ...prev, startMs: ms, startText: formatClock(ms) };
+    });
+  }
+
+  function commitEnd(rawText: string) {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      const ms = parseClockToMs(rawText);
+      if (ms === null || ms <= prev.startMs) return { ...prev, endText: formatClock(prev.endMs) };
+      return { ...prev, endMs: ms, endText: formatClock(ms) };
+    });
+  }
+
+  function useCurrentForStart() {
+    setDraft((prev) => {
+      if (!prev || currentTimeMs < 0 || currentTimeMs >= prev.endMs) return prev;
+      return { ...prev, startMs: currentTimeMs, startText: formatClock(currentTimeMs) };
+    });
+  }
+
+  function useCurrentForEnd() {
+    setDraft((prev) => {
+      if (!prev || currentTimeMs <= prev.startMs) return prev;
+      return { ...prev, endMs: currentTimeMs, endText: formatClock(currentTimeMs) };
+    });
   }
 
   async function saveEdit(rowId: string) {
@@ -143,7 +198,8 @@ export function DetailsTable({
     try {
       const updated = await updateDetailRow(film.id, rowId, {
         passcode,
-        subtitleEntryId: draft.subtitleEntryId,
+        startMs: draft.startMs,
+        endMs: draft.endMs,
         values: draft.values,
       });
       onRowUpdated(updated);
@@ -169,12 +225,13 @@ export function DetailsTable({
   }
 
   async function handleManualAdd() {
-    if (entries.length === 0) return;
     setBusy(true);
     setError(null);
     try {
-      const entry = entries[0];
-      const row = await addDetailRow(film.id, { passcode, subtitleEntryId: entry.id, values: {} });
+      const startMs = currentTimeMs;
+      const cap = durationMs > 0 ? durationMs : startMs + NEW_ROW_DEFAULT_SPAN_MS;
+      const endMs = Math.max(startMs + 1, Math.min(startMs + NEW_ROW_DEFAULT_SPAN_MS, cap));
+      const row = await addDetailRow(film.id, { passcode, startMs, endMs, values: {} });
       onRowAdded(row);
       startEdit(row);
     } catch (err) {
@@ -220,7 +277,8 @@ export function DetailsTable({
       <div className="details-table-scroll" ref={scrollRef}>
         <table className="details-table">
           <colgroup>
-            <col style={{ width: colWidth('timestamp') }} />
+            <col style={{ width: colWidth('start') }} />
+            <col style={{ width: colWidth('end') }} />
             <col style={{ width: colWidth('subtitle') }} />
             <col style={{ width: colWidth('segmentDescription') }} />
             <col style={{ width: colWidth('gesture') }} />
@@ -233,7 +291,8 @@ export function DetailsTable({
           </colgroup>
           <thead>
             <tr>
-              <ResizableTh colKey="timestamp">Timestamp</ResizableTh>
+              <ResizableTh colKey="start">Start</ResizableTh>
+              <ResizableTh colKey="end">End</ResizableTh>
               <ResizableTh colKey="subtitle">Subtitle</ResizableTh>
               <ResizableTh colKey="segmentDescription">Segment Description</ResizableTh>
               <ResizableTh colKey="gesture">Gesture</ResizableTh>
@@ -261,31 +320,65 @@ export function DetailsTable({
                   className={rowClassName}
                   onClick={() => {
                     if (!isEditing) startEdit(row);
-                    const entry = entryForRow(row);
-                    if (entry) onSeek(entry.startMs);
+                    onSeek(row.startMs);
                   }}
                 >
-                  <td title={!isEditing ? row.timestamp : undefined}>
+                  <td title={!isEditing ? formatClock(row.startMs) : undefined}>
                     {isEditing && draft ? (
-                      <select
-                        value={draft.subtitleEntryId}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => setDraft({ ...draft, subtitleEntryId: e.target.value })}
-                      >
-                        {entries.map((entry) => (
-                          <option key={entry.id} value={entry.id}>
-                            {entry.text.slice(0, 24)}
-                          </option>
-                        ))}
-                      </select>
+                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={draft.startText}
+                          size={7}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setDraft({ ...draft, startText: e.target.value })}
+                          onBlur={(e) => commitStart(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          title="Set to current playhead position"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            useCurrentForStart();
+                          }}
+                        >
+                          ⏱
+                        </button>
+                      </span>
                     ) : (
-                      row.timestamp
+                      formatClock(row.startMs)
+                    )}
+                  </td>
+                  <td title={!isEditing ? formatClock(row.endMs) : undefined}>
+                    {isEditing && draft ? (
+                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <input
+                          type="text"
+                          value={draft.endText}
+                          size={7}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => setDraft({ ...draft, endText: e.target.value })}
+                          onBlur={(e) => commitEnd(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn--ghost"
+                          title="Set to current playhead position"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            useCurrentForEnd();
+                          }}
+                        >
+                          ⏱
+                        </button>
+                      </span>
+                    ) : (
+                      formatClock(row.endMs)
                     )}
                   </td>
                   <td title={isEditing ? undefined : row.subtitleText}>
-                    {isEditing && draft
-                      ? entries.find((e) => e.id === draft.subtitleEntryId)?.text
-                      : row.subtitleText}
+                    {isEditing && draft ? subtitleTextForRange(draft.startMs, draft.endMs) : row.subtitleText}
                   </td>
                   {(['segmentDescription', 'gesture', 'notes'] as const).map((key) => (
                     <td key={key} title={!isEditing ? row.values[key] : undefined}>
@@ -342,7 +435,7 @@ export function DetailsTable({
       </div>
 
       <div style={{ display: 'flex', gap: 12 }}>
-        <button type="button" className="btn" disabled={busy || entries.length === 0} onClick={handleManualAdd}>
+        <button type="button" className="btn" disabled={busy} onClick={handleManualAdd}>
           + Manually add details
         </button>
         <button type="button" className="btn" disabled={busy} onClick={handleAddColumn}>

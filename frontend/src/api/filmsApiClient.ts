@@ -164,7 +164,7 @@ export async function listDetails(
 
 export async function addDetailRow(
   filmId: string,
-  payload: { passcode: string; subtitleEntryId: string; values?: Partial<DetailRowValues> },
+  payload: { passcode: string; startMs: number; endMs: number; values?: Partial<DetailRowValues> },
   options: ApiClientOptions = {},
 ): Promise<DetailRow> {
   const baseUrl = resolveBaseUrl(options);
@@ -182,7 +182,7 @@ export async function addDetailRow(
 export async function updateDetailRow(
   filmId: string,
   rowId: string,
-  payload: { passcode: string; subtitleEntryId?: string; values?: Partial<DetailRowValues> },
+  payload: { passcode: string; startMs?: number; endMs?: number; values?: Partial<DetailRowValues> },
   options: ApiClientOptions = {},
 ): Promise<DetailRow> {
   const baseUrl = resolveBaseUrl(options);

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { ConversationTurn, DiscoveryResultRow, SubtitleEntry } from './filmTypes.js';
-import { formatMsAsTimestamp } from './timeFormat.js';
 
 export interface DiscoveryPassInput {
   videoUrl: string;
@@ -165,8 +164,8 @@ export function createDiscoveryAgent(
           }
           return {
             tempId: randomUUID(),
-            subtitleEntryId: entry.id,
-            timestamp: formatMsAsTimestamp(entry.startMs),
+            startMs: entry.startMs,
+            endMs: entry.endMs,
             subtitleText: entry.text,
             values,
           };

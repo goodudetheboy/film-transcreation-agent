@@ -5,15 +5,15 @@ describe('createInMemoryDetailRowsStore rows', () => {
   it('addRow fills in default empty values and returns them via listRows, scoped per film', async () => {
     const store = createInMemoryDetailRowsStore();
     await store.addRow('film-a', {
-      subtitleEntryId: 'e1',
-      timestamp: '00:01',
+      startMs: 1000,
+      endMs: 2000,
       subtitleText: 'Hello',
       values: { segmentDescription: 'desc' },
       provenance: { type: 'user-marked' },
     });
     await store.addRow('film-b', {
-      subtitleEntryId: 'e2',
-      timestamp: '00:02',
+      startMs: 2000,
+      endMs: 3000,
       subtitleText: 'Other film',
       values: {},
       provenance: { type: 'user-marked' },
@@ -25,11 +25,11 @@ describe('createInMemoryDetailRowsStore rows', () => {
     expect(await store.listRows('film-b')).toHaveLength(1);
   });
 
-  it('updateRow merges values and can repoint subtitleEntryId; returns undefined for the wrong film', async () => {
+  it('updateRow merges values and can retime startMs/endMs; returns undefined for the wrong film', async () => {
     const store = createInMemoryDetailRowsStore();
     const row = await store.addRow('film-a', {
-      subtitleEntryId: 'e1',
-      timestamp: '00:01',
+      startMs: 1000,
+      endMs: 2000,
       subtitleText: 'Hello',
       values: { segmentDescription: 'desc' },
       provenance: { type: 'user-marked' },
@@ -38,14 +38,17 @@ describe('createInMemoryDetailRowsStore rows', () => {
     const updated = await store.updateRow('film-a', row.id, { values: { gesture: 'wave' } });
     expect(updated?.values).toEqual({ segmentDescription: 'desc', gesture: 'wave', notes: '', custom: {} });
 
+    const retimed = await store.updateRow('film-a', row.id, { startMs: 5000, endMs: 6500, subtitleText: '' });
+    expect(retimed).toMatchObject({ startMs: 5000, endMs: 6500, subtitleText: '' });
+
     expect(await store.updateRow('film-b', row.id, { values: { notes: 'x' } })).toBeUndefined();
   });
 
   it('deleteRow removes only the targeted row for the right film', async () => {
     const store = createInMemoryDetailRowsStore();
     const row = await store.addRow('film-a', {
-      subtitleEntryId: 'e1',
-      timestamp: '00:01',
+      startMs: 1000,
+      endMs: 2000,
       subtitleText: 'Hello',
       values: {},
       provenance: { type: 'user-marked' },

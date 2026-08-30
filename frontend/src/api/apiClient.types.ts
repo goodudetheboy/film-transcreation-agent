@@ -166,8 +166,8 @@ export interface DetailRowValues {
 export interface DetailRow {
   id: string;
   filmId: string;
-  subtitleEntryId: string;
-  timestamp: string;
+  startMs: number;
+  endMs: number;
   subtitleText: string;
   values: DetailRowValues;
   provenance: DetailRowProvenance;
@@ -186,8 +186,8 @@ export interface DiscoveryResultRowValues {
 
 export interface DiscoveryResultRow {
   tempId: string;
-  subtitleEntryId: string;
-  timestamp: string;
+  startMs: number;
+  endMs: number;
   subtitleText: string;
   values: DiscoveryResultRowValues;
 }

@@ -12,8 +12,8 @@ export function fakeDiscoveryAgent(result?: DiscoveryPassResult): DiscoveryAgent
           ? [
               {
                 tempId: 'fake-result-1',
-                subtitleEntryId: entry.id,
-                timestamp: '00:00',
+                startMs: entry.startMs,
+                endMs: entry.endMs,
                 subtitleText: entry.text,
                 values: Object.fromEntries(targetColumns.map((c: string) => [c, `fake ${c}`])),
               },

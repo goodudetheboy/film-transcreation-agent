@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type { DiscoveryAgent, DiscoveryPassInput, DiscoveryPassResult } from './discoveryAgent.js';
 import type { DiscoveryResultRow } from './filmTypes.js';
 import { simulateDelay } from './testDelay.js';
-import { formatMsAsTimestamp } from './timeFormat.js';
 
 const MOCK_NOTES = [
   'Possible cultural sensitivity — verify local reception.',
@@ -42,8 +41,8 @@ export function createMockDiscoveryAgent(config: { mockDelayScale: number }): Di
         }
         return {
           tempId: randomUUID(),
-          subtitleEntryId: entry.id,
-          timestamp: formatMsAsTimestamp(entry.startMs),
+          startMs: entry.startMs,
+          endMs: entry.endMs,
           subtitleText: entry.text,
           values,
         };

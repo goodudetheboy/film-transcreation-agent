@@ -257,6 +257,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                 rows={rows}
                 columns={columns}
                 currentTimeMs={currentTimeMs}
+                durationMs={durationMs}
                 onSeek={handleSeek}
                 onRowAdded={addRow}
                 onRowUpdated={updateRow}

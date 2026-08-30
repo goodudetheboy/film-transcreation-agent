@@ -186,15 +186,16 @@ describe('Details table routes', () => {
     return res.body.id as string;
   }
 
-  it('adds, lists, updates, and deletes a manual detail row anchored to a real subtitle entry', async () => {
+  it('adds, lists, updates, and deletes a manual detail row with a freeform start/end range', async () => {
     const { app } = buildApp();
     const filmId = await seedFilmId(app);
 
     const add = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, subtitleEntryId: 'e1', values: { notes: 'check this' } });
+      .send({ passcode: TEST_PASSCODE, startMs: 0, endMs: 2000, values: { notes: 'check this' } });
     expect(add.status).toBe(201);
     expect(add.body.provenance).toEqual({ type: 'user-marked' });
+    expect(add.body.subtitleText).toBe('Hello there');
     const rowId = add.body.id;
 
     const list = await request(app).get(`/api/films/${filmId}/details?passcode=${TEST_PASSCODE}`);
@@ -209,13 +210,40 @@ describe('Details table routes', () => {
     expect(del.status).toBe(204);
   });
 
-  it('rejects a subtitleEntryId that does not exist on the film', async () => {
+  it('rejects endMs <= startMs', async () => {
     const { app } = buildApp();
     const filmId = await seedFilmId(app);
     const res = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, subtitleEntryId: 'not-real', values: {} });
+      .send({ passcode: TEST_PASSCODE, startMs: 2000, endMs: 2000, values: {} });
     expect(res.status).toBe(400);
+  });
+
+  it('derives empty subtitle text for a range with no dialogue in it (a non-dialogue moment)', async () => {
+    const { app } = buildApp();
+    const filmId = await seedFilmId(app);
+    const add = await request(app)
+      .post(`/api/films/${filmId}/details`)
+      .send({ passcode: TEST_PASSCODE, startMs: 10_000, endMs: 12_000, values: {} });
+    expect(add.status).toBe(201);
+    expect(add.body.subtitleText).toBe('');
+  });
+
+  it('derives joined subtitle text for a range spanning two adjacent subtitle entries', async () => {
+    const { app } = buildApp();
+    const created = await createFilm(app, {
+      runDiscovery: false,
+      subtitleEntries: [
+        { id: 'e1', index: 0, startMs: 0, endMs: 2000, text: 'Hello there' },
+        { id: 'e2', index: 1, startMs: 2000, endMs: 4000, text: 'General Kenobi' },
+      ],
+    });
+    const filmId = created.body.id;
+    const add = await request(app)
+      .post(`/api/films/${filmId}/details`)
+      .send({ passcode: TEST_PASSCODE, startMs: 0, endMs: 4000, values: {} });
+    expect(add.status).toBe(201);
+    expect(add.body.subtitleText).toBe('Hello there General Kenobi');
   });
 
   it('adds a custom column', async () => {
@@ -261,7 +289,7 @@ describe('Discovery job routes', () => {
     const agent: DiscoveryAgent = {
       runPass: vi.fn().mockResolvedValue({
         resultRows: [
-          { tempId: 't1', subtitleEntryId: 'e1', timestamp: '00:00', subtitleText: 'Hello there', values: { segmentDescription: 'x' } },
+          { tempId: 't1', startMs: 0, endMs: 2000, subtitleText: 'Hello there', values: { segmentDescription: 'x' } },
         ],
         updatedConversation: [],
       }),
@@ -273,7 +301,7 @@ describe('Discovery job routes', () => {
     // Simulate the worker having finished it (route tests don't run the queue worker itself).
     await discoveryJobStore.updateJob(filmId, job.id, {
       status: 'done',
-      resultRows: [{ tempId: 't1', subtitleEntryId: 'e1', timestamp: '00:00', subtitleText: 'Hello there', values: { segmentDescription: 'x' } }],
+      resultRows: [{ tempId: 't1', startMs: 0, endMs: 2000, subtitleText: 'Hello there', values: { segmentDescription: 'x' } }],
     });
 
     const add = await request(app).post(`/api/films/${filmId}/discovery-jobs/${job.id}/results/t1/add`).send({ passcode: TEST_PASSCODE });
@@ -330,8 +358,8 @@ describe('POST /api/films/:id/create-project', () => {
     const filmId = created.body.id;
 
     await detailRowsStore.addRow(filmId, {
-      subtitleEntryId: 'e1',
-      timestamp: '00:00',
+      startMs: 0,
+      endMs: 2000,
       subtitleText: 'Hello there',
       values: { segmentDescription: 'a scene' },
       provenance: { type: 'user-marked' },

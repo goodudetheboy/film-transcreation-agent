@@ -6,8 +6,8 @@ function row(overrides: Partial<DetailRow> = {}): DetailRow {
   return {
     id: 'r1',
     filmId: 'f1',
-    subtitleEntryId: 'e1',
-    timestamp: '00:01',
+    startMs: 1000,
+    endMs: 2000,
     subtitleText: 'Hello there',
     values: { segmentDescription: '', gesture: '', notes: '', custom: {} },
     provenance: { type: 'user-marked' },

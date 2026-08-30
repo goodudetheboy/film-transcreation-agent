@@ -33,8 +33,8 @@ describe('createDiscoveryAgent runPass', () => {
     expect(result.resultRows).toEqual([
       {
         tempId: expect.any(String),
-        subtitleEntryId: 'e2',
-        timestamp: '01:05',
+        startMs: 65000,
+        endMs: 66000,
         subtitleText: 'Second line',
         values: { segmentDescription: 'A finding' },
       },

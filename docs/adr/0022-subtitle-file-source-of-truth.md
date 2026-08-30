@@ -46,3 +46,11 @@ stripped, so `subtitleParser.ts` parses both through one shared scan
 - Re-timing or fixing a typo in the subtitle file after a film is created isn't
   supported — the parsed entries are fixed at creation time. Not needed for this
   pass; would require a "re-upload subtitle" flow if it ever comes up.
+
+**Update (see 0023):** the `DetailRow.subtitleEntryId` FK and its `<select>`-based UI
+described above are superseded by
+[0023](0023-freeform-detail-row-timing.md) — rows now carry their own free
+`startMs`/`endMs` range instead of pointing at one subtitle entry, so non-dialogue
+moments (a visual gag, a gesture) can be flagged too. The film-creation requirement
+above (a real timestamped subtitle file must be uploaded and parsed first) is
+unaffected.

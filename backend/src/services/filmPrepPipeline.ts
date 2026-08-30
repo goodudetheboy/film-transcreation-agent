@@ -71,8 +71,8 @@ export function createFilmPrepPipeline(deps: FilmPrepPipelineDeps): FilmPrepPipe
             });
             for (const row of result.resultRows) {
               await deps.detailRowsStore.addRow(filmId, {
-                subtitleEntryId: row.subtitleEntryId,
-                timestamp: row.timestamp,
+                startMs: row.startMs,
+                endMs: row.endMs,
                 subtitleText: row.subtitleText,
                 values: {
                   segmentDescription: row.values.segmentDescription,

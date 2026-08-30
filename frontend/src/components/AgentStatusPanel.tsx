@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BUILTIN_COLUMN_LABELS, type ColumnDoc, type DetailRow, type DiscoveryJob } from '../api/apiClient.types';
 import { commentOnDiscoveryJob, discardDiscoveryResult, mergeDiscoveryResult, streamDiscoveryJob } from '../api/filmsApiClient';
+import { formatClock } from '../utils/timeFormat';
 
 export interface AgentStatusPanelProps {
   filmId: string;
@@ -125,7 +126,7 @@ export function AgentStatusPanel({ filmId, passcode, jobId, job, columns, onJobE
           <ul className="content-list">
             {job.resultRows.map((r) => (
               <li key={r.tempId} className="content-card">
-                <p className="content-card__caption">{r.timestamp}</p>
+                <p className="content-card__caption">{formatClock(r.startMs)} – {formatClock(r.endMs)}</p>
                 <p className="content-card__primary">“{r.subtitleText}”</p>
                 <p className="content-card__secondary">
                   {Object.entries(r.values)
