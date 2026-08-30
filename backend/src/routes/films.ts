@@ -459,12 +459,12 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       res.status(404).json({ error: 'film not found' });
       return;
     }
-    const { name } = req.body ?? {};
+    const { name, description } = req.body ?? {};
     if (typeof name !== 'string' || name.trim() === '') {
       res.status(400).json({ error: 'name is required' });
       return;
     }
-    const column = await deps.detailRowsStore.addColumn(film.id, name.trim());
+    const column = await deps.detailRowsStore.addColumn(film.id, name.trim(), typeof description === 'string' ? description.trim() : '');
     res.status(201).json(column);
   });
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createDiscoveryQueueWorker } from './discoveryQueueWorker.js';
 import { createInMemoryDiscoveryJobStore } from './discoveryJobStore.js';
 import { createInMemoryFilmStore } from './filmStore.js';
+import { createInMemoryDetailRowsStore } from './detailRowsStore.js';
 import { createDiscoveryEventBus } from './discoveryEventBus.js';
 import type { DiscoveryAgent } from './discoveryAgent.js';
 
@@ -38,6 +39,7 @@ describe('discoveryQueueWorker.processOne', () => {
     const worker = createDiscoveryQueueWorker({
       discoveryJobStore: jobStore,
       filmStore,
+      detailRowsStore: createInMemoryDetailRowsStore(),
       discoveryAgent: realAgent,
       mockDiscoveryAgent: mockAgent,
       eventBus: createDiscoveryEventBus(),
@@ -64,6 +66,7 @@ describe('discoveryQueueWorker.processOne', () => {
     const worker = createDiscoveryQueueWorker({
       discoveryJobStore: jobStore,
       filmStore,
+      detailRowsStore: createInMemoryDetailRowsStore(),
       discoveryAgent: fakeAgent(async () => {
         throw new Error('real');
       }),
@@ -97,6 +100,7 @@ describe('discoveryQueueWorker.processOne', () => {
     const worker = createDiscoveryQueueWorker({
       discoveryJobStore: jobStore,
       filmStore,
+      detailRowsStore: createInMemoryDetailRowsStore(),
       discoveryAgent: fakeAgent(async () => ({ resultRows: [], updatedConversation: [] })),
       mockDiscoveryAgent: fakeAgent(async () => ({ resultRows: [], updatedConversation: [] })),
       eventBus,

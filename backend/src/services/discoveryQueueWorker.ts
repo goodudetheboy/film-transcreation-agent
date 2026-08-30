@@ -1,11 +1,13 @@
 import type { DiscoveryAgent } from './discoveryAgent.js';
 import type { DiscoveryEventBus } from './discoveryEventBus.js';
 import type { DiscoveryJobStore } from './discoveryJobStore.js';
+import type { DetailRowsStore } from './detailRowsStore.js';
 import type { FilmStore } from './filmStore.js';
 
 export interface DiscoveryQueueWorkerDeps {
   discoveryJobStore: DiscoveryJobStore;
   filmStore: FilmStore;
+  detailRowsStore: DetailRowsStore;
   discoveryAgent: DiscoveryAgent;
   mockDiscoveryAgent: DiscoveryAgent;
   eventBus: DiscoveryEventBus;
@@ -49,6 +51,12 @@ export function createDiscoveryQueueWorker(deps: DiscoveryQueueWorkerDeps): Disc
       const isRerun = job.conversationHistory.length > 0;
       const latestComment = job.commentHistory[job.commentHistory.length - 1]?.comment;
 
+      // Custom columns' name/description, so the agent gets real context for
+      // what a user-defined column is asking for instead of just its raw key
+      // (see docs/adr and discoveryAgent.ts's columnMeta usage).
+      const columns = await deps.detailRowsStore.listColumns(job.filmId);
+      const columnMeta = Object.fromEntries(columns.map((c) => [c.key, { name: c.name, description: c.description }]));
+
       const started = new Date().toISOString();
       const running1 = await deps.discoveryJobStore.updateJob(job.filmId, job.id, {
         log: [
@@ -63,6 +71,7 @@ export function createDiscoveryQueueWorker(deps: DiscoveryQueueWorkerDeps): Disc
         subtitleEntries: film.subtitle.entries,
         specialInstruction: job.specialInstruction,
         targetColumns: job.targetColumns,
+        columnMeta,
         priorConversation: job.conversationHistory,
         newComment: isRerun ? latestComment : undefined,
       });

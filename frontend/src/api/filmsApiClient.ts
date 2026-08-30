@@ -252,7 +252,7 @@ export async function deleteDetailRow(
 
 export async function addColumn(
   filmId: string,
-  payload: { passcode: string; name: string },
+  payload: { passcode: string; name: string; description?: string },
   options: ApiClientOptions = {},
 ): Promise<ColumnDoc> {
   const baseUrl = resolveBaseUrl(options);

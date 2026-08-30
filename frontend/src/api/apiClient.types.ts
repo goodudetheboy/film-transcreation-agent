@@ -147,6 +147,8 @@ export interface ColumnDoc {
   id: string;
   filmId: string;
   name: string;
+  /** Shown as a tooltip next to the column name, and fed to the Discovery Agent as context. */
+  description: string;
   key: string;
   createdAt: string;
 }

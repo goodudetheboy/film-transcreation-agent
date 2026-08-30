@@ -105,6 +105,45 @@ describe('createDiscoveryAgent runPass', () => {
     expect(result.resultRows[0].values).toEqual({ custom: { localSlang: 'yo' } });
   });
 
+  it('surfaces a custom column\'s name and description in the system instruction, not just its raw key', async () => {
+    const calls: unknown[] = [];
+    const generateContent = vi.fn(async (params: any) => {
+      calls.push(params);
+      return { text: JSON.stringify({ rows: [] }) };
+    });
+    const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+    await agent.runPass({
+      videoUrl: 'gs://bucket/clip.mp4',
+      subtitleEntries: ENTRIES,
+      specialInstruction: '',
+      targetColumns: ['localSlang'],
+      columnMeta: { localSlang: { name: 'Local Slang', description: 'Flag any regional slang the localizer should adapt.' } },
+      priorConversation: [],
+    });
+
+    const systemInstruction = (calls[0] as any).config.systemInstruction;
+    expect(systemInstruction).toContain('"localSlang" (Local Slang): Flag any regional slang the localizer should adapt.');
+  });
+
+  it('falls back to the raw key when a custom column has no columnMeta entry', async () => {
+    const calls: unknown[] = [];
+    const generateContent = vi.fn(async (params: any) => {
+      calls.push(params);
+      return { text: JSON.stringify({ rows: [] }) };
+    });
+    const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+    await agent.runPass({
+      videoUrl: 'gs://bucket/clip.mp4',
+      subtitleEntries: ENTRIES,
+      specialInstruction: '',
+      targetColumns: ['localSlang'],
+      priorConversation: [],
+    });
+
+    const systemInstruction = (calls[0] as any).config.systemInstruction;
+    expect(systemInstruction).toContain('"localSlang" (localSlang)');
+  });
+
   it('re-runs append the comment as a new user turn onto the prior conversation, without re-attaching the video', async () => {
     const calls: unknown[] = [];
     const generateContent = vi.fn(async (params: any) => {

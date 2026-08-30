@@ -78,6 +78,9 @@ export interface ColumnDoc {
   id: string;
   filmId: string;
   name: string;
+  /** Shown as a tooltip next to the column name, and fed to the Discovery
+   * Agent as context for what this column is asking for — see discoveryAgent.ts. */
+  description: string;
   key: string;
   createdAt: string;
 }

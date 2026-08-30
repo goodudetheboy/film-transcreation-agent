@@ -8,6 +8,13 @@ export interface DiscoveryPassInput {
   subtitleEntries: SubtitleEntry[];
   specialInstruction: string;
   targetColumns: string[];
+  /**
+   * Name/description for custom (non-builtin) target columns, keyed by column
+   * key — surfaced to Gemini as real context for what a user-defined column is
+   * asking for, instead of just the column's raw key. The three builtin
+   * columns (segmentDescription/gesture/notes) don't need an entry here.
+   */
+  columnMeta?: Record<string, { name: string; description: string }>;
   priorConversation: ConversationTurn[];
   /** Present only on a comment-driven re-run of an already-run pass. */
   newComment?: string;
@@ -34,15 +41,25 @@ export interface DiscoveryAgent {
 
 const CUSTOM_VALUE_KEYS = new Set(['segmentDescription', 'gesture', 'notes']);
 
-function columnLabel(key: string): string {
+function columnLabel(key: string, columnMeta?: Record<string, { name: string; description: string }>): string {
   if (key === 'segmentDescription') return 'Segment Description';
   if (key === 'gesture') return 'Gesture';
   if (key === 'notes') return 'Notes';
-  return key;
+  return columnMeta?.[key]?.name ?? key;
 }
 
-function buildSystemInstruction(subtitleEntries: SubtitleEntry[], specialInstruction: string, targetColumns: string[]): string {
-  const columnsDesc = targetColumns.map((c) => `- "${c}" (${columnLabel(c)})`).join('\n');
+function buildSystemInstruction(
+  subtitleEntries: SubtitleEntry[],
+  specialInstruction: string,
+  targetColumns: string[],
+  columnMeta?: Record<string, { name: string; description: string }>,
+): string {
+  const columnsDesc = targetColumns
+    .map((c) => {
+      const description = columnMeta?.[c]?.description;
+      return description ? `- "${c}" (${columnLabel(c, columnMeta)}): ${description}` : `- "${c}" (${columnLabel(c, columnMeta)})`;
+    })
+    .join('\n');
   const entriesJson = JSON.stringify(subtitleEntries.map((e) => ({ startMs: e.startMs, endMs: e.endMs, text: e.text })));
   return `You are the Discovery Agent in a film localization triage pipeline. Watch the
 attached video and find moments worth flagging for cultural-localization review.
@@ -119,7 +136,7 @@ export function createDiscoveryAgent(
     new GoogleGenAI({ vertexai: true, project: config.googleCloudProject, location: config.geminiLocation });
 
   return {
-    async runPass({ videoUrl, subtitleEntries, specialInstruction, targetColumns, priorConversation, newComment }) {
+    async runPass({ videoUrl, subtitleEntries, specialInstruction, targetColumns, columnMeta, priorConversation, newComment }) {
       const contents: ConversationTurn[] = [...priorConversation];
       if (contents.length === 0) {
         contents.push({
@@ -137,7 +154,7 @@ export function createDiscoveryAgent(
         model: config.geminiModel,
         contents,
         config: {
-          systemInstruction: buildSystemInstruction(subtitleEntries, specialInstruction, targetColumns),
+          systemInstruction: buildSystemInstruction(subtitleEntries, specialInstruction, targetColumns, columnMeta),
           temperature: 0.2,
           maxOutputTokens: MAX_OUTPUT_TOKENS,
           responseMimeType: 'application/json',

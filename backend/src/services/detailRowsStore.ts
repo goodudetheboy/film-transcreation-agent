@@ -37,7 +37,7 @@ export interface DetailRowsStore {
   ): Promise<DetailRow | undefined>;
   deleteRow(filmId: string, rowId: string): Promise<boolean>;
   listColumns(filmId: string): Promise<ColumnDoc[]>;
-  addColumn(filmId: string, name: string): Promise<ColumnDoc>;
+  addColumn(filmId: string, name: string, description: string): Promise<ColumnDoc>;
 }
 
 function rowsCollection(firestore: Firestore, filmId: string) {
@@ -107,11 +107,12 @@ export function createFirestoreDetailRowsStore(firestore: Firestore): DetailRows
       return snapshot.docs.map((d) => d.data() as ColumnDoc);
     },
 
-    async addColumn(filmId, name) {
+    async addColumn(filmId, name, description) {
       const column: ColumnDoc = {
         id: randomUUID(),
         filmId,
         name,
+        description,
         key: columnKeyFromName(name),
         createdAt: new Date().toISOString(),
       };
@@ -175,11 +176,12 @@ export function createInMemoryDetailRowsStore(): DetailRowsStore {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
 
-    async addColumn(filmId, name) {
+    async addColumn(filmId, name, description) {
       const column: ColumnDoc = {
         id: randomUUID(),
         filmId,
         name,
+        description,
         key: columnKeyFromName(name),
         createdAt: new Date().toISOString(),
       };

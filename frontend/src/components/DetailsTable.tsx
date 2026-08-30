@@ -71,18 +71,21 @@ interface Draft {
 function ResizableTh({
   colKey,
   children,
+  title,
   onResizerPointerDown,
   onResizerPointerMove,
   onResizerPointerUp,
 }: {
   colKey: string;
   children: ReactNode;
+  /** Tooltip shown on hover — used for a custom column's description. */
+  title?: string;
   onResizerPointerDown: (e: React.PointerEvent<HTMLSpanElement>, key: string) => void;
   onResizerPointerMove: (e: React.PointerEvent<HTMLSpanElement>) => void;
   onResizerPointerUp: (e: React.PointerEvent<HTMLSpanElement>) => void;
 }) {
   return (
-    <th>
+    <th title={title}>
       {children}
       <span
         className="details-table__col-resizer"
@@ -112,6 +115,9 @@ export function DetailsTable({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  const [showAddColumnModal, setShowAddColumnModal] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnDescription, setNewColumnDescription] = useState('');
   const dragRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -174,6 +180,15 @@ export function DetailsTable({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [editingRowId]);
+
+  useEffect(() => {
+    if (!showAddColumnModal) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowAddColumnModal(false);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showAddColumnModal]);
 
   function startEdit(row: DetailRow) {
     setEditingRowId(row.id);
@@ -275,14 +290,25 @@ export function DetailsTable({
     }
   }
 
-  async function handleAddColumn() {
-    const name = window.prompt('New column name?');
-    if (!name || name.trim() === '') return;
+  function openAddColumnModal() {
+    setNewColumnName('');
+    setNewColumnDescription('');
+    setError(null);
+    setShowAddColumnModal(true);
+  }
+
+  function cancelAddColumn() {
+    setShowAddColumnModal(false);
+  }
+
+  async function submitAddColumn() {
+    if (newColumnName.trim() === '') return;
     setBusy(true);
     setError(null);
     try {
-      const column = await addColumn(film.id, { passcode, name: name.trim() });
+      const column = await addColumn(film.id, { passcode, name: newColumnName.trim(), description: newColumnDescription.trim() });
       onColumnAdded(column);
+      setShowAddColumnModal(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to add column');
     } finally {
@@ -332,7 +358,7 @@ export function DetailsTable({
               <ResizableTh colKey="gesture" {...resizerHandlers}>Gesture</ResizableTh>
               <ResizableTh colKey="notes" {...resizerHandlers}>Notes</ResizableTh>
               {columns.map((c) => (
-                <ResizableTh key={c.id} colKey={c.key} {...resizerHandlers}>
+                <ResizableTh key={c.id} colKey={c.key} title={c.description || undefined} {...resizerHandlers}>
                   {c.name}
                 </ResizableTh>
               ))}
@@ -389,7 +415,7 @@ export function DetailsTable({
         <button type="button" className="btn" disabled={busy} onClick={handleManualAdd}>
           + Manually add details
         </button>
-        <button type="button" className="btn" disabled={busy} onClick={handleAddColumn}>
+        <button type="button" className="btn" disabled={busy} onClick={openAddColumnModal}>
           + Add column
         </button>
       </div>
@@ -477,6 +503,62 @@ export function DetailsTable({
               </span>
             </div>
           </div>
+        </div>
+      )}
+
+      {showAddColumnModal && (
+        <div className="modal-backdrop" onClick={() => !busy && cancelAddColumn()}>
+          <form
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submitAddColumn();
+            }}
+          >
+            <div className="modal__header">
+              <p className="modal__title">Add column</p>
+              <button type="button" className="modal__close" onClick={cancelAddColumn} disabled={busy}>
+                ×
+              </button>
+            </div>
+
+            <div className="field">
+              <label htmlFor="new-column-name">Name</label>
+              <input
+                id="new-column-name"
+                type="text"
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="new-column-description">Description</label>
+              <textarea
+                id="new-column-description"
+                placeholder="What should go in this column, and when?"
+                value={newColumnDescription}
+                onChange={(e) => setNewColumnDescription(e.target.value)}
+              />
+              <p className="field__hint">
+                Shown as a tooltip on the column header, and given to the AI discovery agents as context for what to
+                fill in — make sure it's accurate.
+              </p>
+            </div>
+
+            {error && <p className="passcode-gate__error">{error}</p>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn" disabled={busy} onClick={cancelAddColumn}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={busy || newColumnName.trim() === ''}>
+                Add
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

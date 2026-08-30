@@ -260,12 +260,23 @@ describe('Details table routes', () => {
     expect(add.body.subtitleText).toBe('Hello there General Kenobi');
   });
 
-  it('adds a custom column', async () => {
+  it('adds a custom column with a description', async () => {
+    const { app } = buildApp();
+    const filmId = await seedFilmId(app);
+    const res = await request(app)
+      .post(`/api/films/${filmId}/columns`)
+      .send({ passcode: TEST_PASSCODE, name: 'Local Slang', description: 'Flag any regional slang the localizer should adapt.' });
+    expect(res.status).toBe(201);
+    expect(res.body.key).toBe('local_slang');
+    expect(res.body.description).toBe('Flag any regional slang the localizer should adapt.');
+  });
+
+  it('defaults description to an empty string when none is given', async () => {
     const { app } = buildApp();
     const filmId = await seedFilmId(app);
     const res = await request(app).post(`/api/films/${filmId}/columns`).send({ passcode: TEST_PASSCODE, name: 'Local Slang' });
     expect(res.status).toBe(201);
-    expect(res.body.key).toBe('local_slang');
+    expect(res.body.description).toBe('');
   });
 });
 

@@ -45,7 +45,7 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
 
     // The queue worker is deliberately not started by createApp() (see docs/adr/0018) —
     // driven here explicitly, one job at a time, against the same store instances.
-    worker = createDiscoveryQueueWorker({ discoveryJobStore, filmStore, discoveryAgent, mockDiscoveryAgent: discoveryAgent, eventBus });
+    worker = createDiscoveryQueueWorker({ discoveryJobStore, filmStore, detailRowsStore, discoveryAgent, mockDiscoveryAgent: discoveryAgent, eventBus });
   });
 
   afterAll(async () => {

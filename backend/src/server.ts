@@ -48,6 +48,7 @@ const app = createApp({
 const discoveryQueueWorker = createDiscoveryQueueWorker({
   discoveryJobStore,
   filmStore,
+  detailRowsStore,
   discoveryAgent,
   mockDiscoveryAgent,
   eventBus,

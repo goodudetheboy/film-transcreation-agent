@@ -62,8 +62,9 @@ describe('createInMemoryDetailRowsStore rows', () => {
 describe('createInMemoryDetailRowsStore columns', () => {
   it('addColumn derives a stable snake_case key from the name, scoped per film', async () => {
     const store = createInMemoryDetailRowsStore();
-    const column = await store.addColumn('film-a', 'Local Slang?');
+    const column = await store.addColumn('film-a', 'Local Slang?', 'Note any regional slang the localizer should adapt.');
     expect(column.name).toBe('Local Slang?');
+    expect(column.description).toBe('Note any regional slang the localizer should adapt.');
     expect(column.key).toBe('local_slang');
     expect(await store.listColumns('film-a')).toHaveLength(1);
     expect(await store.listColumns('film-b')).toHaveLength(0);
