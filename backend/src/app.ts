@@ -56,6 +56,12 @@ const notConfiguredVideoBucketUploader: VideoBucketUploader = {
   async createResumableUploadSession() {
     throw new Error('videoBucketUploader not provided to createApp()');
   },
+  async getObjectSizeBytes() {
+    throw new Error('videoBucketUploader not provided to createApp()');
+  },
+  async deleteObject() {
+    throw new Error('videoBucketUploader not provided to createApp()');
+  },
 };
 
 /**

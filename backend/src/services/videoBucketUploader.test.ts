@@ -208,4 +208,50 @@ describe('createVideoBucketUploader', () => {
       expect(createResumableUploadMock).toHaveBeenCalledWith({ metadata: { contentType: 'video/mp4' } });
     });
   });
+
+  describe('getObjectSizeBytes', () => {
+    it('returns the actual object size', async () => {
+      const getMetadataMock = vi.fn().mockResolvedValue([{ size: '449236799' }]);
+      fileMock.mockReturnValue({ createWriteStream: createWriteStreamMock, delete: deleteMock, getMetadata: getMetadataMock });
+
+      const uploader = createVideoBucketUploader(config);
+      const size = await uploader.getObjectSizeBytes('gs://test-bucket/clip.mp4');
+
+      expect(fileMock).toHaveBeenCalledWith('clip.mp4');
+      expect(size).toBe(449236799);
+    });
+
+    it('returns null when the object does not exist (upload not finished yet)', async () => {
+      const getMetadataMock = vi.fn().mockRejectedValue({ code: 404 });
+      fileMock.mockReturnValue({ createWriteStream: createWriteStreamMock, delete: deleteMock, getMetadata: getMetadataMock });
+
+      const uploader = createVideoBucketUploader(config);
+      const size = await uploader.getObjectSizeBytes('gs://test-bucket/missing.mp4');
+
+      expect(size).toBeNull();
+    });
+
+    it('rejects a gs:// URI for a different bucket', async () => {
+      const uploader = createVideoBucketUploader(config);
+      await expect(uploader.getObjectSizeBytes('gs://other-bucket/clip.mp4')).rejects.toThrow(/does not belong to the configured bucket/);
+    });
+
+    it('rethrows non-404 errors', async () => {
+      const getMetadataMock = vi.fn().mockRejectedValue(new Error('permission denied'));
+      fileMock.mockReturnValue({ createWriteStream: createWriteStreamMock, delete: deleteMock, getMetadata: getMetadataMock });
+
+      const uploader = createVideoBucketUploader(config);
+      await expect(uploader.getObjectSizeBytes('gs://test-bucket/clip.mp4')).rejects.toThrow('permission denied');
+    });
+  });
+
+  describe('deleteObject', () => {
+    it('deletes the object by its gs:// URI', async () => {
+      const uploader = createVideoBucketUploader(config);
+      await uploader.deleteObject('gs://test-bucket/clip.mp4');
+
+      expect(fileMock).toHaveBeenCalledWith('clip.mp4');
+      expect(deleteMock).toHaveBeenCalledWith({ ignoreNotFound: true });
+    });
+  });
 });

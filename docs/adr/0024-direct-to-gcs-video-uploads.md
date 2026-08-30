@@ -83,3 +83,43 @@ Two ways to keep the video bytes off Cloud Run were considered:
 - If uploads to a *different* GCP project/bucket are ever needed (e.g. a judge
   running their own deploy), the CORS step above must be repeated for that
   bucket — not automated by this change.
+
+## Update: GCS's completing response never carries CORS headers — added a backend finalize step
+
+Live-verifying the above against the real bucket (after applying the CORS
+policy and confirming it via `curl`'s OPTIONS preflight) still failed with
+"Failed to fetch" — but only ever *very late*, consistently around the last
+chunk. Reproduced deterministically with per-chunk logging in a real browser:
+every intermediate `308 Resume Incomplete` response carried a correct
+`Access-Control-Allow-Origin` header; the completing `200` response never did.
+Confirmed directly with `curl` (Origin header set manually, bypassing the
+browser's own enforcement to just inspect what GCS sends): the finalizing PUT's
+200 response has no CORS headers at all, and neither does a subsequent
+status-check (`Content-Range: bytes */total`) against an already-completed
+object. This is a genuine, undocumented GCS platform behavior, not a
+misconfiguration — a browser's `fetch()` can never successfully read
+confirmation of a resumable upload's own completion, whether the upload
+actually succeeded or not. (An earlier direct-from-Node test had appeared to
+prove the chunk protocol worked end-to-end, but Node's `fetch` doesn't send an
+`Origin` header at all — it couldn't have hit this, so it never actually
+exercised the thing that was broken.)
+
+Fix: stop trying to read the browser's own confirmation of the final chunk.
+- `frontend/src/api/resumableUpload.ts`: a thrown error on the *final* chunk
+  specifically is now treated as expected, not fatal — the bytes are sent
+  either way; the function just resolves. (Intermediate chunks keep their real
+  retry-and-resume behavior; only the terminal request's response is
+  known-unreadable.)
+- New `POST /api/films/upload-video/finalize`: after the browser finishes
+  sending bytes, `filmsApiClient.uploadVideoFile` calls this route, which
+  independently checks the object's real GCS metadata
+  (`videoBucketUploader.getObjectSizeBytes()`, added alongside `deleteObject()`)
+  — unaffected by browser CORS since it's a server-to-server call. This is also
+  where the real size cap is enforced: the client declares a size at `/init`
+  time, but nothing stops it lying, since GCS itself doesn't cap a resumable
+  session's total from what was declared at creation — `/finalize` checks the
+  *actual* uploaded size against `maxVideoUploadBytes` and deletes the object
+  if it's over, closing that gap rather than trusting the client's word.
+- Re-verified against the real bucket end-to-end via the actual browser
+  `uploadVideoFile` call (not Node): full progress to 100%, clean
+  `{ videoUrl }` result, object confirmed byte-perfect in the bucket.

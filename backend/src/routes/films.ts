@@ -174,6 +174,46 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
     }
   });
 
+  // GCS's resumable-upload completion response never carries CORS headers
+  // (confirmed empirically — every intermediate 308 does, the finalizing 200
+  // never does), so a browser's fetch() can never read confirmation of its
+  // own upload directly — it always throws, whether the upload actually
+  // succeeded or not. The frontend sends the bytes, then calls this route so
+  // the backend (unaffected by CORS) verifies completion. This also enforces
+  // the real size cap server-side: the client declares a size at /init time,
+  // but nothing stops it lying, since GCS itself doesn't cap a resumable
+  // session's total from what was declared at creation.
+  router.post('/api/films/upload-video/finalize', async (req, res) => {
+    const { videoUrl, testMode } = req.body ?? {};
+
+    if (isMockRequest(testMode)) {
+      res.status(400).json({ error: 'upload-video/finalize is not used in mock mode' });
+      return;
+    }
+    if (typeof videoUrl !== 'string' || !videoUrl.startsWith('gs://')) {
+      res.status(400).json({ error: 'videoUrl must be a gs:// URI' });
+      return;
+    }
+
+    try {
+      const size = await deps.videoBucketUploader.getObjectSizeBytes(videoUrl);
+      if (size === null) {
+        res.status(404).json({ error: 'video upload has not finished yet' });
+        return;
+      }
+      if (size > deps.maxVideoUploadBytes) {
+        await deps.videoBucketUploader.deleteObject(videoUrl).catch(() => {});
+        res.status(413).json({ error: `video exceeds the ${deps.maxVideoUploadBytes}-byte upload limit (actual size ${size} bytes)` });
+        return;
+      }
+      res.status(200).json({ ok: true, size });
+    } catch (err) {
+      res.status(502).json({
+        error: `failed to verify uploaded video: ${err instanceof Error ? err.message : 'unknown error'}`,
+      });
+    }
+  });
+
   router.post(
     '/api/films/upload-subtitle',
     (req, res, next) => {

@@ -24,7 +24,7 @@ describe('uploadVideoFile', () => {
     expect(init.body).toBeInstanceOf(FormData);
   });
 
-  it('real mode calls upload-video/init then PUTs the file directly to the returned session URL', async () => {
+  it('real mode calls init, PUTs directly to the session URL, then calls finalize to confirm completion', async () => {
     const file = makeFile(10);
     const fetchImpl = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
       if (url === 'http://x/api/films/upload-video/init') {
@@ -44,7 +44,14 @@ describe('uploadVideoFile', () => {
       }
       if (url === 'https://storage.googleapis.com/upload/s1') {
         expect(init.method).toBe('PUT');
-        return { status: 200, headers: { get: () => null } };
+        // GCS's completing response never carries CORS headers in a real browser —
+        // exercised here as a thrown network error, same as the browser would see.
+        throw new TypeError('Failed to fetch');
+      }
+      if (url === 'http://x/api/films/upload-video/finalize') {
+        expect(init.method).toBe('POST');
+        expect(JSON.parse(init.body as string)).toEqual({ passcode: 'p', videoUrl: 'gs://bucket/s1.mp4', testMode: false });
+        return { ok: true, status: 200, json: vi.fn().mockResolvedValue({ ok: true, size: 10 }) };
       }
       throw new Error(`unexpected fetch to ${url}`);
     });
@@ -66,5 +73,28 @@ describe('uploadVideoFile', () => {
     await expect(
       uploadVideoFile(makeFile(), { passcode: 'p', testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
     ).rejects.toThrow(/video exceeds the upload limit/);
+  });
+
+  it('real mode surfaces an error if finalize rejects the upload (e.g. oversized or never actually completed)', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith('/upload-video/init')) {
+        return {
+          ok: true,
+          status: 200,
+          json: vi.fn().mockResolvedValue({ uploadUrl: 'https://storage.googleapis.com/upload/s1', videoUrl: 'gs://bucket/s1.mp4' }),
+        };
+      }
+      if (url === 'https://storage.googleapis.com/upload/s1') {
+        return { status: 200, headers: { get: () => null } };
+      }
+      if (url.endsWith('/upload-video/finalize')) {
+        return { ok: false, status: 404, text: vi.fn().mockResolvedValue(JSON.stringify({ error: 'video upload has not finished yet' })) };
+      }
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+
+    await expect(
+      uploadVideoFile(makeFile(), { passcode: 'p', testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
+    ).rejects.toThrow(/video upload has not finished yet/);
   });
 });

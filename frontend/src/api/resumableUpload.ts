@@ -7,6 +7,18 @@
  * "Resumable" here means auto-retry-and-resume within this single call (a wifi
  * blip mid-transfer resumes from the last confirmed byte) — not persistence
  * across page reloads.
+ *
+ * IMPORTANT: GCS's completing response (the 200 that finalizes the object) —
+ * and any later status-check of an already-complete object — never carries an
+ * `Access-Control-Allow-Origin` header, confirmed empirically against a
+ * correctly-CORS-configured bucket (every intermediate 308 has it; the
+ * finalizing 200 never does). A browser's fetch() therefore ALWAYS throws on
+ * the final chunk, whether the upload actually succeeded or not — this isn't
+ * an error worth retrying. This function sends the final chunk's bytes and
+ * resolves regardless of whether that request's response was readable; the
+ * caller MUST independently verify completion via the backend (see
+ * `filmsApiClient.uploadVideoFile`'s call to `/api/films/upload-video/finalize`,
+ * which isn't subject to browser CORS) rather than trusting this resolving.
  */
 
 // Must be a multiple of GCS's required 256KiB chunk-boundary.
@@ -55,6 +67,7 @@ export async function uploadFileResumable(
     // after a failure can move `offset` forward without reaching the chunk's
     // original end, and the next attempt must target the updated range.
     const end = Math.min(offset + CHUNK_SIZE, total);
+    const isFinalChunk = end === total;
 
     try {
       const res = await fetchImpl(uploadUrl, {
@@ -76,6 +89,12 @@ export async function uploadFileResumable(
       attempt = 0; // this chunk landed — the next one gets a fresh retry budget
       onProgress?.(offset / total);
     } catch (err) {
+      if (isFinalChunk) {
+        // Expected: see the CORS note above. The bytes are sent either way —
+        // resolve and let the caller confirm completion via the backend.
+        onProgress?.(1);
+        return;
+      }
       attempt += 1;
       if (attempt >= MAX_ATTEMPTS_PER_CHUNK) throw err;
       await sleepImpl(RETRY_DELAYS_MS[attempt - 1] ?? RETRY_DELAYS_MS.at(-1)!);

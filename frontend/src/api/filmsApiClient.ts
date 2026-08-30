@@ -32,6 +32,13 @@ export interface UploadOptions {
  * hard, non-configurable 32MB request-size limit that any real film blows past,
  * so the video bytes must never go through it. See
  * docs/adr/0024-direct-to-gcs-video-uploads.md for the full writeup of why.
+ *
+ * The final chunk's response is never readable in a browser (GCS's completion
+ * response never carries CORS headers), so `uploadFileResumable` can't confirm
+ * success on its own — this calls the backend's /finalize endpoint afterward,
+ * which isn't subject to browser CORS and can genuinely verify the object
+ * exists with the right size (also enforcing the size cap server-side, since
+ * a client can lie about the size it declares at /init time).
  */
 export async function uploadVideoFile(
   file: File,
@@ -64,6 +71,14 @@ export async function uploadVideoFile(
   const { uploadUrl, videoUrl } = (await initRes.json()) as { uploadUrl: string; videoUrl: string };
 
   await uploadFileResumable(uploadUrl, file, { onProgress, fetchImpl });
+
+  const finalizeRes = await fetchImpl(`${baseUrl}/api/films/upload-video/finalize`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ passcode, videoUrl, testMode }),
+  });
+  await throwOnError(finalizeRes);
+
   return { videoUrl };
 }
 

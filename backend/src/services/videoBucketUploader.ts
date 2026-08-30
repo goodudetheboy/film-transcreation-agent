@@ -20,6 +20,17 @@ export interface VideoBucketUploader {
    * the object name is chosen here, before the upload completes.
    */
   createResumableUploadSession(input: { filename: string; contentType: string }): Promise<{ uploadUrl: string; videoUrl: string }>;
+  /**
+   * Reads back an uploaded object's actual size, or null if it doesn't exist
+   * (yet). GCS's resumable-upload completion response never carries CORS
+   * headers — confirmed empirically, not documented anywhere obvious — so a
+   * browser can never read confirmation of its own upload directly; the
+   * backend has to verify completion (and the real size, since a client can
+   * lie about the size it declares at session-init time) out of band.
+   */
+  getObjectSizeBytes(gsUri: string): Promise<number | null>;
+  /** Deletes an object by its gs:// URI — used to clean up an oversized upload after the fact. */
+  deleteObject(gsUri: string): Promise<void>;
 }
 
 /** Blocks loopback, private, link-local (incl. the GCP/AWS metadata address), and unspecified ranges. */
@@ -73,6 +84,17 @@ async function assertSafeHttpUrl(url: string): Promise<URL> {
 export function guessExtension(pathname: string): string {
   const match = /\.[a-zA-Z0-9]{2,5}$/.exec(pathname);
   return match ? match[0] : '.mp4';
+}
+
+/** Parses `gs://bucket/object` and rejects anything not in the configured bucket. */
+function objectNameFromGsUri(gsUri: string, bucketName: string): string {
+  const match = /^gs:\/\/([^/]+)\/(.+)$/.exec(gsUri);
+  if (!match) throw new Error(`invalid gs:// URI: ${gsUri}`);
+  const [, uriBucket, objectName] = match;
+  if (uriBucket !== bucketName) {
+    throw new Error(`gs:// URI does not belong to the configured bucket: ${gsUri}`);
+  }
+  return objectName;
 }
 
 export function createVideoBucketUploader(config: {
@@ -163,6 +185,22 @@ export function createVideoBucketUploader(config: {
         metadata: { contentType: contentType || 'video/mp4' },
       });
       return { uploadUrl, videoUrl: `gs://${config.bucketName}/${objectName}` };
+    },
+
+    async getObjectSizeBytes(gsUri: string): Promise<number | null> {
+      const objectName = objectNameFromGsUri(gsUri, config.bucketName);
+      try {
+        const [metadata] = await bucket.file(objectName).getMetadata();
+        return Number(metadata.size);
+      } catch (err) {
+        if ((err as { code?: number }).code === 404) return null;
+        throw err;
+      }
+    },
+
+    async deleteObject(gsUri: string): Promise<void> {
+      const objectName = objectNameFromGsUri(gsUri, config.bucketName);
+      await bucket.file(objectName).delete({ ignoreNotFound: true });
     },
   };
 }

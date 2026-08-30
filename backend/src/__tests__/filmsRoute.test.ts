@@ -27,6 +27,8 @@ function buildApp(
       uploadFromUrl: ReturnType<typeof vi.fn>;
       uploadBuffer: ReturnType<typeof vi.fn>;
       createResumableUploadSession: ReturnType<typeof vi.fn>;
+      getObjectSizeBytes: ReturnType<typeof vi.fn>;
+      deleteObject: ReturnType<typeof vi.fn>;
     };
     maxVideoUploadBytes?: number;
     maxSubtitleUploadBytes?: number;
@@ -62,6 +64,8 @@ function buildApp(
       uploadFromUrl: vi.fn(),
       uploadBuffer: vi.fn(),
       createResumableUploadSession: vi.fn(),
+      getObjectSizeBytes: vi.fn(),
+      deleteObject: vi.fn(),
     },
   });
 
@@ -128,7 +132,9 @@ describe('POST /api/films', () => {
 describe('POST /api/films/upload-subtitle', () => {
   it('parses a valid .srt file and returns entries without touching the bucket in test mode', async () => {
     const uploadBuffer = vi.fn();
-    const { app } = buildApp({ videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer } });
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer, createResumableUploadSession: vi.fn(), getObjectSizeBytes: vi.fn(), deleteObject: vi.fn() },
+    });
 
     const res = await request(app)
       .post(`/api/films/upload-subtitle?passcode=${TEST_PASSCODE}`)
@@ -420,7 +426,7 @@ describe('POST /api/films/upload-video/init', () => {
       videoUrl: 'gs://test-bucket/abc.mp4',
     });
     const { app } = buildApp({
-      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession },
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession, getObjectSizeBytes: vi.fn(), deleteObject: vi.fn() },
     });
 
     const res = await request(app)
@@ -470,12 +476,94 @@ describe('POST /api/films/upload-video/init', () => {
   it('returns 502 when the uploader fails to mint a session', async () => {
     const createResumableUploadSession = vi.fn().mockRejectedValue(new Error('gcs unreachable'));
     const { app } = buildApp({
-      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession },
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession, getObjectSizeBytes: vi.fn(), deleteObject: vi.fn() },
     });
 
     const res = await request(app)
       .post('/api/films/upload-video/init')
       .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 1000, testMode: false });
+    expect(res.status).toBe(502);
+  });
+});
+
+describe('POST /api/films/upload-video/finalize', () => {
+  it('confirms a completed upload and returns its size', async () => {
+    const getObjectSizeBytes = vi.fn().mockResolvedValue(1000);
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession: vi.fn(), getObjectSizeBytes, deleteObject: vi.fn() },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, size: 1000 });
+    expect(getObjectSizeBytes).toHaveBeenCalledWith('gs://test-bucket/clip.mp4');
+  });
+
+  it('returns 404 when the object does not exist yet (upload not actually finished)', async () => {
+    const getObjectSizeBytes = vi.fn().mockResolvedValue(null);
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession: vi.fn(), getObjectSizeBytes, deleteObject: vi.fn() },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes and rejects an object that exceeds the size cap, even though the client declared a smaller size at /init', async () => {
+    const getObjectSizeBytes = vi.fn().mockResolvedValue(5000);
+    const deleteObject = vi.fn().mockResolvedValue(undefined);
+    const { app } = buildApp({
+      maxVideoUploadBytes: 1000,
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession: vi.fn(), getObjectSizeBytes, deleteObject },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+
+    expect(res.status).toBe(413);
+    expect(deleteObject).toHaveBeenCalledWith('gs://test-bucket/clip.mp4');
+  });
+
+  it('requires the passcode', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: 'wrong', videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects mock-mode requests', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: true });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a videoUrl that is not a gs:// URI', async () => {
+    const { app } = buildApp();
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'http://example.com/clip.mp4', testMode: false });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 502 when checking the object fails', async () => {
+    const getObjectSizeBytes = vi.fn().mockRejectedValue(new Error('gcs unreachable'));
+    const { app } = buildApp({
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession: vi.fn(), getObjectSizeBytes, deleteObject: vi.fn() },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/finalize')
+      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
     expect(res.status).toBe(502);
   });
 });

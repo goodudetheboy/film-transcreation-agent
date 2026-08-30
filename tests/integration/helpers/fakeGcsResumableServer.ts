@@ -14,7 +14,21 @@ export interface FakeGcsResumableServer {
  * gets faked to point at — the ONLY thing allowed to be fake in this test layer
  * is the external Google client, never the frontend<->backend hop (see CLAUDE.md).
  */
-export async function startFakeGcsResumableServer(): Promise<FakeGcsResumableServer> {
+export interface FakeGcsResumableServerOptions {
+  /**
+   * Reproduces the real GCS bug this test layer exists to catch: the bucket
+   * fully receives and finalizes the object, but the completing response's
+   * connection is dropped rather than answered — same client-visible symptom
+   * as GCS's real completing response never carrying CORS headers (a browser
+   * fetch() can't read either one; it just throws). Only the completing
+   * request is affected — status-checks and intermediate 308s behave normally.
+   */
+  dropFinalResponse?: boolean;
+}
+
+export async function startFakeGcsResumableServer(
+  options: FakeGcsResumableServerOptions = {},
+): Promise<FakeGcsResumableServer> {
   let received = 0;
 
   const server = http.createServer((req, res) => {
@@ -45,6 +59,10 @@ export async function startFakeGcsResumableServer(): Promise<FakeGcsResumableSer
       const total = Number(totalStr);
       const end = Number(endStr);
       if (end + 1 >= total) {
+        if (options.dropFinalResponse) {
+          req.socket.destroy();
+          return;
+        }
         res.writeHead(200).end();
       } else {
         res.writeHead(308, { Range: `bytes=0-${received - 1}` }).end();
