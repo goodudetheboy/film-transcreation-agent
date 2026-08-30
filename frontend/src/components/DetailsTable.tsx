@@ -62,6 +62,38 @@ interface Draft {
   values: DetailRowValues;
 }
 
+/** Defined at module scope, not inside DetailsTable's render body — an inline
+ * component redefined on every render is a *new type* to React, so every
+ * `setColWidths` update during a drag would tear down and recreate this
+ * `<span>`, silently losing the `setPointerCapture()` mid-gesture (the drag
+ * would only keep tracking while the cursor stayed exactly over the 6px
+ * sliver). Keeping it stable here is what makes capture survive the drag. */
+function ResizableTh({
+  colKey,
+  children,
+  onResizerPointerDown,
+  onResizerPointerMove,
+  onResizerPointerUp,
+}: {
+  colKey: string;
+  children: ReactNode;
+  onResizerPointerDown: (e: React.PointerEvent<HTMLSpanElement>, key: string) => void;
+  onResizerPointerMove: (e: React.PointerEvent<HTMLSpanElement>) => void;
+  onResizerPointerUp: (e: React.PointerEvent<HTMLSpanElement>) => void;
+}) {
+  return (
+    <th>
+      {children}
+      <span
+        className="details-table__col-resizer"
+        onPointerDown={(e) => onResizerPointerDown(e, colKey)}
+        onPointerMove={onResizerPointerMove}
+        onPointerUp={onResizerPointerUp}
+      />
+    </th>
+  );
+}
+
 export function DetailsTable({
   film,
   passcode,
@@ -115,19 +147,11 @@ export function DetailsTable({
     e.currentTarget.releasePointerCapture(e.pointerId);
   }
 
-  function ResizableTh({ colKey, children }: { colKey: string; children: ReactNode }) {
-    return (
-      <th>
-        {children}
-        <span
-          className="details-table__col-resizer"
-          onPointerDown={(e) => handleResizerPointerDown(e, colKey)}
-          onPointerMove={handleResizerPointerMove}
-          onPointerUp={handleResizerPointerUp}
-        />
-      </th>
-    );
-  }
+  const resizerHandlers = {
+    onResizerPointerDown: handleResizerPointerDown,
+    onResizerPointerMove: handleResizerPointerMove,
+    onResizerPointerUp: handleResizerPointerUp,
+  };
 
   function isRowActive(row: DetailRow) {
     return currentTimeMs >= row.startMs && currentTimeMs < row.endMs;
@@ -141,6 +165,15 @@ export function DetailsTable({
       .querySelector<HTMLElement>(`[data-row-id="${activeRowId}"]`)
       ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [activeRowId]);
+
+  useEffect(() => {
+    if (!editingRowId) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') cancelEdit();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editingRowId]);
 
   function startEdit(row: DetailRow) {
     setEditingRowId(row.id);
@@ -217,6 +250,7 @@ export function DetailsTable({
     try {
       await deleteDetailRow(film.id, rowId, passcode);
       onRowDeleted(rowId);
+      if (editingRowId === rowId) cancelEdit();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to delete row');
     } finally {
@@ -291,26 +325,26 @@ export function DetailsTable({
           </colgroup>
           <thead>
             <tr>
-              <ResizableTh colKey="start">Start</ResizableTh>
-              <ResizableTh colKey="end">End</ResizableTh>
-              <ResizableTh colKey="subtitle">Subtitle</ResizableTh>
-              <ResizableTh colKey="segmentDescription">Segment Description</ResizableTh>
-              <ResizableTh colKey="gesture">Gesture</ResizableTh>
-              <ResizableTh colKey="notes">Notes</ResizableTh>
+              <ResizableTh colKey="start" {...resizerHandlers}>Start</ResizableTh>
+              <ResizableTh colKey="end" {...resizerHandlers}>End</ResizableTh>
+              <ResizableTh colKey="subtitle" {...resizerHandlers}>Subtitle</ResizableTh>
+              <ResizableTh colKey="segmentDescription" {...resizerHandlers}>Segment Description</ResizableTh>
+              <ResizableTh colKey="gesture" {...resizerHandlers}>Gesture</ResizableTh>
+              <ResizableTh colKey="notes" {...resizerHandlers}>Notes</ResizableTh>
               {columns.map((c) => (
-                <ResizableTh key={c.id} colKey={c.key}>
+                <ResizableTh key={c.id} colKey={c.key} {...resizerHandlers}>
                   {c.name}
                 </ResizableTh>
               ))}
-              <ResizableTh colKey="source">Source</ResizableTh>
+              <ResizableTh colKey="source" {...resizerHandlers}>Source</ResizableTh>
               <th />
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => {
-              const isEditing = editingRowId === row.id;
+              const isOpenInModal = editingRowId === row.id;
               const isActive = row.id === activeRowId;
-              const rowClassName = [isEditing && 'details-table__row--editing', isActive && 'details-table__row--active']
+              const rowClassName = [isOpenInModal && 'details-table__row--editing', isActive && 'details-table__row--active']
                 .filter(Boolean)
                 .join(' ');
               return (
@@ -319,113 +353,30 @@ export function DetailsTable({
                   data-row-id={row.id}
                   className={rowClassName}
                   onClick={() => {
-                    if (!isEditing) startEdit(row);
+                    startEdit(row);
                     onSeek(row.startMs);
                   }}
                 >
-                  <td title={!isEditing ? formatClock(row.startMs) : undefined}>
-                    {isEditing && draft ? (
-                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          value={draft.startText}
-                          size={7}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setDraft({ ...draft, startText: e.target.value })}
-                          onBlur={(e) => commitStart(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          title="Set to current playhead position"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            useCurrentForStart();
-                          }}
-                        >
-                          ⏱
-                        </button>
-                      </span>
-                    ) : (
-                      formatClock(row.startMs)
-                    )}
-                  </td>
-                  <td title={!isEditing ? formatClock(row.endMs) : undefined}>
-                    {isEditing && draft ? (
-                      <span style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          value={draft.endText}
-                          size={7}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setDraft({ ...draft, endText: e.target.value })}
-                          onBlur={(e) => commitEnd(e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn--ghost"
-                          title="Set to current playhead position"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            useCurrentForEnd();
-                          }}
-                        >
-                          ⏱
-                        </button>
-                      </span>
-                    ) : (
-                      formatClock(row.endMs)
-                    )}
-                  </td>
-                  <td title={isEditing ? undefined : row.subtitleText}>
-                    {isEditing && draft ? subtitleTextForRange(draft.startMs, draft.endMs) : row.subtitleText}
-                  </td>
+                  <td title={formatClock(row.startMs)}>{formatClock(row.startMs)}</td>
+                  <td title={formatClock(row.endMs)}>{formatClock(row.endMs)}</td>
+                  <td title={row.subtitleText}>{row.subtitleText}</td>
                   {(['segmentDescription', 'gesture', 'notes'] as const).map((key) => (
-                    <td key={key} title={!isEditing ? row.values[key] : undefined}>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={draftValue(key)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setDraftValue(key, e.target.value)}
-                        />
-                      ) : (
-                        row.values[key]
-                      )}
+                    <td key={key} title={row.values[key]}>
+                      {row.values[key]}
                     </td>
                   ))}
                   {columns.map((c) => (
-                    <td key={c.id} title={!isEditing ? (row.values.custom[c.key] ?? '') : undefined}>
-                      {isEditing ? (
-                        <input
-                          type="text"
-                          value={draftValue(c.key)}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) => setDraftValue(c.key, e.target.value)}
-                        />
-                      ) : (
-                        row.values.custom[c.key] ?? ''
-                      )}
+                    <td key={c.id} title={row.values.custom[c.key] ?? ''}>
+                      {row.values.custom[c.key] ?? ''}
                     </td>
                   ))}
                   <td className="details-table__cell--nowrap-exempt">
                     <span className={`status-badge status-badge--${provenanceModifier(row)}`}>{provenanceLabel(row)}</span>
                   </td>
                   <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
-                    {isEditing ? (
-                      <span style={{ display: 'flex', gap: 6 }}>
-                        <button type="button" className="btn" disabled={busy} onClick={() => saveEdit(row.id)}>
-                          Save
-                        </button>
-                        <button type="button" className="btn" disabled={busy} onClick={cancelEdit}>
-                          Cancel
-                        </button>
-                      </span>
-                    ) : (
-                      <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(row.id)}>
-                        Delete
-                      </button>
-                    )}
+                    <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(row.id)}>
+                      Delete
+                    </button>
                   </td>
                 </tr>
               );
@@ -442,6 +393,92 @@ export function DetailsTable({
           + Add column
         </button>
       </div>
+
+      {editingRowId && draft && (
+        <div className="modal-backdrop" onClick={() => !busy && cancelEdit()}>
+          <div className="modal detail-row-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <p className="modal__title">Edit detail</p>
+              <button type="button" className="modal__close" onClick={cancelEdit} disabled={busy}>
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12 }}>
+              <div className="field" style={{ flex: 1 }}>
+                <label>Start</label>
+                <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={draft.startText}
+                    onChange={(e) => setDraft({ ...draft, startText: e.target.value })}
+                    onBlur={(e) => commitStart(e.target.value)}
+                  />
+                  <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForStart}>
+                    ⏱
+                  </button>
+                </span>
+              </div>
+              <div className="field" style={{ flex: 1 }}>
+                <label>End</label>
+                <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={draft.endText}
+                    onChange={(e) => setDraft({ ...draft, endText: e.target.value })}
+                    onBlur={(e) => commitEnd(e.target.value)}
+                  />
+                  <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForEnd}>
+                    ⏱
+                  </button>
+                </span>
+              </div>
+            </div>
+
+            <div className="field">
+              <label>Subtitle</label>
+              <p className="detail-row-modal__readonly">{subtitleTextForRange(draft.startMs, draft.endMs) || '—'}</p>
+            </div>
+
+            {(['segmentDescription', 'gesture', 'notes'] as const).map((key) => (
+              <div className="field" key={key}>
+                <label>{key === 'segmentDescription' ? 'Segment Description' : key === 'gesture' ? 'Gesture' : 'Notes'}</label>
+                <textarea value={draftValue(key)} onChange={(e) => setDraftValue(key, e.target.value)} />
+              </div>
+            ))}
+
+            {columns.map((c) => (
+              <div className="field" key={c.id}>
+                <label>{c.name}</label>
+                <textarea value={draftValue(c.key)} onChange={(e) => setDraftValue(c.key, e.target.value)} />
+              </div>
+            ))}
+
+            <div className="field">
+              <label>Source</label>
+              <span className={`status-badge status-badge--${provenanceModifier(rows.find((r) => r.id === editingRowId)!)}`}>
+                {provenanceLabel(rows.find((r) => r.id === editingRowId)!)}
+              </span>
+            </div>
+
+            {error && <p className="passcode-gate__error">{error}</p>}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(editingRowId)}>
+                Delete
+              </button>
+              <span style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn" disabled={busy} onClick={cancelEdit}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn--primary" disabled={busy} onClick={() => saveEdit(editingRowId)}>
+                  Save
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

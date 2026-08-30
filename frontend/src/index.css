@@ -1393,10 +1393,27 @@ textarea {
   flex-direction: column;
   gap: var(--space-snug);
   margin-bottom: var(--space-loose);
+  /* Fills whatever space is actually left in `.workspace__panel--left` after
+     the heading and the buttons below, rather than guessing a viewport
+     fraction — a fixed vh value can end up taller than the panel itself
+     (it did: a 60vh table in a ~490px-tall panel), which just moves the "have
+     to scroll to reach the horizontal scrollbar" problem from the page down
+     to the panel. `min-height: 0` is required alongside `flex: 1` here, same
+     as everywhere else in this app's flex/grid chains — without it a flex
+     child won't actually shrink below its content size. */
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .details-table-scroll {
   overflow-x: auto;
+  overflow-y: auto;
+  /* Fills the remaining height inside `.details-table-wrap` (see above) —
+     extra rows scroll inside this fixed-size box, so its horizontal
+     scrollbar always sits at a consistent, already-visible position instead
+     of trailing however tall the row list happens to be. */
+  flex: 1 1 0;
+  min-height: 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
 }
@@ -1409,7 +1426,10 @@ textarea {
 }
 
 .details-table th {
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
   text-align: left;
   font-size: var(--eyebrow-size);
   font-weight: var(--eyebrow-weight);
@@ -2194,6 +2214,28 @@ textarea {
 
 .kickoff-modal {
   width: 440px;
+}
+
+/* ---- Detail row modal ---- */
+
+.detail-row-modal {
+  width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.detail-row-modal .field textarea {
+  min-height: 70px;
+}
+
+.detail-row-modal__readonly {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 13px;
 }
 
 /* ==========================================================================
