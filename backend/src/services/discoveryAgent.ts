@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { GoogleGenAI, Type } from '@google/genai';
 import type { ConversationTurn, DiscoveryResultRow, SubtitleEntry } from './filmTypes.js';
+import { subtitleTextForRange } from './subtitleOverlap.js';
 
 export interface DiscoveryPassInput {
   videoUrl: string;
@@ -42,18 +43,25 @@ function columnLabel(key: string): string {
 
 function buildSystemInstruction(subtitleEntries: SubtitleEntry[], specialInstruction: string, targetColumns: string[]): string {
   const columnsDesc = targetColumns.map((c) => `- "${c}" (${columnLabel(c)})`).join('\n');
-  const entriesJson = JSON.stringify(
-    subtitleEntries.map((e) => ({ id: e.id, startMs: e.startMs, endMs: e.endMs, text: e.text })),
-  );
+  const entriesJson = JSON.stringify(subtitleEntries.map((e) => ({ startMs: e.startMs, endMs: e.endMs, text: e.text })));
   return `You are the Discovery Agent in a film localization triage pipeline. Watch the
 attached video and find moments worth flagging for cultural-localization review.
 
 SPECIAL INSTRUCTION FROM THE USER (follow this closely — it scopes what you look for):
 ${specialInstruction || '(none given — use your general judgment about what is worth flagging)'}
 
-Every moment you flag MUST be anchored to exactly one of this film's existing
-subtitle entries, by that entry's "id" field below — do not invent your own
-timestamps or subtitle text:
+For each flagged moment, provide your own "startMs" and "endMs" (integer
+milliseconds, endMs strictly greater than startMs) marking exactly the span
+the finding covers. Do NOT feel constrained to match a subtitle entry's exact
+boundaries — many worthwhile findings have no dialogue in them at all (a
+visual gag, a gesture, on-screen text, a silent beat); for those, pick the
+startMs/endMs that covers the moment on screen even though no subtitle line
+overlaps it. Only use a dialogue line's own boundaries when the finding really
+is anchored to that line being said.
+
+For grounding only (the film's overall pacing/duration, and to help you time
+non-dialogue findings relative to nearby lines) — you do NOT need to match
+these boundaries — here is this film's subtitle track:
 ${entriesJson}
 
 For each flagged moment, fill in ONLY these fields (the columns this pass was
@@ -66,7 +74,8 @@ attention. Do not pad the output with an entry for every subtitle line.`;
 
 function buildResponseSchema(targetColumns: string[]) {
   const properties: Record<string, unknown> = {
-    subtitleEntryId: { type: Type.STRING },
+    startMs: { type: Type.INTEGER },
+    endMs: { type: Type.INTEGER },
   };
   for (const col of targetColumns) {
     properties[col] = { type: Type.STRING };
@@ -79,7 +88,7 @@ function buildResponseSchema(targetColumns: string[]) {
         items: {
           type: Type.OBJECT,
           properties,
-          required: ['subtitleEntryId', ...targetColumns],
+          required: ['startMs', 'endMs', ...targetColumns],
         },
       },
     },
@@ -147,26 +156,33 @@ export function createDiscoveryAgent(
       const text = response.text;
       if (!text) throw new Error('discovery agent returned no content');
 
-      const parsed = JSON.parse(text) as { rows: Array<Record<string, string>> };
-      const entryById = new Map(subtitleEntries.map((e) => [e.id, e]));
+      const parsed = JSON.parse(text) as { rows: Array<Record<string, string | number>> };
 
       const resultRows: DiscoveryResultRow[] = parsed.rows
-        .filter((r) => entryById.has(r.subtitleEntryId))
+        .filter((r) => {
+          const startMs = Number(r.startMs);
+          const endMs = Number(r.endMs);
+          // Same range validation the freeform storage model itself enforces
+          // (see docs/adr/0023) — a row here is only ever the agent's own
+          // proposed span now, never derived from a matched subtitle entry.
+          return Number.isFinite(startMs) && Number.isFinite(endMs) && startMs >= 0 && endMs > startMs;
+        })
         .map((r) => {
-          const entry = entryById.get(r.subtitleEntryId)!;
+          const startMs = Number(r.startMs);
+          const endMs = Number(r.endMs);
           const values: DiscoveryResultRow['values'] = {};
           for (const col of targetColumns) {
             if (CUSTOM_VALUE_KEYS.has(col)) {
-              (values as Record<string, string>)[col] = r[col] ?? '';
+              (values as Record<string, string>)[col] = String(r[col] ?? '');
             } else {
-              values.custom = { ...(values.custom ?? {}), [col]: r[col] ?? '' };
+              values.custom = { ...(values.custom ?? {}), [col]: String(r[col] ?? '') };
             }
           }
           return {
             tempId: randomUUID(),
-            startMs: entry.startMs,
-            endMs: entry.endMs,
-            subtitleText: entry.text,
+            startMs,
+            endMs,
+            subtitleText: subtitleTextForRange(subtitleEntries, startMs, endMs),
             values,
           };
         });

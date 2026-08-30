@@ -14,11 +14,11 @@ function fakeGenAI(generateContent: GenAIClient['models']['generateContent']): G
 }
 
 describe('createDiscoveryAgent runPass', () => {
-  it('sends a fresh video turn when there is no prior conversation, and maps rows back to their subtitle entries', async () => {
+  it('sends a fresh video turn when there is no prior conversation, and derives subtitleText for the agent-proposed range', async () => {
     const calls: unknown[] = [];
     const generateContent = vi.fn(async (params: any) => {
       calls.push(params);
-      return { text: JSON.stringify({ rows: [{ subtitleEntryId: 'e2', segmentDescription: 'A finding' }] }) };
+      return { text: JSON.stringify({ rows: [{ startMs: 65000, endMs: 66000, segmentDescription: 'A finding' }] }) };
     });
 
     const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
@@ -45,9 +45,39 @@ describe('createDiscoveryAgent runPass', () => {
     expect(sentContents[0].parts.some((p: any) => p.fileData?.fileUri === 'gs://bucket/clip.mp4')).toBe(true);
   });
 
-  it('drops any row whose subtitleEntryId does not match a real entry', async () => {
+  it('accepts a freeform range with no dialogue in it at all — the whole point of docs/adr/0023', async () => {
     const generateContent = vi.fn(async () => ({
-      text: JSON.stringify({ rows: [{ subtitleEntryId: 'does-not-exist', segmentDescription: 'x' }] }),
+      // Falls entirely between the two ENTRIES — no subtitle line overlaps it.
+      text: JSON.stringify({ rows: [{ startMs: 10000, endMs: 12000, segmentDescription: 'A visual gag' }] }),
+    }));
+    const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+    const result = await agent.runPass({
+      videoUrl: 'gs://bucket/clip.mp4',
+      subtitleEntries: ENTRIES,
+      specialInstruction: '',
+      targetColumns: ['segmentDescription'],
+      priorConversation: [],
+    });
+    expect(result.resultRows).toEqual([
+      {
+        tempId: expect.any(String),
+        startMs: 10000,
+        endMs: 12000,
+        subtitleText: '',
+        values: { segmentDescription: 'A visual gag' },
+      },
+    ]);
+  });
+
+  it('drops any row with an invalid range (endMs not after startMs, or negative)', async () => {
+    const generateContent = vi.fn(async () => ({
+      text: JSON.stringify({
+        rows: [
+          { startMs: 5000, endMs: 5000, segmentDescription: 'zero-length' },
+          { startMs: 5000, endMs: 3000, segmentDescription: 'backwards' },
+          { startMs: -100, endMs: 200, segmentDescription: 'negative' },
+        ],
+      }),
     }));
     const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
     const result = await agent.runPass({
@@ -62,7 +92,7 @@ describe('createDiscoveryAgent runPass', () => {
 
   it('routes non-builtin target columns into values.custom', async () => {
     const generateContent = vi.fn(async () => ({
-      text: JSON.stringify({ rows: [{ subtitleEntryId: 'e1', localSlang: 'yo' }] }),
+      text: JSON.stringify({ rows: [{ startMs: 1000, endMs: 2000, localSlang: 'yo' }] }),
     }));
     const agent = createDiscoveryAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
     const result = await agent.runPass({

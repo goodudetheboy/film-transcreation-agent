@@ -44,11 +44,30 @@ propose non-dialogue-anchored ranges is a natural follow-up, not built here.
   - The film-creation requirement from 0022 — a real timestamped subtitle file
   must be uploaded and parsed before a film can be created — is unaffected by this
   ADR; only the DetailRow FK constraint and its `<select>`-based UI are superseded.
-- Until a follow-up teaches the Discovery Agent to propose its own non-dialogue
-  ranges, only human-marked rows can cover a genuinely dialogue-free moment — agent
-  passes still only ever flag existing subtitle lines.
 - The backend can validate `endMs > startMs >= 0` but has no server-side notion of
   the video's actual duration to bound `endMs` against (that's only known
   client-side, from the `<video>` element) — same limitation `VideoScrubber.tsx`
   already works around by clamping out-of-range entries defensively at render time
   rather than rejecting them at the source.
+
+## Update: the Discovery Agent itself now proposes freeform ranges
+
+Built the follow-up flagged above. `discoveryAgent.ts`'s Gemini response schema no
+longer has a `subtitleEntryId` field — the model now supplies its own `startMs`/
+`endMs` (integer ms, `endMs > startMs`) per finding, validated the same way the
+storage layer already does. The subtitle track is still given to the model as
+context (for pacing/duration grounding), but the prompt now explicitly says findings
+don't need to match any entry's boundaries — a visual gag or silent beat should get
+a range with no dialogue in it. `subtitleText` is derived via the same
+`subtitleTextForRange()` helper the storage/UI layer uses (a row over dialogue-free
+seconds legitimately derives `''`), rather than being copied from a matched entry.
+
+`mockDiscoveryAgent.ts` got the equivalent treatment for demoability without
+needing real Gemini calls: alongside its usual dialogue-anchored picks, it now
+proposes one freeform row in the gap after the first subtitle entry (clamped to
+never overlap the next entry, even when two lines sit only milliseconds apart —
+first version fell back to a flat "+1500ms" that could still land inside the next
+entry, producing a "silent" row whose derived text wasn't actually empty). Caught
+this by live-testing against the real 126-line "Disney's Inside Out" film rather
+than just the unit test's more sparsely-spaced fixture — the fixture's generous
+gaps didn't exercise the tight-packing edge case at all.
