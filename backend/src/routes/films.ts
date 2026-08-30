@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { readFile, rm } from 'node:fs/promises';
 import { Router, type Response } from 'express';
 import multer from 'multer';
 import type { DetailRowsStore } from '../services/detailRowsStore.js';
@@ -54,7 +54,19 @@ function toPublicJob(job: DiscoveryJob) {
 
 export function filmsRoute(deps: FilmsRouteDeps): Router {
   const router = Router();
-  const uploadVideo = multer({ storage: multer.memoryStorage(), limits: { fileSize: deps.maxVideoUploadBytes } });
+  // Video uses diskStorage, not memoryStorage: a real film can be hundreds of MB
+  // to a few GB, and memoryStorage buffers the *entire* upload into the Node
+  // process's RAM before the handler even runs. Streaming straight to disk keeps
+  // memory flat regardless of file size. Subtitle files are tiny text, so
+  // memoryStorage there is fine and simpler.
+  mkdirSync(deps.mockUploadsDir, { recursive: true });
+  const uploadVideo = multer({
+    storage: multer.diskStorage({
+      destination: deps.mockUploadsDir,
+      filename: (_req, file, cb) => cb(null, `${randomUUID()}${guessExtension(file.originalname)}`),
+    }),
+    limits: { fileSize: deps.maxVideoUploadBytes },
+  });
   const uploadSubtitle = multer({ storage: multer.memoryStorage(), limits: { fileSize: deps.maxSubtitleUploadBytes } });
 
   // ---- Uploads ----------------------------------------------------------
@@ -80,31 +92,35 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
         res.status(400).json({ error: 'video file is required' });
         return;
       }
-      if (!file.mimetype.startsWith('video/') && file.mimetype !== 'application/octet-stream') {
-        res.status(400).json({ error: `uploaded file does not look like a video (content-type "${file.mimetype}")` });
-        return;
-      }
 
-      if (isMockRequest(req.body?.testMode)) {
-        await simulateDelay({ minMs: 800, maxMs: 1500 }, deps.mockDelayScale);
-
-        const filename = `${randomUUID()}${guessExtension(file.originalname)}`;
-        await mkdir(deps.mockUploadsDir, { recursive: true });
-        await writeFile(path.join(deps.mockUploadsDir, filename), file.buffer);
-
-        // A <video> GET can't carry a passcode header/body — ride along as a query
-        // param, same lookup passcodeMiddleware already used to authorize this POST.
-        const passcode = req.body?.passcode ?? req.query?.passcode ?? '';
-        const origin = `${req.protocol}://${req.get('host')}`;
-        const videoUrl = `${origin}/mock-uploads/${filename}?passcode=${encodeURIComponent(String(passcode))}`;
-
-        res.status(200).json({ videoUrl });
-        return;
-      }
-
+      // diskStorage already wrote the upload to deps.mockUploadsDir under
+      // file.filename before this handler runs — every path below either keeps
+      // it there (mock mode) or must clean it up (validation failure, or after
+      // it's been read and forwarded to the real bucket).
+      let keepFile = false;
       try {
+        if (!file.mimetype.startsWith('video/') && file.mimetype !== 'application/octet-stream') {
+          res.status(400).json({ error: `uploaded file does not look like a video (content-type "${file.mimetype}")` });
+          return;
+        }
+
+        if (isMockRequest(req.body?.testMode)) {
+          await simulateDelay({ minMs: 800, maxMs: 1500 }, deps.mockDelayScale);
+          keepFile = true;
+
+          // A <video> GET can't carry a passcode header/body — ride along as a query
+          // param, same lookup passcodeMiddleware already used to authorize this POST.
+          const passcode = req.body?.passcode ?? req.query?.passcode ?? '';
+          const origin = `${req.protocol}://${req.get('host')}`;
+          const videoUrl = `${origin}/mock-uploads/${file.filename}?passcode=${encodeURIComponent(String(passcode))}`;
+
+          res.status(200).json({ videoUrl });
+          return;
+        }
+
+        const buffer = await readFile(file.path);
         const videoUrl = await deps.videoBucketUploader.uploadBuffer({
-          buffer: file.buffer,
+          buffer,
           filename: file.originalname,
           contentType: file.mimetype,
         });
@@ -113,6 +129,8 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
         res.status(502).json({
           error: `failed to upload video to bucket: ${err instanceof Error ? err.message : 'unknown error'}`,
         });
+      } finally {
+        if (!keepFile) await rm(file.path, { force: true }).catch(() => {});
       }
     },
   );
