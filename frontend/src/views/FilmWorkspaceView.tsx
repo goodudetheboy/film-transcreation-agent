@@ -1,12 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import {
-  createProjectFromFilm,
-  deleteFilm,
-  getFilm,
-  listDetails,
-  listDiscoveryJobs,
-} from '../api/filmsApiClient';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { deleteFilm, getFilm, listDetails, listDiscoveryJobs } from '../api/filmsApiClient';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { TransportBar } from '../components/TransportBar';
@@ -62,9 +56,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showKickoff, setShowKickoff] = useState(false);
-  const [country, setCountry] = useState('');
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [projectError, setProjectError] = useState<string | null>(null);
 
   const splitRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
@@ -265,20 +256,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     }
   }
 
-  async function handleCreateProject(e: FormEvent) {
-    e.preventDefault();
-    if (!film || country.trim() === '') return;
-    setCreatingProject(true);
-    setProjectError(null);
-    try {
-      const project = await createProjectFromFilm(film.id, { passcode, country });
-      navigate(`/projects/${project.id}`);
-    } catch (err) {
-      setProjectError(err instanceof Error ? err.message : 'failed to create project');
-      setCreatingProject(false);
-    }
-  }
-
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
   if (!film) return <p className="results-placeholder">Loading…</p>;
 
@@ -344,16 +321,9 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
             <>
               <p className="section-heading">Project</p>
               {rows.length > 0 ? (
-                <form onSubmit={handleCreateProject} className="new-project-form" style={{ maxWidth: 480, marginTop: 20 }}>
-                  <div className="field">
-                    <label htmlFor="country">Target country</label>
-                    <input id="country" type="text" value={country} onChange={(e) => setCountry(e.target.value)} />
-                  </div>
-                  {projectError && <p className="passcode-gate__error">{projectError}</p>}
-                  <button type="submit" className="btn btn--primary" disabled={creatingProject || country.trim() === ''}>
-                    {creatingProject ? 'Creating…' : 'Create Project'}
-                  </button>
-                </form>
+                <Link to={`/films/${film.id}/projects/new`} className="btn btn--primary" style={{ width: 'fit-content', marginTop: 20 }}>
+                  New project from this film
+                </Link>
               ) : (
                 <p className="results-placeholder">Add at least one detail row before creating a project.</p>
               )}

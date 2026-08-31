@@ -1,13 +1,26 @@
 /**
- * Mirrors ProjectItem/Project/researchAgent types in backend/src/services/projectStore.ts
- * and researchAgent.ts, ResearchStreamEvent in backend/src/routes/projects.ts, and
- * Film/SubtitleEntry/DetailRow/DiscoveryJob in backend/src/services/filmTypes.ts. Not
- * literally shared via a workspace package (kept dead-simple for the hackathon
- * scaffold, per docs/adr/0006) — if this shape changes, update both sides by hand.
+ * Mirrors backend/src/services/projectTypes.ts (Project/Rubric/ProjectItem/
+ * ResearchRun/ChatSession), backend/src/routes/projects.ts's
+ * ResearchRunStreamEvent, and backend/src/services/researchChatAgent.ts's
+ * ChatStreamEvent, plus Film/SubtitleEntry/DetailRow/DiscoveryJob in
+ * backend/src/services/filmTypes.ts. Not literally shared via a workspace
+ * package (kept dead-simple for the hackathon scaffold, per docs/adr/0006) —
+ * if this shape changes, update both sides by hand. See docs/adr/0025.
  */
+export type ProjectItemAction = 'pending' | 'accepted' | 'rejected' | 'need-research';
+export type ProjectLifecycleStatus = 'draft' | 'in_progress' | 'completed' | 'abandoned';
+export type ResearchRunStatus = 'queued' | 'running' | 'done' | 'error';
+export type ChatSessionStatus = 'idle' | 'streaming' | 'error';
+
 export interface Rubric {
   id: string;
+  projectId: string;
+  name: string;
   description: string;
+  /** 1-5 importance multiplier, default 3. */
+  weight: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RubricScore {
@@ -18,11 +31,56 @@ export interface RubricScore {
   reasoning: string;
   evidence: string;
   sources: string[];
+  userNote?: string;
+  updatedAt: string;
+  updatedBy: 'batch-agent' | 'chat-agent' | 'user';
 }
 
 export interface SuggestedReplacement {
   text: string;
   justification: string;
+}
+
+export interface ProjectItem {
+  id: string;
+  projectId: string;
+  filmId: string;
+  detailRowId: string;
+  startMs: number;
+  endMs: number;
+  subtitleText: string;
+  sceneDescription: string;
+  customValues: Record<string, string>;
+  action: ProjectItemAction;
+  importanceScore: number | null;
+  scores: RubricScore[];
+  summary: string | null;
+  shouldTranscreate: boolean | null;
+  suggestedReplacement: SuggestedReplacement | null;
+  lastResearchedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  country: string;
+  sourceFilmId: string;
+  note: string;
+  status: ProjectLifecycleStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** What GET /api/projects and /api/projects/:id return — Project plus server-side
+ * enrichment so the Library table needs exactly one call, no frontend N+1. */
+export interface EnrichedProject extends Project {
+  pendingCount: number;
+  acceptedCount: number;
+  rejectedCount: number;
+  needResearchCount: number;
+  agentStatus: ResearchRunStatus | null;
 }
 
 export interface ResearchResult {
@@ -37,36 +95,24 @@ export interface ResearchResult {
   suggestedReplacement?: SuggestedReplacement;
 }
 
-export interface ProjectItem {
+export interface ResearchRun {
   id: string;
-  scriptLine: string;
-  sceneDescription: string;
-}
-
-export type BatchStatus = 'pending' | 'running' | 'done' | 'error';
-
-export interface ProjectBatch {
-  index: number;
+  projectId: string;
+  mode: 'need-research' | 'custom';
   itemIds: string[];
-  status: BatchStatus;
-}
-
-export type ProjectStatus = 'draft' | 'researching' | 'done' | 'error';
-
-export interface Project {
-  id: string;
-  name: string;
-  country: string;
-  items: ProjectItem[];
-  rubrics: Rubric[];
-  status: ProjectStatus;
-  batches: ProjectBatch[];
-  results: ResearchResult[];
-  errorMessage?: string;
+  rubricIds: string[];
+  status: ResearchRunStatus;
+  testMode: boolean;
   createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  updatedAt: string;
+  totalBatches: number;
+  completedBatches: number;
+  errorMessage?: string;
 }
 
-export type ResearchStreamEvent =
+export type ResearchRunStreamEvent =
   | { type: 'progress'; message: string }
   | {
       type: 'batch_done';
@@ -76,6 +122,43 @@ export type ResearchStreamEvent =
       results: ResearchResult[];
     }
   | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
+  | { type: 'error'; message: string };
+
+/** The resumable stream's frame shape — the entire current run document each time. */
+export type ResearchRunUpdateEvent = { type: 'run_update'; run: ResearchRun };
+
+// ---- Chat (docs/adr/0025) --------------------------------------------------
+
+export interface ChatPart {
+  text?: string;
+  functionCall?: { name: string; args: Record<string, unknown> };
+  functionResponse?: { name: string; response: Record<string, unknown> };
+}
+
+export interface ChatTurn {
+  role: 'user' | 'model';
+  parts: ChatPart[];
+  ts: string;
+}
+
+export interface ChatSession {
+  id: string;
+  projectId: string;
+  name: string | null;
+  sessionNumber: number;
+  status: ChatSessionStatus;
+  turns: ChatTurn[];
+  createdAt: string;
+  updatedAt: string;
+  errorMessage?: string;
+}
+
+export type ChatStreamEvent =
+  | { type: 'text_delta'; text: string }
+  | { type: 'tool_call'; callId: string; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; callId: string; name: string; result: Record<string, unknown> }
+  | { type: 'item_patched'; itemId: string; rubricId?: string; patch: Record<string, unknown> }
+  | { type: 'turn_done' }
   | { type: 'error'; message: string };
 
 // ---- Films / subtitle / details / discovery jobs (docs/adr/0018-0022) --------------

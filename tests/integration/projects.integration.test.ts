@@ -1,42 +1,94 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createProject, streamResearch } from '../../frontend/src/api/projectsApiClient';
-import type { ResearchStreamEvent } from '../../frontend/src/api/apiClient.types';
+import { createProjectFromFilm } from '../../frontend/src/api/filmsApiClient';
+import {
+  listRubrics,
+  listItems,
+  updateItemAction,
+  streamResearchRun,
+  createChatSession,
+} from '../../frontend/src/api/projectsApiClient';
+import { sendChatMessage } from '../../frontend/src/api/projectChatApiClient';
+import type { ChatStreamEvent, ResearchRunStreamEvent } from '../../frontend/src/api/apiClient.types';
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
 import { fakeResearchAgent } from './helpers/fakeResearchAgent';
+import { fakeResearchChatAgent } from './helpers/fakeResearchChatAgent';
+import { createInMemoryFilmStore } from '../../backend/src/services/filmStore';
+import { createInMemoryDetailRowsStore } from '../../backend/src/services/detailRowsStore';
+import { createInMemoryProjectStore } from '../../backend/src/services/projectStore';
+import { createInMemoryProjectRubricStore } from '../../backend/src/services/projectRubricStore';
+import { createInMemoryProjectItemStore } from '../../backend/src/services/projectItemStore';
+import { createInMemoryResearchRunStore } from '../../backend/src/services/researchRunStore';
+import { createInMemoryChatSessionStore } from '../../backend/src/services/chatSessionStore';
 
 const TEST_PASSCODE = 'integration-test-passcode';
 
-describe('frontend projectsApiClient -> real backend -> faked research agent', () => {
+describe('frontend project APIs -> real backend -> faked research/chat agents', () => {
   let backend: TestBackend;
+  let filmId: string;
+  let rowId: string;
 
   beforeAll(async () => {
+    const filmStore = createInMemoryFilmStore();
+    const detailRowsStore = createInMemoryDetailRowsStore();
+    const projectStore = createInMemoryProjectStore();
+    const projectRubricStore = createInMemoryProjectRubricStore();
+    const projectItemStore = createInMemoryProjectItemStore();
+    const researchRunStore = createInMemoryResearchRunStore();
+    const chatSessionStore = createInMemoryChatSessionStore();
+
+    const film = await filmStore.createFilm({
+      title: 'Integration Film',
+      videoUrl: 'http://example.com/clip.mp4',
+      subtitle: null,
+      runDiscoveryOnCreate: false,
+    });
+    filmId = film.id;
+    const row = await detailRowsStore.addRow(film.id, {
+      startMs: 0,
+      endMs: 2000,
+      subtitleText: "I'm not eating that broccoli.",
+      values: { segmentDescription: 'Riley pushes a plate of broccoli away at the dinner table' },
+      provenance: { type: 'user-marked' },
+    });
+    rowId = row.id;
+
+    const researchAgent = fakeResearchAgent([
+      [
+        {
+          targetCountry: 'Japan',
+          scores: [
+            {
+              rubricId: 'placeholder',
+              score: 9,
+              reasoning: 'Broccoli reads as a disliked vegetable to American kids, but not to Japanese kids.',
+              evidence: "Documented case: Pixar re-animated this exact line for Inside Out's Japanese release.",
+              sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
+              updatedAt: new Date().toISOString(),
+              updatedBy: 'batch-agent',
+            },
+          ],
+          summary: 'The broccoli line does not translate to Japan and should be transcreated.',
+          shouldTranscreate: true,
+          suggestedReplacement: {
+            text: 'Swap the disliked food for one Japanese kids commonly dislike.',
+            justification: 'Matches the real Pixar localization precedent for this exact scene.',
+          },
+        },
+      ],
+    ]);
+    const researchChatAgent = fakeResearchChatAgent({ projectItemStore, projectRubricStore, chatSessionStore });
+
     backend = await startTestBackend({
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
-      researchAgent: fakeResearchAgent([
-        [
-          {
-            itemId: 'placeholder',
-            targetCountry: 'Japan',
-            scores: [
-              {
-                rubricId: 'food-aversion',
-                score: 9,
-                reasoning:
-                  "Broccoli reads as a disliked vegetable to American kids, but not to Japanese kids.",
-                evidence:
-                  "Documented case: Pixar re-animated this exact line for Inside Out's Japanese release, swapping in green peppers.",
-                sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
-              },
-            ],
-            summary: 'The broccoli line does not translate to Japan and should be transcreated.',
-            shouldTranscreate: true,
-            suggestedReplacement: {
-              text: 'Swap the disliked food for one Japanese kids commonly dislike.',
-              justification: 'Matches the real Pixar localization precedent for this exact scene.',
-            },
-          },
-        ],
-      ]),
+      filmStore,
+      detailRowsStore,
+      projectStore,
+      projectRubricStore,
+      projectItemStore,
+      researchRunStore,
+      chatSessionStore,
+      researchAgent,
+      researchChatAgent,
     });
   });
 
@@ -44,48 +96,69 @@ describe('frontend projectsApiClient -> real backend -> faked research agent', (
     await backend.close();
   });
 
-  it('creates a project via the real backend, then streams research progress end-to-end from the faked agent', async () => {
+  it('creates a film-first project, runs research end-to-end, then a chat turn patches an item live', async () => {
     // No fetchImpl override anywhere in this file — real fetch, real TCP, real Express app.
-    // Only backend.researchAgent (injected above) is fake.
-    const project = await createProject(
-      {
-        passcode: TEST_PASSCODE,
-        country: 'Japan',
-        items: [
-          {
-            scriptLine: "I'm not eating that broccoli.",
-            sceneDescription: 'Riley pushes a plate of broccoli away at the dinner table',
-          },
-        ],
-      },
+    // Only backend.researchAgent/researchChatAgent (injected above) are fake.
+    const { project, items } = await createProjectFromFilm(
+      filmId,
+      { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] },
       { baseUrl: backend.url },
     );
 
     expect(project.id).toBeTruthy();
-    expect(project.status).toBe('draft');
-    expect(project.items).toHaveLength(1);
+    expect(project.sourceFilmId).toBe(filmId);
+    expect(items).toHaveLength(1);
+    expect(items[0].subtitleText).toBe("I'm not eating that broccoli.");
+    expect(items[0].action).toBe('pending');
 
-    const events: ResearchStreamEvent[] = [];
-    await streamResearch(
+    const rubrics = await listRubrics(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    expect(rubrics.length).toBeGreaterThan(0); // fell back to DEFAULT_RUBRICS
+
+    // Mark the item need-research, then kick off a batch research run against it.
+    await updateItemAction(project.id, items[0].id, { passcode: TEST_PASSCODE, action: 'need-research' }, { baseUrl: backend.url });
+
+    const runEvents: ResearchRunStreamEvent[] = [];
+    await streamResearchRun(
       project.id,
-      { passcode: TEST_PASSCODE, testMode: false }, // must reach the injected fake researchAgent, not the default mock
-      (e) => events.push(e),
+      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' }, // testMode:false reaches the injected fake researchAgent
+      (e) => runEvents.push(e),
       { baseUrl: backend.url },
     );
 
-    expect(events[0]).toMatchObject({ type: 'progress' });
-    const batchEvents = events.filter((e) => e.type === 'batch_done');
-    expect(batchEvents).toHaveLength(1);
-    expect(events.at(-1)).toMatchObject({
-      type: 'done',
-      summary: { totalItems: 1, totalRecommendedForChange: 1 },
-    });
+    expect(runEvents[0]).toMatchObject({ type: 'progress' });
+    expect(runEvents.at(-1)).toMatchObject({ type: 'done', summary: { totalItems: 1, totalRecommendedForChange: 1 } });
+
+    const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    expect(afterRun[0].shouldTranscreate).toBe(true);
+    expect(afterRun[0].summary).toContain('does not translate to Japan');
+
+    // Now open a chat session and send a message that triggers the fake chat
+    // agent's canned tool call — confirms the SSE round trip AND that the
+    // resulting ProjectItem write is real, visible via a fresh GET.
+    const session = await createChatSession(project.id, { passcode: TEST_PASSCODE }, { baseUrl: backend.url });
+    const chatEvents: ChatStreamEvent[] = [];
+    await sendChatMessage(
+      project.id,
+      session.id,
+      { passcode: TEST_PASSCODE, text: 'what do you think of this line?', testMode: false, itemId: items[0].id },
+      (e) => chatEvents.push(e),
+      { baseUrl: backend.url },
+    );
+
+    expect(chatEvents.some((e) => e.type === 'tool_call' && e.name === 'update_rubric_score')).toBe(true);
+    expect(chatEvents.some((e) => e.type === 'item_patched')).toBe(true);
+    expect(chatEvents.at(-1)).toEqual({ type: 'turn_done' });
+
+    const afterChat = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const chatPatchedScore = afterChat[0].scores.find((s) => s.updatedBy === 'chat-agent');
+    expect(chatPatchedScore).toMatchObject({ score: 7, updatedBy: 'chat-agent' });
   });
 
   it('rejects project creation with an error when the passcode is wrong', async () => {
     await expect(
-      createProject(
-        { passcode: 'wrong', country: 'Japan', items: [{ scriptLine: 'x', sceneDescription: 'y' }] },
+      createProjectFromFilm(
+        filmId,
+        { passcode: 'wrong', country: 'Japan', detailRowIds: [rowId] },
         { baseUrl: backend.url },
       ),
     ).rejects.toThrow(/401/);

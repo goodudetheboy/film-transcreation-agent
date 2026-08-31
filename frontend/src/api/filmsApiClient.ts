@@ -8,7 +8,7 @@ import type {
   Film,
   FilmPrepStreamEvent,
   Project,
-  Rubric,
+  ProjectItem,
   SubtitleEntry,
 } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
@@ -398,22 +398,25 @@ export async function discardDiscoveryResult(
 export interface CreateProjectFromFilmPayload {
   passcode: string;
   country: string;
-  rubrics?: Rubric[];
+  note?: string;
+  /** Explicit selection only — never every DetailRow unconditionally, see docs/adr/0025. */
+  detailRowIds: string[];
+  rubrics?: Array<{ name: string; description: string; weight: number }>;
 }
 
 export async function createProjectFromFilm(
   filmId: string,
   payload: CreateProjectFromFilmPayload,
   options: ApiClientOptions = {},
-): Promise<Project> {
+): Promise<{ project: Project; items: ProjectItem[] }> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/create-project`, {
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/projects`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
-  return (await res.json()) as Project;
+  return (await res.json()) as { project: Project; items: ProjectItem[] };
 }

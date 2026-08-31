@@ -3,9 +3,9 @@ import { Routes, Route, NavLink } from 'react-router-dom';
 import { PasscodeGate } from './components/PasscodeGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
-import { ProjectsListView } from './views/ProjectsListView';
-import { NewProjectView } from './views/NewProjectView';
-import { ProjectDetailView } from './views/ProjectDetailView';
+import { ProjectsLibraryView } from './views/ProjectsLibraryView';
+import { NewProjectWizardView } from './views/NewProjectWizardView';
+import { ProjectWorkspaceView } from './views/ProjectWorkspaceView';
 import { StartScreen } from './views/StartScreen';
 import { ImportFilmModal } from './views/ImportFilmModal';
 import { FilmPreparingView } from './views/FilmPreparingView';
@@ -59,11 +59,14 @@ function App() {
             path="/films/:id"
             element={<FilmWorkspaceView passcode={passcode} testMode={testMode} />}
           />
-          <Route path="/projects" element={<ProjectsListView passcode={passcode} />} />
-          <Route path="/projects/new" element={<NewProjectView passcode={passcode} />} />
+          <Route
+            path="/films/:filmId/projects/new"
+            element={<NewProjectWizardView passcode={passcode} testMode={testMode} />}
+          />
+          <Route path="/projects" element={<ProjectsLibraryView passcode={passcode} />} />
           <Route
             path="/projects/:id"
-            element={<ProjectDetailView passcode={passcode} testMode={testMode} />}
+            element={<ProjectWorkspaceView passcode={passcode} testMode={testMode} />}
           />
         </Routes>
       </main>
