@@ -6,6 +6,7 @@ import {
   updateItemAction,
   streamResearchRun,
   createChatSession,
+  runTrendResearch,
 } from '../../frontend/src/api/projectsApiClient';
 import { sendChatMessage } from '../../frontend/src/api/projectChatApiClient';
 import type { ChatStreamEvent, ResearchRunStreamEvent } from '../../frontend/src/api/apiClient.types';
@@ -166,13 +167,10 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
   });
 });
 
-describe('frontend project APIs -> real backend -> faked research + trend agents', () => {
+describe('frontend project APIs -> real backend -> faked Trend Agent (manual, per-item)', () => {
   let backend: TestBackend;
   let filmId: string;
   let rowId: string;
-  // Mutated in the test, before triggering the run, once the real server-assigned
-  // rubric id is known — the fake agent's canned score object is held by reference.
-  const scoreHolder = { rubricId: 'placeholder', score: 9, reasoning: 'r', evidence: 'e', sources: [] as string[], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' as const };
 
   beforeAll(async () => {
     const filmStore = createInMemoryFilmStore();
@@ -194,16 +192,6 @@ describe('frontend project APIs -> real backend -> faked research + trend agents
     });
     rowId = row.id;
 
-    const researchAgent = fakeResearchAgent([
-      [
-        {
-          targetCountry: 'Brazil',
-          scores: [scoreHolder],
-          summary: 'This slang reference is dated and should be updated for the target country.',
-          shouldTranscreate: true,
-        },
-      ],
-    ]);
     const trendSuggestion = {
       text: 'use the current trend',
       justification: 'because it is what is circulating locally right now',
@@ -216,7 +204,6 @@ describe('frontend project APIs -> real backend -> faked research + trend agents
       config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
       filmStore,
       detailRowsStore,
-      researchAgent,
       trendAgent: fakeTrendAgent([trendSuggestion]),
     });
   });
@@ -225,7 +212,7 @@ describe('frontend project APIs -> real backend -> faked research + trend agents
     await backend.close();
   });
 
-  it('chains the Trend Agent after the real backend delivers a trend-eligible flagged item, end-to-end over SSE and persisted items', async () => {
+  it('runs the Trend Agent for a single item on demand, ungated — item has never been researched', async () => {
     const { project, items } = await createProjectFromFilm(
       filmId,
       {
@@ -237,22 +224,16 @@ describe('frontend project APIs -> real backend -> faked research + trend agents
       { baseUrl: backend.url },
     );
 
-    const rubrics = await listRubrics(project.id, TEST_PASSCODE, { baseUrl: backend.url });
-    scoreHolder.rubricId = rubrics[0].id;
-
-    await updateItemAction(project.id, items[0].id, { passcode: TEST_PASSCODE, action: 'need-research' }, { baseUrl: backend.url });
-
-    const runEvents: ResearchRunStreamEvent[] = [];
-    await streamResearchRun(
+    // No research run at all — item is still 'pending', shouldTranscreate is null.
+    // The manual button is the trigger, so this must still work end-to-end.
+    const updated = await runTrendResearch(
       project.id,
-      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' },
-      (e) => runEvents.push(e),
+      items[0].id,
+      { passcode: TEST_PASSCODE, testMode: false },
       { baseUrl: backend.url },
     );
 
-    const batchDone = runEvents.find((e) => e.type === 'batch_done');
-    expect(batchDone).toBeDefined();
-    expect((batchDone as Extract<ResearchRunStreamEvent, { type: 'batch_done' }>).results[0].trendSuggestions).toEqual([
+    expect(updated.trendSuggestions).toEqual([
       {
         text: 'use the current trend',
         justification: 'because it is what is circulating locally right now',
@@ -263,14 +244,23 @@ describe('frontend project APIs -> real backend -> faked research + trend agents
     ]);
 
     const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
-    expect(afterRun[0].trendSuggestions).toEqual([
+    expect(afterRun[0].trendSuggestions).toEqual(updated.trendSuggestions);
+  });
+
+  it('returns 400 when the project has no trend-eligible rubric configured', async () => {
+    const { project, items } = await createProjectFromFilm(
+      filmId,
       {
-        text: 'use the current trend',
-        justification: 'because it is what is circulating locally right now',
-        sourceUrl: 'https://example.com/trend',
-        sourceTitle: 'Trend Roundup',
-        publishedDate: '2026-05-01',
+        passcode: TEST_PASSCODE,
+        country: 'Brazil',
+        detailRowIds: [rowId],
+        rubrics: [{ name: 'Wordplay', description: 'wordplay', weight: 3, trendEligible: false }],
       },
-    ]);
+      { baseUrl: backend.url },
+    );
+
+    await expect(
+      runTrendResearch(project.id, items[0].id, { passcode: TEST_PASSCODE, testMode: false }, { baseUrl: backend.url }),
+    ).rejects.toThrow(/400/);
   });
 });

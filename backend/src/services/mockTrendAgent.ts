@@ -18,15 +18,10 @@ function mockSuggestion(): TrendSuggestion {
 
 export function createMockTrendAgent(): TrendAgent {
   return {
-    async findTrendSuggestions({ items }) {
-      const output: Record<string, TrendSuggestion[]> = {};
-      for (const { item } of items) {
-        const haystack = `${item.scriptLine} ${item.sceneDescription}`.toLowerCase();
-        if (haystack.includes('meme')) {
-          output[item.id] = [mockSuggestion()];
-        }
-      }
-      return output;
+    async findTrendSuggestions({ item, rubrics }) {
+      if (rubrics.length === 0) return [];
+      const haystack = `${item.scriptLine} ${item.sceneDescription}`.toLowerCase();
+      return haystack.includes('meme') ? [mockSuggestion()] : [];
     },
   };
 }
