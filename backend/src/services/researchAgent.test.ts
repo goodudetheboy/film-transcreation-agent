@@ -1,11 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createResearchAgent, stripJsonFences, type GenAIClient } from './researchAgent.js';
+import { createResearchAgent, stripJsonFences, type GenAIClient, type Rubric } from './researchAgent.js';
 
 const CONFIG = {
   googleCloudProject: 'test-project',
   geminiLocation: 'us-central1',
   geminiModel: 'gemini-2.5-flash',
 };
+
+const NOW = new Date().toISOString();
+function rubric(id: string, description: string, weight = 3): Rubric {
+  return { id, projectId: 'proj-a', name: id, description, weight, createdAt: NOW, updatedAt: NOW };
+}
 
 function fakeGenAI(generateContent: GenAIClient['models']['generateContent']): GenAIClient {
   return { models: { generateContent } };
@@ -67,7 +72,7 @@ describe('createResearchAgent researchBatch', () => {
     const results = await agent.researchBatch({
       items,
       targetCountry: 'Japan',
-      rubrics: [{ id: 'r1', description: 'test rubric' }],
+      rubrics: [rubric('r1', 'test rubric')],
     });
 
     expect(generateContent).toHaveBeenCalledTimes(3); // 10 + 10 + 5
@@ -181,10 +186,10 @@ describe('createResearchAgent researchBatch', () => {
     const results = await agent.researchBatch({
       items: itemsList(1),
       targetCountry: 'Japan',
-      rubrics: [{ id: 'food-aversion', description: 'test' }],
+      rubrics: [rubric('food-aversion', 'test')],
     });
 
-    expect(results[0]).toEqual({
+    expect(results[0]).toMatchObject({
       itemId: 'item-0',
       targetCountry: 'Japan',
       scores: [
@@ -194,12 +199,14 @@ describe('createResearchAgent researchBatch', () => {
           reasoning: 'reason',
           evidence: 'evidence',
           sources: ['https://example.com'],
+          updatedBy: 'batch-agent',
         },
       ],
       summary: 'this should change',
       shouldTranscreate: true,
       suggestedReplacement: { text: 'replacement text', justification: 'because' },
     });
+    expect(results[0].scores[0].updatedAt).toEqual(expect.any(String));
   });
 
   it('omits suggestedReplacement entirely when suggested_replacement is null', async () => {

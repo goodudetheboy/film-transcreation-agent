@@ -1,9 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import { createMockResearchAgent } from './mockResearchAgent.js';
+import type { Rubric } from './researchAgent.js';
+
+const NOW = new Date().toISOString();
+function rubric(id: string, description: string, weight = 3): Rubric {
+  return { id, projectId: 'proj-a', name: id, description, weight, createdAt: NOW, updatedAt: NOW };
+}
 
 const RUBRICS = [
-  { id: 'food-aversion', description: 'food that reads differently abroad' },
-  { id: 'wordplay', description: 'wordplay that depends on the source language' },
+  rubric('food-aversion', 'food that reads differently abroad'),
+  rubric('wordplay', 'wordplay that depends on the source language'),
 ];
 
 describe('createMockResearchAgent', () => {
@@ -17,7 +23,7 @@ describe('createMockResearchAgent', () => {
     const result = await agent.researchBatch({
       items,
       targetCountry: 'Japan',
-      rubrics: [{ id: 'r1', description: 'anything' }],
+      rubrics: [rubric('r1', 'anything')],
     });
 
     expect(result).toHaveLength(2);

@@ -376,32 +376,68 @@ describe('Discovery job routes', () => {
   });
 });
 
-describe('POST /api/films/:id/create-project', () => {
-  it('builds project items from the film\'s curated Details rows', async () => {
+describe('POST /api/films/:id/projects', () => {
+  it("builds project items from the film's curated Details rows, only for explicitly selected rows", async () => {
     const { app, detailRowsStore } = buildApp();
     const created = await createFilm(app, { runDiscovery: false });
     const filmId = created.body.id;
 
-    await detailRowsStore.addRow(filmId, {
+    const selectedRow = await detailRowsStore.addRow(filmId, {
       startMs: 0,
       endMs: 2000,
       subtitleText: 'Hello there',
       values: { segmentDescription: 'a scene' },
       provenance: { type: 'user-marked' },
     });
+    // A second row exists but is never selected — asserts the bridge only imports
+    // an explicit selection, never every row unconditionally (see docs/adr/0025).
+    await detailRowsStore.addRow(filmId, {
+      startMs: 3000,
+      endMs: 4000,
+      subtitleText: 'Not selected',
+      values: {},
+      provenance: { type: 'user-marked' },
+    });
 
-    const res = await request(app).post(`/api/films/${filmId}/create-project`).send({ passcode: TEST_PASSCODE, country: 'Japan' });
+    const res = await request(app)
+      .post(`/api/films/${filmId}/projects`)
+      .send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [selectedRow.id] });
     expect(res.status).toBe(201);
-    expect(res.body.items).toEqual([{ id: expect.any(String), scriptLine: 'Hello there', sceneDescription: 'a scene' }]);
+    expect(res.body.project).toMatchObject({ country: 'Japan', sourceFilmId: filmId, status: 'draft' });
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({
+      detailRowId: selectedRow.id,
+      subtitleText: 'Hello there',
+      sceneDescription: 'a scene',
+      action: 'pending',
+    });
+
+    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    expect(rubrics.body.length).toBeGreaterThan(0); // falls back to DEFAULT_RUBRICS
   });
 
-  it('returns 404/400 for an unknown film / missing country', async () => {
-    const { app } = buildApp();
+  it('returns 404/400 for an unknown film / missing country / missing detailRowIds', async () => {
+    const { app, detailRowsStore } = buildApp();
     const created = await createFilm(app, { runDiscovery: false });
     const filmId = created.body.id;
+    const row = await detailRowsStore.addRow(filmId, {
+      startMs: 0,
+      endMs: 2000,
+      subtitleText: 'Hello there',
+      values: {},
+      provenance: { type: 'user-marked' },
+    });
 
-    expect((await request(app).post('/api/films/nope/create-project').send({ passcode: TEST_PASSCODE, country: 'Japan' })).status).toBe(404);
-    expect((await request(app).post(`/api/films/${filmId}/create-project`).send({ passcode: TEST_PASSCODE })).status).toBe(400);
+    expect(
+      (await request(app).post('/api/films/nope/projects').send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [row.id] }))
+        .status,
+    ).toBe(404);
+    expect(
+      (await request(app).post(`/api/films/${filmId}/projects`).send({ passcode: TEST_PASSCODE, detailRowIds: [row.id] })).status,
+    ).toBe(400);
+    expect(
+      (await request(app).post(`/api/films/${filmId}/projects`).send({ passcode: TEST_PASSCODE, country: 'Japan' })).status,
+    ).toBe(400);
   });
 });
 

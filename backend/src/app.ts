@@ -9,7 +9,12 @@ import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
-import { createProjectStore, type ProjectStore } from './services/projectStore.js';
+import { createInMemoryProjectStore, type ProjectStore } from './services/projectStore.js';
+import { createInMemoryProjectRubricStore, type ProjectRubricStore } from './services/projectRubricStore.js';
+import { createInMemoryProjectItemStore, type ProjectItemStore } from './services/projectItemStore.js';
+import { createInMemoryResearchRunStore, type ResearchRunStore } from './services/researchRunStore.js';
+import { createInMemoryChatSessionStore, type ChatSessionStore } from './services/chatSessionStore.js';
+import { createResearchRunEventBus, type ResearchRunEventBus } from './services/researchRunEventBus.js';
 import { createInMemoryFilmStore, type FilmStore } from './services/filmStore.js';
 import { createInMemoryDetailRowsStore, type DetailRowsStore } from './services/detailRowsStore.js';
 import { createInMemoryDiscoveryJobStore, type DiscoveryJobStore } from './services/discoveryJobStore.js';
@@ -25,6 +30,11 @@ export interface AppDeps {
   researchAgent?: ResearchAgent;
   mockResearchAgent?: ResearchAgent;
   projectStore?: ProjectStore;
+  projectRubricStore?: ProjectRubricStore;
+  projectItemStore?: ProjectItemStore;
+  researchRunStore?: ResearchRunStore;
+  chatSessionStore?: ChatSessionStore;
+  researchRunEventBus?: ResearchRunEventBus;
   filmStore?: FilmStore;
   detailRowsStore?: DetailRowsStore;
   discoveryJobStore?: DiscoveryJobStore;
@@ -74,7 +84,12 @@ export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
   const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
   const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
-  const projectStore = deps.projectStore ?? createProjectStore();
+  const projectStore = deps.projectStore ?? createInMemoryProjectStore();
+  const projectRubricStore = deps.projectRubricStore ?? createInMemoryProjectRubricStore();
+  const projectItemStore = deps.projectItemStore ?? createInMemoryProjectItemStore();
+  const researchRunStore = deps.researchRunStore ?? createInMemoryResearchRunStore();
+  const chatSessionStore = deps.chatSessionStore ?? createInMemoryChatSessionStore();
+  const researchRunEventBus = deps.researchRunEventBus ?? createResearchRunEventBus();
   const filmStore = deps.filmStore ?? createInMemoryFilmStore();
   const detailRowsStore = deps.detailRowsStore ?? createInMemoryDetailRowsStore();
   const discoveryJobStore = deps.discoveryJobStore ?? createInMemoryDiscoveryJobStore();
@@ -107,10 +122,14 @@ export function createApp(deps: AppDeps = {}): Express {
   guarded.use(verifyPasscodeRoute());
   guarded.use(
     projectsRoute({
-      store: projectStore,
+      projectStore,
+      projectRubricStore,
+      projectItemStore,
+      detailRowsStore,
+      researchRunStore,
       researchAgent,
       mockResearchAgent,
-      defaultRubrics: DEFAULT_RUBRICS,
+      eventBus: researchRunEventBus,
     }),
   );
   // Serves mock-mode uploaded video bytes back over HTTP. Sits behind the same
@@ -122,6 +141,8 @@ export function createApp(deps: AppDeps = {}): Express {
       detailRowsStore,
       discoveryJobStore,
       projectStore,
+      projectRubricStore,
+      projectItemStore,
       defaultRubrics: DEFAULT_RUBRICS,
       videoBucketUploader,
       maxVideoUploadBytes: config.maxVideoUploadBytes,

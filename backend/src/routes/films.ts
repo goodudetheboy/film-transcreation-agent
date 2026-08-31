@@ -6,11 +6,12 @@ import multer from 'multer';
 import type { DetailRowsStore } from '../services/detailRowsStore.js';
 import type { DiscoveryEventBus } from '../services/discoveryEventBus.js';
 import type { DiscoveryJob, DiscoveryJobStore } from '../services/discoveryJobStore.js';
-import { detailRowsToProjectItems } from '../services/detailRowsToProjectItems.js';
+import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
 import type { FilmPrep, FilmStore } from '../services/filmStore.js';
 import type { FilmPrepPipeline } from '../services/filmPrepPipeline.js';
 import type { ProjectStore } from '../services/projectStore.js';
-import type { Rubric } from '../services/researchAgent.js';
+import type { ProjectItemStore } from '../services/projectItemStore.js';
+import type { CreateRubricInput, ProjectRubricStore } from '../services/projectRubricStore.js';
 import { parseSubtitleFile } from '../services/subtitleParser.js';
 import { subtitleTextForRange } from '../services/subtitleOverlap.js';
 import { simulateDelay } from '../services/testDelay.js';
@@ -21,7 +22,9 @@ export interface FilmsRouteDeps {
   detailRowsStore: DetailRowsStore;
   discoveryJobStore: DiscoveryJobStore;
   projectStore: ProjectStore;
-  defaultRubrics: Rubric[];
+  projectRubricStore: ProjectRubricStore;
+  projectItemStore: ProjectItemStore;
+  defaultRubrics: CreateRubricInput[];
   videoBucketUploader: VideoBucketUploader;
   maxVideoUploadBytes: number;
   maxSubtitleUploadBytes: number;
@@ -636,29 +639,41 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   // ---- Bridge to Project (Research) --------------------------------------
 
-  router.post('/api/films/:id/create-project', async (req, res) => {
+  // Film-first creation only (see docs/adr/0025) — always requires an explicit
+  // selection of the film's DetailRows to import, never "every row
+  // unconditionally" the way the old create-project route worked.
+  router.post('/api/films/:id/projects', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
     if (!film) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
 
-    const { country, rubrics } = req.body ?? {};
+    const { country, note, detailRowIds, rubrics } = req.body ?? {};
     if (typeof country !== 'string' || country.trim() === '') {
       res.status(400).json({ error: 'country is required' });
       return;
     }
+    if (!Array.isArray(detailRowIds) || detailRowIds.length === 0) {
+      res.status(400).json({ error: 'detailRowIds must be a non-empty array' });
+      return;
+    }
 
-    const rows = await deps.detailRowsStore.listRows(film.id);
-    const items = detailRowsToProjectItems(rows);
-
-    const project = deps.projectStore.createProject({
-      name: `${country}-${film.title}`,
+    const project = await deps.projectStore.createProject({
+      name: `${country} — ${film.title}`,
       country,
-      items,
-      rubrics: Array.isArray(rubrics) && rubrics.length > 0 ? rubrics : deps.defaultRubrics,
+      sourceFilmId: film.id,
+      note: typeof note === 'string' ? note : undefined,
     });
-    res.status(201).json(project);
+
+    const rubricInputs: CreateRubricInput[] = Array.isArray(rubrics) && rubrics.length > 0 ? rubrics : deps.defaultRubrics;
+    await Promise.all(rubricInputs.map((r) => deps.projectRubricStore.createRubric(project.id, r)));
+
+    const idSet = new Set(detailRowIds);
+    const rows = (await deps.detailRowsStore.listRows(film.id)).filter((r) => idSet.has(r.id));
+    const items = await deps.projectItemStore.createItems(project.id, detailRowsToProjectItemInputs(film.id, rows));
+
+    res.status(201).json({ project, items });
   });
 
   return router;

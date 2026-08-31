@@ -6,6 +6,12 @@ import { createFirestoreClient } from './services/firestoreClient.js';
 import { createFirestoreFilmStore } from './services/filmStore.js';
 import { createFirestoreDetailRowsStore } from './services/detailRowsStore.js';
 import { createFirestoreDiscoveryJobStore } from './services/discoveryJobStore.js';
+import { createFirestoreProjectStore } from './services/projectStore.js';
+import { createFirestoreProjectRubricStore } from './services/projectRubricStore.js';
+import { createFirestoreProjectItemStore } from './services/projectItemStore.js';
+import { createFirestoreResearchRunStore } from './services/researchRunStore.js';
+import { createFirestoreChatSessionStore } from './services/chatSessionStore.js';
+import { createResearchRunEventBus } from './services/researchRunEventBus.js';
 import { createDiscoveryAgent } from './services/discoveryAgent.js';
 import { createMockDiscoveryAgent } from './services/mockDiscoveryAgent.js';
 import { createDiscoveryEventBus } from './services/discoveryEventBus.js';
@@ -18,6 +24,12 @@ const firestore = createFirestoreClient(config);
 const filmStore = createFirestoreFilmStore(firestore);
 const detailRowsStore = createFirestoreDetailRowsStore(firestore);
 const discoveryJobStore = createFirestoreDiscoveryJobStore(firestore);
+const projectStore = createFirestoreProjectStore(firestore);
+const projectRubricStore = createFirestoreProjectRubricStore(firestore);
+const projectItemStore = createFirestoreProjectItemStore(firestore);
+const researchRunStore = createFirestoreResearchRunStore(firestore);
+const chatSessionStore = createFirestoreChatSessionStore(firestore);
+const researchRunEventBus = createResearchRunEventBus();
 
 const researchAgent = createResearchAgent(config);
 const discoveryAgent = createDiscoveryAgent(config);
@@ -38,6 +50,12 @@ const app = createApp({
   filmStore,
   detailRowsStore,
   discoveryJobStore,
+  projectStore,
+  projectRubricStore,
+  projectItemStore,
+  researchRunStore,
+  chatSessionStore,
+  researchRunEventBus,
   eventBus,
 });
 

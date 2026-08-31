@@ -1,88 +1,117 @@
 import { randomUUID } from 'node:crypto';
-import type { Rubric, ResearchResult } from './researchAgent.js';
+import type { Firestore } from '@google-cloud/firestore';
+import type { Project } from './projectTypes.js';
 
-export interface ProjectItem {
-  id: string;
-  scriptLine: string;
-  sceneDescription: string;
-}
-
-export type BatchStatus = 'pending' | 'running' | 'done' | 'error';
-
-export interface ProjectBatch {
-  index: number;
-  itemIds: string[];
-  status: BatchStatus;
-}
-
-export type ProjectStatus = 'draft' | 'researching' | 'done' | 'error';
-
-export interface Project {
-  id: string;
-  name: string;
-  country: string;
-  items: ProjectItem[];
-  rubrics: Rubric[];
-  status: ProjectStatus;
-  batches: ProjectBatch[];
-  results: ResearchResult[];
-  errorMessage?: string;
-  createdAt: string;
-}
+export type { Project } from './projectTypes.js';
 
 export interface CreateProjectInput {
-  /** Defaults to `country` when omitted (the plain "New Project" flow doesn't have a film name to build one from). */
-  name?: string;
+  name: string;
   country: string;
-  items: Array<{ scriptLine: string; sceneDescription: string }>;
-  rubrics: Rubric[];
+  sourceFilmId: string;
+  note?: string;
 }
 
 /**
- * In-memory only — state is lost on server restart. A deliberate hackathon-scope
- * tradeoff, not an oversight; see docs/adr/0013.
+ * Owns the `projects/{projectId}` document only — rubrics/items/researchRuns/
+ * chatSessions live in their own sibling stores (projectRubricStore.ts,
+ * projectItemStore.ts, researchRunStore.ts, chatSessionStore.ts), same
+ * per-concern split as filmStore.ts vs. detailRowsStore.ts/discoveryJobStore.ts.
+ *
+ * Moved off the in-memory Map from docs/adr/0013 to Firestore — see
+ * docs/adr/0025 for why (chat sessions need to survive restarts, the Library's
+ * agent-status column needs to reflect state with nobody's SSE stream open).
  */
 export interface ProjectStore {
-  createProject(input: CreateProjectInput): Project;
-  getProject(id: string): Project | undefined;
-  listProjects(): Project[];
-  updateProject(id: string, patch: Partial<Omit<Project, 'id' | 'createdAt'>>): Project | undefined;
+  createProject(input: CreateProjectInput): Promise<Project>;
+  getProject(id: string): Promise<Project | undefined>;
+  listProjects(): Promise<Project[]>;
+  updateProject(id: string, patch: Partial<Pick<Project, 'name' | 'note' | 'status'>>): Promise<Project | undefined>;
+  deleteProject(id: string): Promise<boolean>;
 }
 
-export function createProjectStore(): ProjectStore {
+const PROJECTS_COLLECTION = 'projects';
+
+function newProject(input: CreateProjectInput, now: string): Project {
+  return {
+    id: randomUUID(),
+    name: input.name,
+    country: input.country,
+    sourceFilmId: input.sourceFilmId,
+    note: input.note ?? '',
+    status: 'draft',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function createFirestoreProjectStore(firestore: Firestore): ProjectStore {
+  const collection = firestore.collection(PROJECTS_COLLECTION);
+
+  return {
+    async createProject(input) {
+      const project = newProject(input, new Date().toISOString());
+      await collection.doc(project.id).set(project);
+      return project;
+    },
+
+    async getProject(id) {
+      const doc = await collection.doc(id).get();
+      return doc.exists ? (doc.data() as Project) : undefined;
+    },
+
+    async listProjects() {
+      const snapshot = await collection.orderBy('createdAt', 'desc').get();
+      return snapshot.docs.map((d) => d.data() as Project);
+    },
+
+    async updateProject(id, patch) {
+      const ref = collection.doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return undefined;
+      const updated: Project = { ...(doc.data() as Project), ...patch, updatedAt: new Date().toISOString() };
+      await ref.set(updated);
+      return updated;
+    },
+
+    async deleteProject(id) {
+      const ref = collection.doc(id);
+      const doc = await ref.get();
+      if (!doc.exists) return false;
+      await firestore.recursiveDelete(ref);
+      return true;
+    },
+  };
+}
+
+/** In-memory fake, same interface/semantics — for unit tests. */
+export function createInMemoryProjectStore(): ProjectStore {
   const projects = new Map<string, Project>();
 
   return {
-    createProject(input) {
-      const project: Project = {
-        id: randomUUID(),
-        name: input.name ?? input.country,
-        country: input.country,
-        items: input.items.map((item) => ({ id: randomUUID(), ...item })),
-        rubrics: input.rubrics,
-        status: 'draft',
-        batches: [],
-        results: [],
-        createdAt: new Date().toISOString(),
-      };
+    async createProject(input) {
+      const project = newProject(input, new Date().toISOString());
       projects.set(project.id, project);
       return project;
     },
 
-    getProject(id) {
+    async getProject(id) {
       return projects.get(id);
     },
 
-    listProjects() {
-      return [...projects.values()];
+    async listProjects() {
+      return [...projects.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },
 
-    updateProject(id, patch) {
+    async updateProject(id, patch) {
       const existing = projects.get(id);
       if (!existing) return undefined;
-      const updated: Project = { ...existing, ...patch };
+      const updated: Project = { ...existing, ...patch, updatedAt: new Date().toISOString() };
       projects.set(id, updated);
       return updated;
+    },
+
+    async deleteProject(id) {
+      return projects.delete(id);
     },
   };
 }

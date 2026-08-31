@@ -10,6 +10,7 @@ import type {
 /** Canned food-aversion score referencing the same documented Inside Out case used
  * by insideOutDetails.ts, so a demo run always has something recognizable to show. */
 function mockScoreFor(rubric: Rubric, isBroccoli: boolean): RubricScore {
+  const updatedAt = new Date().toISOString();
   if (isBroccoli && rubric.id === 'food-aversion') {
     return {
       rubricId: 'food-aversion',
@@ -19,6 +20,8 @@ function mockScoreFor(rubric: Rubric, isBroccoli: boolean): RubricScore {
       evidence:
         "Documented case: Pixar re-animated this exact line for Inside Out's Japanese release, swapping in green peppers.",
       sources: ['https://www.businessinsider.com/inside-out-pixar-broccoli-japan-2015-6'],
+      updatedAt,
+      updatedBy: 'batch-agent',
     };
   }
   return {
@@ -27,6 +30,8 @@ function mockScoreFor(rubric: Rubric, isBroccoli: boolean): RubricScore {
     reasoning: `No signal for "${rubric.description}" was found in this mock item.`,
     evidence: '(mock data — no web search performed)',
     sources: [],
+    updatedAt,
+    updatedBy: 'batch-agent',
   };
 }
 

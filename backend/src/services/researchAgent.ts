@@ -1,30 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
+import type { Rubric, RubricScore, SuggestedReplacement } from './projectTypes.js';
+
+export type { Rubric, RubricScore, SuggestedReplacement } from './projectTypes.js';
 
 export interface ResearchItem {
   id: string;
   scriptLine: string;
   sceneDescription: string;
-}
-
-export interface Rubric {
-  id: string;
-  description: string;
-}
-
-export interface RubricScore {
-  rubricId: string;
-  /** 0-10 integer. Relevance/match-strength between the item and the concern this
-   * rubric describes — NOT a "how well would this land" fit score. 0 = the item does
-   * not trigger this rubric's concern at all; 10 = a clear, strong match. */
-  score: number;
-  reasoning: string;
-  evidence: string;
-  sources: string[];
-}
-
-export interface SuggestedReplacement {
-  text: string;
-  justification: string;
 }
 
 export interface ResearchResult {
@@ -72,7 +54,11 @@ concern that rubric describes, not how well the item would land in the target
 country and not whether it should change. 0 means the item does not trigger
 this rubric's concern at all. 10 means it is a clear, strong match for the
 concern. Score every rubric this way, independent of what you'll eventually
-conclude in your summary.
+conclude in your summary. Each rubric also carries a "weight" (1-5) indicating
+how much it will count toward this item's overall importance once scores are
+aggregated downstream — this does NOT change how you score the rubric itself,
+weight is informational context only, score purely on how strongly the
+concern applies.
 
 INPUT
 {{INPUT_JSON}}
@@ -122,7 +108,7 @@ input, in the same order, for every item, never fewer, never more.`;
 function buildPrompt(batch: ResearchItem[], targetCountry: string, rubrics: Rubric[]): string {
   const payload = {
     target_country: targetCountry,
-    rubrics: rubrics.map((r) => ({ id: r.id, description: r.description })),
+    rubrics: rubrics.map((r) => ({ id: r.id, description: r.description, weight: r.weight })),
     items: batch.map((i) => ({
       id: i.id,
       script_line: i.scriptLine,
@@ -208,6 +194,7 @@ export function createResearchAgent(
           throw new Error(`Research agent response wasn't valid JSON: ${text}`);
         }
 
+        const scoredAt = new Date().toISOString();
         const batchResults: ResearchResult[] = (parsed as Array<Record<string, unknown>>).map(
           (r) => ({
             itemId: r.item_id as string,
@@ -218,6 +205,8 @@ export function createResearchAgent(
               reasoning: s.reasoning as string,
               evidence: s.evidence as string,
               sources: (s.sources as string[]) ?? [],
+              updatedAt: scoredAt,
+              updatedBy: 'batch-agent' as const,
             })),
             summary: r.summary as string,
             shouldTranscreate: Boolean(r.should_transcreate),
