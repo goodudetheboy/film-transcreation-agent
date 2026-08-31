@@ -348,6 +348,41 @@ describe('POST /api/projects/:id/research-runs', () => {
     expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
   });
 
+  it('does not call the Trend Agent when a trend-eligible rubric merely has a (low) score entry — exhaustive scoring means every rubric always has one', async () => {
+    // Regression test: a non-trend rubric (food-aversion-style) is what actually
+    // flagged the item; the trend-eligible rubric is present in the exhaustive
+    // scores array too, but scored low, so its concern doesn't genuinely apply.
+    let trendRubricId = '';
+    const agent = fakeAgent((batchItems) => [
+      [
+        {
+          itemId: batchItems[0].id,
+          targetCountry: 'Japan',
+          scores: [
+            { rubricId: 'food-aversion-like', score: 9, reasoning: 'r', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
+            { rubricId: trendRubricId, score: 1, reasoning: 'no signal', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
+          ],
+          summary: 'should change',
+          shouldTranscreate: true,
+        },
+      ],
+    ]);
+    const trend = fakeTrendAgent([
+      { text: 't', justification: 'j', sourceUrl: 'https://example.com', sourceTitle: 's', publishedDate: '2026-05-01' },
+    ]);
+    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent, mockTrendAgent: trend });
+
+    const rubric = await request(app)
+      .post(`/api/projects/${project.id}/rubrics`)
+      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
+    trendRubricId = rubric.body.id;
+    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
+
+    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+
+    expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
+  });
+
   it('delivers research results even when the Trend Agent throws', async () => {
     let trendRubricId = '';
     const agent = fakeAgent((batchItems) => [
