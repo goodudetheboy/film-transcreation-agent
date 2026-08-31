@@ -22,3 +22,9 @@ firebase-debug.log
 
 # Local film persistence (see docs/adr/0016) — not committed, dev-machine only
 backend/.data/
+
+# Integration tests' own mock-upload artifacts (multer diskStorage writes real
+# files under here when films.integration.test.ts runs) — previously untracked
+# but uncovered, so a stray run could get committed by accident; see 20260828's
+# progress notes.
+tests/integration/.data/
