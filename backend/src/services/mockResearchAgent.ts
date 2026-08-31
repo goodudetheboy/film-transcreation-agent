@@ -71,7 +71,7 @@ export function createMockResearchAgent(): ResearchAgent {
           mockResultFor(item, targetCountry, rubrics),
         );
         results.push(...batchResults);
-        onBatchComplete?.({
+        await onBatchComplete?.({
           batchIndex,
           totalBatches: batches.length,
           itemIds: batch.map((i) => i.id),

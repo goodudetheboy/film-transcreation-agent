@@ -19,6 +19,9 @@ export interface Rubric {
   description: string;
   /** 1-5 importance multiplier, default 3. */
   weight: number;
+  /** Whether this rubric's concern is tied to socially-current content (slang, memes,
+   * viral references) that the Trend Agent should search live sources for. */
+  trendEligible: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +44,16 @@ export interface SuggestedReplacement {
   justification: string;
 }
 
+export interface TrendSuggestion {
+  text: string;
+  justification: string;
+  sourceUrl: string;
+  sourceTitle: string;
+  /** ISO 8601 (or YYYY-MM-DD) date the source was published — used to show a staleness
+   * indicator so the reviewer judges freshness themselves. */
+  publishedDate: string;
+}
+
 export interface ProjectItem {
   id: string;
   projectId: string;
@@ -57,6 +70,9 @@ export interface ProjectItem {
   summary: string | null;
   shouldTranscreate: boolean | null;
   suggestedReplacement: SuggestedReplacement | null;
+  /** Additive alternative(s) alongside suggestedReplacement, never a replacement for
+   * it. Present only once the Trend Agent has run for this item and found something. */
+  trendSuggestions: TrendSuggestion[] | null;
   lastResearchedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -93,6 +109,9 @@ export interface ResearchResult {
   shouldTranscreate: boolean;
   /** Present only when shouldTranscreate is true. */
   suggestedReplacement?: SuggestedReplacement;
+  /** Present only when this batch's item was routed to the Trend Agent and it found
+   * something — merged in for the run's originating connection, see routes/projects.ts. */
+  trendSuggestions?: TrendSuggestion[];
 }
 
 export interface ResearchRun {

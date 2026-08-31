@@ -12,6 +12,7 @@ import type { ChatStreamEvent, ResearchRunStreamEvent } from '../../frontend/src
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
 import { fakeResearchAgent } from './helpers/fakeResearchAgent';
 import { fakeResearchChatAgent } from './helpers/fakeResearchChatAgent';
+import { fakeTrendAgent } from './helpers/fakeTrendAgent';
 import { createInMemoryFilmStore } from '../../backend/src/services/filmStore';
 import { createInMemoryDetailRowsStore } from '../../backend/src/services/detailRowsStore';
 import { createInMemoryProjectStore } from '../../backend/src/services/projectStore';
@@ -162,5 +163,114 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
         { baseUrl: backend.url },
       ),
     ).rejects.toThrow(/401/);
+  });
+});
+
+describe('frontend project APIs -> real backend -> faked research + trend agents', () => {
+  let backend: TestBackend;
+  let filmId: string;
+  let rowId: string;
+  // Mutated in the test, before triggering the run, once the real server-assigned
+  // rubric id is known — the fake agent's canned score object is held by reference.
+  const scoreHolder = { rubricId: 'placeholder', score: 9, reasoning: 'r', evidence: 'e', sources: [] as string[], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' as const };
+
+  beforeAll(async () => {
+    const filmStore = createInMemoryFilmStore();
+    const detailRowsStore = createInMemoryDetailRowsStore();
+
+    const film = await filmStore.createFilm({
+      title: 'Trend Integration Film',
+      videoUrl: 'http://example.com/clip2.mp4',
+      subtitle: null,
+      runDiscoveryOnCreate: false,
+    });
+    filmId = film.id;
+    const row = await detailRowsStore.addRow(film.id, {
+      startMs: 0,
+      endMs: 2000,
+      subtitleText: 'that meme is so played out',
+      values: { segmentDescription: 'a character references a dated meme' },
+      provenance: { type: 'user-marked' },
+    });
+    rowId = row.id;
+
+    const researchAgent = fakeResearchAgent([
+      [
+        {
+          targetCountry: 'Brazil',
+          scores: [scoreHolder],
+          summary: 'This slang reference is dated and should be updated for the target country.',
+          shouldTranscreate: true,
+        },
+      ],
+    ]);
+    const trendSuggestion = {
+      text: 'use the current trend',
+      justification: 'because it is what is circulating locally right now',
+      sourceUrl: 'https://example.com/trend',
+      sourceTitle: 'Trend Roundup',
+      publishedDate: '2026-05-01',
+    };
+
+    backend = await startTestBackend({
+      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
+      filmStore,
+      detailRowsStore,
+      researchAgent,
+      trendAgent: fakeTrendAgent([trendSuggestion]),
+    });
+  });
+
+  afterAll(async () => {
+    await backend.close();
+  });
+
+  it('chains the Trend Agent after the real backend delivers a trend-eligible flagged item, end-to-end over SSE and persisted items', async () => {
+    const { project, items } = await createProjectFromFilm(
+      filmId,
+      {
+        passcode: TEST_PASSCODE,
+        country: 'Brazil',
+        detailRowIds: [rowId],
+        rubrics: [{ name: 'Slang', description: 'slang or memes tied to a moment', weight: 3, trendEligible: true }],
+      },
+      { baseUrl: backend.url },
+    );
+
+    const rubrics = await listRubrics(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    scoreHolder.rubricId = rubrics[0].id;
+
+    await updateItemAction(project.id, items[0].id, { passcode: TEST_PASSCODE, action: 'need-research' }, { baseUrl: backend.url });
+
+    const runEvents: ResearchRunStreamEvent[] = [];
+    await streamResearchRun(
+      project.id,
+      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' },
+      (e) => runEvents.push(e),
+      { baseUrl: backend.url },
+    );
+
+    const batchDone = runEvents.find((e) => e.type === 'batch_done');
+    expect(batchDone).toBeDefined();
+    expect((batchDone as Extract<ResearchRunStreamEvent, { type: 'batch_done' }>).results[0].trendSuggestions).toEqual([
+      {
+        text: 'use the current trend',
+        justification: 'because it is what is circulating locally right now',
+        sourceUrl: 'https://example.com/trend',
+        sourceTitle: 'Trend Roundup',
+        publishedDate: '2026-05-01',
+      },
+    ]);
+
+    const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    expect(afterRun[0].trendSuggestions).toEqual([
+      {
+        text: 'use the current trend',
+        justification: 'because it is what is circulating locally right now',
+        sourceUrl: 'https://example.com/trend',
+        sourceTitle: 'Trend Roundup',
+        publishedDate: '2026-05-01',
+      },
+    ]);
   });
 });

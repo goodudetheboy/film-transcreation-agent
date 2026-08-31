@@ -416,6 +416,32 @@ describe('POST /api/films/:id/projects', () => {
     expect(rubrics.body.length).toBeGreaterThan(0); // falls back to DEFAULT_RUBRICS
   });
 
+  it('defaults trendEligible to false for a caller-supplied custom rubric that omits it', async () => {
+    const { app, detailRowsStore } = buildApp();
+    const created = await createFilm(app, { runDiscovery: false });
+    const filmId = created.body.id;
+    const row = await detailRowsStore.addRow(filmId, {
+      startMs: 0,
+      endMs: 2000,
+      subtitleText: 'Hello there',
+      values: { segmentDescription: 'a scene' },
+      provenance: { type: 'user-marked' },
+    });
+
+    const res = await request(app)
+      .post(`/api/films/${filmId}/projects`)
+      .send({
+        passcode: TEST_PASSCODE,
+        country: 'Japan',
+        detailRowIds: [row.id],
+        rubrics: [{ name: 'Custom', description: 'a custom rubric', weight: 3 }],
+      });
+    expect(res.status).toBe(201);
+
+    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    expect(rubrics.body).toEqual([expect.objectContaining({ name: 'Custom', trendEligible: false })]);
+  });
+
   it('returns 404/400 for an unknown film / missing country / missing detailRowIds', async () => {
     const { app, detailRowsStore } = buildApp();
     const created = await createFilm(app, { runDiscovery: false });

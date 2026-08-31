@@ -19,6 +19,7 @@ describe('createInMemoryProjectItemStore', () => {
     expect(created[0].action).toBe('pending');
     expect(created[0].importanceScore).toBeNull();
     expect(created[0].scores).toEqual([]);
+    expect(created[0].trendSuggestions).toBeNull();
   });
 
   it('createItems dedupes by detailRowId — calling twice does not duplicate', async () => {
@@ -118,6 +119,25 @@ describe('createInMemoryProjectItemStore', () => {
     expect(updated?.suggestedReplacement).toEqual({ text: 'new line', justification: 'because' });
     expect(updated?.shouldTranscreate).toBe(true);
     expect(await store.setSuggestedReplacement('proj-b', item.id, { text: 'x', justification: 'y' })).toBeUndefined();
+  });
+
+  it('setTrendSuggestions sets trendSuggestions without touching suggestedReplacement or shouldTranscreate', async () => {
+    const store = createInMemoryProjectItemStore();
+    const [item] = await store.createItems('proj-a', [baseInput]);
+    expect(item.trendSuggestions).toBeNull();
+
+    const trendSuggestion = {
+      text: 'use the current trend',
+      justification: 'because',
+      sourceUrl: 'https://example.com/trend',
+      sourceTitle: 'Trend',
+      publishedDate: '2026-05-01',
+    };
+    const updated = await store.setTrendSuggestions('proj-a', item.id, [trendSuggestion]);
+    expect(updated?.trendSuggestions).toEqual([trendSuggestion]);
+    expect(updated?.suggestedReplacement).toBeNull();
+    expect(updated?.shouldTranscreate).toBeNull();
+    expect(await store.setTrendSuggestions('proj-b', item.id, [trendSuggestion])).toBeUndefined();
   });
 
   it('deleteItem removes only the targeted item for the right project', async () => {

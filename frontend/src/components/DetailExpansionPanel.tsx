@@ -4,6 +4,18 @@ import { updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { ResearchChatPanel } from './ResearchChatPanel';
 
+/** Relative age string for a Trend Suggestion's publishedDate, so a reviewer can judge
+ * staleness themselves rather than trusting a trend suggestion blindly. */
+function describeAge(publishedDate: string): string {
+  const days = Math.floor((Date.now() - new Date(publishedDate).getTime()) / (1000 * 60 * 60 * 24));
+  if (days < 0) return 'sourced in the future (?)';
+  if (days < 31) return `sourced ${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `sourced ${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.round(months / 12);
+  return `sourced ${years} year${years === 1 ? '' : 's'} ago`;
+}
+
 export interface DetailExpansionPanelProps {
   projectId: string;
   passcode: string;
@@ -167,6 +179,21 @@ export function DetailExpansionPanel({
                 <p className="replacement-card__why">{item.suggestedReplacement.justification}</p>
               </div>
             )}
+
+            {item.trendSuggestions?.map((t, ti) => (
+              <div className="replacement-card trend-suggestion-card" key={ti}>
+                <p className="replacement-card__label">Trend-Sourced Alternative</p>
+                <p className="replacement-card__text">{t.text}</p>
+                <p className="replacement-card__why">{t.justification}</p>
+                <p className="replacement-card__why">
+                  <a href={t.sourceUrl} target="_blank" rel="noreferrer" className="source-link">
+                    {t.sourceTitle}
+                  </a>
+                  {' — '}
+                  {describeAge(t.publishedDate)}
+                </p>
+              </div>
+            ))}
 
             {rubrics.map((rubric) => (
               <ScoreBlock
