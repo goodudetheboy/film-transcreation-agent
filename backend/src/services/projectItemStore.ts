@@ -59,13 +59,19 @@ function newItem(id: string, projectId: string, input: CreateProjectItemInput, n
 
 function upsertScore(scores: RubricScore[], rubricId: string, patch: PatchScoreInput, now: string): RubricScore[] {
   const existing = scores.find((s) => s.rubricId === rubricId);
+  const userNote = patch.userNote ?? existing?.userNote;
   const merged: RubricScore = {
     rubricId,
     score: patch.score ?? existing?.score ?? 0,
     reasoning: patch.reasoning ?? existing?.reasoning ?? '',
     evidence: patch.evidence ?? existing?.evidence ?? '',
     sources: patch.sources ?? existing?.sources ?? [],
-    userNote: patch.userNote ?? existing?.userNote,
+    // Firestore's .set() rejects an explicit `undefined` value (throws "Cannot
+    // use 'undefined' as a Firestore value") — omit the key entirely rather
+    // than assigning userNote: undefined when neither the patch nor the
+    // existing score has one yet. Only the in-memory fake tolerated this;
+    // real Firestore does not (found via live verification, not a unit test).
+    ...(userNote !== undefined ? { userNote } : {}),
     updatedAt: now,
     updatedBy: patch.updatedBy,
   };

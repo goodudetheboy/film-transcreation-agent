@@ -23,7 +23,7 @@ export function DetailRowPicker({ rows, selected, onToggle, alreadyImportedIds }
   }
 
   return (
-    <div className="details-table-wrap">
+    <div className="details-table-wrap details-table-wrap--standalone">
       <div className="details-table-scroll">
         <table className="details-table">
           <thead>

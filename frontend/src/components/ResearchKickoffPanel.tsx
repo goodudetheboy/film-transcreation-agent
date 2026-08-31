@@ -58,7 +58,7 @@ export function ResearchKickoffPanel({ items, testMode, onKickoff, onClose }: Re
         </div>
 
         {mode === 'custom' && (
-          <div className="details-table-wrap" style={{ maxHeight: 240 }}>
+          <div className="details-table-wrap details-table-wrap--standalone" style={{ maxHeight: 240 }}>
             <div className="details-table-scroll">
               <table className="details-table">
                 <tbody>

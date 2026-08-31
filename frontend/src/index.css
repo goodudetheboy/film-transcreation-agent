@@ -2405,6 +2405,28 @@ textarea {
   border-left: 2px solid var(--accent);
 }
 
+/* `.details-table-wrap`'s `flex: 1 1 0` only resolves to a real height when
+   its parent chain is itself height-bounded (true inside
+   `.workspace__panel--left`'s flex column, see above) — dropped into a plain
+   auto-height flex column like `.app-body-inner`/`.new-project-form` (every
+   Projects-pipeline usage: the wizard, the workspace table, the library,
+   the manual-add/kickoff modals) it collapses to zero height instead. This
+   modifier gives it an explicit ceiling so it degrades to "just scroll
+   inside a sensible max-height" wherever there's no bounding ancestor. */
+.details-table-wrap--standalone {
+  flex: none;
+  max-height: 50vh;
+}
+
+.details-table-wrap--standalone .details-table-scroll {
+  /* The scroll box itself is also a flex-grow child (of `.details-table-wrap`)
+     with `flex-basis: 0` — same collapse problem one level down, since its
+     parent is now content-sized (`flex: none` above) rather than externally
+     height-bounded. Without this it also resolves to ~0 height. */
+  flex: none;
+  max-height: 50vh;
+}
+
 .action-picker {
   background: var(--bg);
   border: 1px solid var(--border-strong);

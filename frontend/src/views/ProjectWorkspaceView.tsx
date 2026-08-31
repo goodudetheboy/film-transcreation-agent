@@ -178,7 +178,7 @@ export function ProjectWorkspaceView({ passcode, testMode }: ProjectWorkspaceVie
           {sorted.length === 0 && <p className="results-placeholder">No items match this filter.</p>}
 
           {sorted.length > 0 && (
-            <div className="details-table-wrap">
+            <div className="details-table-wrap details-table-wrap--standalone">
               <div className="details-table-scroll">
                 <table className="details-table">
                   <thead>

@@ -62,7 +62,7 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
         groupByCountry(projects).map(([country, group]) => (
           <div key={country}>
             <p className="section-heading">{country}</p>
-            <div className="details-table-wrap">
+            <div className="details-table-wrap details-table-wrap--standalone">
               <div className="details-table-scroll">
                 <table className="details-table">
                   <thead>

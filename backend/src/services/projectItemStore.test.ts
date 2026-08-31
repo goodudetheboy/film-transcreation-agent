@@ -64,6 +64,30 @@ describe('createInMemoryProjectItemStore', () => {
     expect(patchedAgain?.scores[0]).toMatchObject({ score: 8, reasoning: 'revised reasoning', updatedBy: 'user' });
   });
 
+  it('patchScore never writes an explicit userNote:undefined key when neither the patch nor an existing score has one', async () => {
+    // Regression test: found via live verification against real Firestore, not
+    // this in-memory fake — Firestore's .set() throws "Cannot use 'undefined'
+    // as a Firestore value" on an explicit undefined field, which the
+    // in-memory Map-backed fake happily tolerates. Guards the upsertScore()
+    // fix (omit the key entirely rather than assign it undefined).
+    const store = createInMemoryProjectItemStore();
+    const [item] = await store.createItems('proj-a', [baseInput]);
+
+    const patched = await store.patchScore('proj-a', item.id, 'rubric-1', {
+      score: 8,
+      reasoning: 'no user note provided',
+      updatedBy: 'chat-agent',
+    });
+    expect(Object.prototype.hasOwnProperty.call(patched!.scores[0], 'userNote')).toBe(false);
+
+    // Once a userNote IS supplied, subsequent patches that don't touch it
+    // must preserve it rather than dropping it back to undefined.
+    const withNote = await store.patchScore('proj-a', item.id, 'rubric-1', { userNote: 'flagged for follow-up', updatedBy: 'user' });
+    expect(withNote?.scores[0].userNote).toBe('flagged for follow-up');
+    const afterUnrelatedPatch = await store.patchScore('proj-a', item.id, 'rubric-1', { score: 9, updatedBy: 'chat-agent' });
+    expect(afterUnrelatedPatch?.scores[0].userNote).toBe('flagged for follow-up');
+  });
+
   it('applyResearchResult replaces the full score set and stamps lastResearchedAt', async () => {
     const store = createInMemoryProjectItemStore();
     const [item] = await store.createItems('proj-a', [baseInput]);
