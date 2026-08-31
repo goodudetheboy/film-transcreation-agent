@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { createApp } from './app.js';
 import { createResearchAgent } from './services/researchAgent.js';
+import { createTrendAgent } from './services/trendAgent.js';
+import { createParallelSearchClient } from './services/parallelSearchClient.js';
 import { createVideoBucketUploader } from './services/videoBucketUploader.js';
 import { createFirestoreClient } from './services/firestoreClient.js';
 import { createFirestoreFilmStore } from './services/filmStore.js';
@@ -33,6 +35,8 @@ const chatSessionStore = createFirestoreChatSessionStore(firestore);
 const researchRunEventBus = createResearchRunEventBus();
 
 const researchAgent = createResearchAgent(config);
+const parallelSearchClient = createParallelSearchClient({ apiKey: config.parallelApiKey });
+const trendAgent = createTrendAgent(config, { parallelSearchClient });
 const researchChatAgent = createResearchChatAgent(config, { projectItemStore, projectRubricStore, chatSessionStore });
 const discoveryAgent = createDiscoveryAgent(config);
 const mockDiscoveryAgent = createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
@@ -46,6 +50,7 @@ const videoBucketUploader = createVideoBucketUploader({
 const app = createApp({
   config,
   researchAgent,
+  trendAgent,
   researchChatAgent,
   discoveryAgent,
   mockDiscoveryAgent,

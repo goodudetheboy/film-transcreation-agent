@@ -10,6 +10,8 @@ import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
+import type { TrendAgent } from './services/trendAgent.js';
+import { createMockTrendAgent } from './services/mockTrendAgent.js';
 import { createInMemoryProjectStore, type ProjectStore } from './services/projectStore.js';
 import { createInMemoryProjectRubricStore, type ProjectRubricStore } from './services/projectRubricStore.js';
 import { createInMemoryProjectItemStore, type ProjectItemStore } from './services/projectItemStore.js';
@@ -32,6 +34,8 @@ export interface AppDeps {
   config?: Partial<Config>;
   researchAgent?: ResearchAgent;
   mockResearchAgent?: ResearchAgent;
+  trendAgent?: TrendAgent;
+  mockTrendAgent?: TrendAgent;
   researchChatAgent?: ResearchChatAgent;
   mockResearchChatAgent?: ResearchChatAgent;
   projectStore?: ProjectStore;
@@ -52,6 +56,12 @@ export interface AppDeps {
 const notConfiguredResearchAgent: ResearchAgent = {
   async researchBatch() {
     throw new Error('researchAgent not provided to createApp()');
+  },
+};
+
+const notConfiguredTrendAgent: TrendAgent = {
+  async findTrendSuggestions() {
+    throw new Error('trendAgent not provided to createApp()');
   },
 };
 
@@ -96,6 +106,8 @@ export function createApp(deps: AppDeps = {}): Express {
   const config: Config = { ...loadConfig(), ...deps.config };
   const researchAgent = deps.researchAgent ?? notConfiguredResearchAgent;
   const mockResearchAgent = deps.mockResearchAgent ?? createMockResearchAgent();
+  const trendAgent = deps.trendAgent ?? notConfiguredTrendAgent;
+  const mockTrendAgent = deps.mockTrendAgent ?? createMockTrendAgent();
   const projectStore = deps.projectStore ?? createInMemoryProjectStore();
   const projectRubricStore = deps.projectRubricStore ?? createInMemoryProjectRubricStore();
   const projectItemStore = deps.projectItemStore ?? createInMemoryProjectItemStore();
@@ -144,6 +156,8 @@ export function createApp(deps: AppDeps = {}): Express {
       researchRunStore,
       researchAgent,
       mockResearchAgent,
+      trendAgent,
+      mockTrendAgent,
       eventBus: researchRunEventBus,
     }),
   );

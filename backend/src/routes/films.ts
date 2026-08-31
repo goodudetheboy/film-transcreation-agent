@@ -666,7 +666,10 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       note: typeof note === 'string' ? note : undefined,
     });
 
-    const rubricInputs: CreateRubricInput[] = Array.isArray(rubrics) && rubrics.length > 0 ? rubrics : deps.defaultRubrics;
+    const rubricInputs: CreateRubricInput[] =
+      Array.isArray(rubrics) && rubrics.length > 0
+        ? rubrics.map((r) => ({ ...r, trendEligible: typeof r.trendEligible === 'boolean' ? r.trendEligible : false }))
+        : deps.defaultRubrics;
     await Promise.all(rubricInputs.map((r) => deps.projectRubricStore.createRubric(project.id, r)));
 
     const idSet = new Set(detailRowIds);

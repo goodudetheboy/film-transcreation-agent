@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Firestore } from '@google-cloud/firestore';
-import type { ProjectItem, ProjectItemAction, RubricScore, SuggestedReplacement } from './projectTypes.js';
+import type { ProjectItem, ProjectItemAction, RubricScore, SuggestedReplacement, TrendSuggestion } from './projectTypes.js';
 
 export type { ProjectItem } from './projectTypes.js';
 
@@ -51,6 +51,7 @@ function newItem(id: string, projectId: string, input: CreateProjectItemInput, n
     summary: null,
     shouldTranscreate: null,
     suggestedReplacement: null,
+    trendSuggestions: null,
     lastResearchedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -99,6 +100,9 @@ export interface ProjectItemStore {
   /** Used by the chat tool executor's propose_replacement tool — setting a suggestion
    * implies recommending transcreation, so shouldTranscreate flips to true alongside it. */
   setSuggestedReplacement(projectId: string, itemId: string, suggestion: SuggestedReplacement): Promise<ProjectItem | undefined>;
+  /** Used by the Trend Agent chaining step in the research-run route — additive
+   * alongside suggestedReplacement, never flips shouldTranscreate on its own. */
+  setTrendSuggestions(projectId: string, itemId: string, suggestions: TrendSuggestion[]): Promise<ProjectItem | undefined>;
 }
 
 function itemsCollection(firestore: Firestore, projectId: string) {
@@ -201,6 +205,19 @@ export function createFirestoreProjectItemStore(firestore: Firestore): ProjectIt
       await ref.set(updated);
       return updated;
     },
+
+    async setTrendSuggestions(projectId, itemId, suggestions) {
+      const ref = itemsCollection(firestore, projectId).doc(itemId);
+      const doc = await ref.get();
+      if (!doc.exists) return undefined;
+      const updated: ProjectItem = {
+        ...(doc.data() as ProjectItem),
+        trendSuggestions: suggestions,
+        updatedAt: new Date().toISOString(),
+      };
+      await ref.set(updated);
+      return updated;
+    },
   };
 }
 
@@ -288,6 +305,18 @@ export function createInMemoryProjectItemStore(): ProjectItemStore {
         ...current,
         suggestedReplacement: suggestion,
         shouldTranscreate: true,
+        updatedAt: new Date().toISOString(),
+      };
+      items.set(itemId, updated);
+      return updated;
+    },
+
+    async setTrendSuggestions(projectId, itemId, suggestions) {
+      const current = items.get(itemId);
+      if (!current || current.projectId !== projectId) return undefined;
+      const updated: ProjectItem = {
+        ...current,
+        trendSuggestions: suggestions,
         updatedAt: new Date().toISOString(),
       };
       items.set(itemId, updated);

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import type { Rubric, RubricScore, SuggestedReplacement } from './projectTypes.js';
 
-export type { Rubric, RubricScore, SuggestedReplacement } from './projectTypes.js';
+export type { Rubric, RubricScore, SuggestedReplacement, TrendSuggestion } from './projectTypes.js';
 
 export interface ResearchItem {
   id: string;
@@ -35,7 +35,7 @@ export interface ResearchAgent {
     rubrics: Rubric[];
     /** Fired after each sequential batch call finishes — lets a caller (e.g. an SSE
      * route) report incremental progress without changing the batching logic itself. */
-    onBatchComplete?: (progress: ResearchBatchProgress) => void;
+    onBatchComplete?: (progress: ResearchBatchProgress) => void | Promise<void>;
   }): Promise<ResearchResult[]>;
 }
 
@@ -222,7 +222,7 @@ export function createResearchAgent(
           }),
         );
         results.push(...batchResults);
-        onBatchComplete?.({
+        await onBatchComplete?.({
           batchIndex,
           totalBatches: batches.length,
           itemIds: batch.map((i) => i.id),

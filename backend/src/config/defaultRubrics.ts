@@ -12,25 +12,36 @@ export const DEFAULT_RUBRICS: CreateRubricInput[] = [
     name: 'Food aversion',
     description: 'A food or drink reference that reads differently (or not at all) in the target country.',
     weight: 3,
+    trendEligible: false,
   },
   {
     name: 'Wordplay',
     description: 'A pun, rhyme, or wordplay joke that depends on the source language and will not survive translation.',
     weight: 3,
+    trendEligible: false,
   },
   {
     name: 'Gesture',
     description: 'A hand gesture, body language, or physical action with a different or offensive meaning in the target country.',
     weight: 3,
+    trendEligible: false,
   },
   {
     name: 'Holiday reference',
     description: 'A holiday, season, or calendar-based reference not observed the same way in the target country.',
     weight: 3,
+    trendEligible: false,
   },
   {
     name: 'Cultural institution',
     description: 'A reference to an institution, brand, or shared cultural experience specific to the source country.',
     weight: 3,
+    trendEligible: false,
+  },
+  {
+    name: 'Slang / meme reference',
+    description: 'Slang, a meme, or a viral reference whose currency and meaning are tied to a specific moment and audience, and may need a locally current equivalent in the target country.',
+    weight: 3,
+    trendEligible: true,
   },
 ];

@@ -9,7 +9,7 @@ const CONFIG = {
 
 const NOW = new Date().toISOString();
 function rubric(id: string, description: string, weight = 3): Rubric {
-  return { id, projectId: 'proj-a', name: id, description, weight, createdAt: NOW, updatedAt: NOW };
+  return { id, projectId: 'proj-a', name: id, description, weight, trendEligible: false, createdAt: NOW, updatedAt: NOW };
 }
 
 function fakeGenAI(generateContent: GenAIClient['models']['generateContent']): GenAIClient {
@@ -134,6 +134,36 @@ describe('createResearchAgent researchBatch', () => {
     await expect(
       agent.researchBatch({ items: itemsList(1), targetCountry: 'Japan', rubrics: [] }),
     ).rejects.toThrow(/empty response/);
+  });
+
+  it('awaits an async onBatchComplete before starting the next batch call', async () => {
+    const order: string[] = [];
+    const generateContent = vi.fn(async (params: any) => {
+      const ids = itemIdsFromPrompt(params.contents);
+      order.push(`generate-${ids[0]}`);
+      return { text: resultsFor(ids) };
+    });
+    const agent = createResearchAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+
+    await agent.researchBatch({
+      items: itemsList(15),
+      targetCountry: 'Japan',
+      rubrics: [],
+      onBatchComplete: async (p) => {
+        order.push(`callback-start-${p.itemIds[0]}`);
+        await new Promise((r) => setTimeout(r, 5));
+        order.push(`callback-end-${p.itemIds[0]}`);
+      },
+    });
+
+    expect(order).toEqual([
+      'generate-item-0',
+      'callback-start-item-0',
+      'callback-end-item-0',
+      'generate-item-10',
+      'callback-start-item-10',
+      'callback-end-item-10',
+    ]);
   });
 
   it('fires onBatchComplete after each batch with that batch\'s own results', async () => {

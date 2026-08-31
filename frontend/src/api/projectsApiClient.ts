@@ -64,7 +64,7 @@ export async function listRubrics(projectId: string, passcode: string, options: 
 
 export async function createRubric(
   projectId: string,
-  payload: { passcode: string; name: string; description: string; weight: number },
+  payload: { passcode: string; name: string; description: string; weight: number; trendEligible?: boolean },
   options: ApiClientOptions = {},
 ): Promise<Rubric> {
   const baseUrl = resolveBaseUrl(options);
@@ -82,7 +82,7 @@ export async function createRubric(
 export async function updateRubric(
   projectId: string,
   rubricId: string,
-  payload: { passcode: string; name?: string; description?: string; weight?: number },
+  payload: { passcode: string; name?: string; description?: string; weight?: number; trendEligible?: boolean },
   options: ApiClientOptions = {},
 ): Promise<Rubric> {
   const baseUrl = resolveBaseUrl(options);

@@ -401,7 +401,7 @@ export interface CreateProjectFromFilmPayload {
   note?: string;
   /** Explicit selection only — never every DetailRow unconditionally, see docs/adr/0025. */
   detailRowIds: string[];
-  rubrics?: Array<{ name: string; description: string; weight: number }>;
+  rubrics?: Array<{ name: string; description: string; weight: number; trendEligible?: boolean }>;
 }
 
 export async function createProjectFromFilm(

@@ -16,7 +16,7 @@ describe('createMockResearchChatAgent', () => {
     const projectItemStore = createInMemoryProjectItemStore();
     const projectRubricStore = createInMemoryProjectRubricStore();
     const chatSessionStore = createInMemoryChatSessionStore();
-    const rubric = await projectRubricStore.createRubric('proj-a', { name: 'Food aversion', description: 'd', weight: 3 });
+    const rubric = await projectRubricStore.createRubric('proj-a', { name: 'Food aversion', description: 'd', weight: 3 , trendEligible: false });
     const [item] = await projectItemStore.createItems('proj-a', [
       { filmId: 'film-a', detailRowId: 'row-1', startMs: 0, endMs: 1000, subtitleText: 'hello', sceneDescription: 'scene', customValues: {} },
     ]);

@@ -16,7 +16,7 @@ export function fakeResearchAgent(resultsByBatch: CannedResearchResult[][] = [[]
       for (let i = 0; i < resultsByBatch.length; i++) {
         const batchResults: ResearchResult[] = resultsByBatch[i].map((r) => ({ ...r, itemId: items[cursor++]?.id ?? 'unknown' }));
         all.push(...batchResults);
-        onBatchComplete?.({
+        await onBatchComplete?.({
           batchIndex: i,
           totalBatches: resultsByBatch.length,
           itemIds: batchResults.map((r) => r.itemId),

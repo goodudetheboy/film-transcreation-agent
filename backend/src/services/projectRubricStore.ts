@@ -8,6 +8,9 @@ export interface CreateRubricInput {
   name: string;
   description: string;
   weight: number;
+  /** Whether this rubric's concern is tied to socially-current content (slang, memes,
+   * viral references) that the Trend Agent should search live sources for. */
+  trendEligible: boolean;
 }
 
 export type UpdateRubricInput = Partial<CreateRubricInput>;
@@ -31,6 +34,7 @@ function newRubric(id: string, projectId: string, input: CreateRubricInput, now:
     name: input.name,
     description: input.description,
     weight: input.weight,
+    trendEligible: input.trendEligible,
     createdAt: now,
     updatedAt: now,
   };
