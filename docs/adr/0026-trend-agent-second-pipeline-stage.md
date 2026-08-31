@@ -39,13 +39,22 @@ Specific mechanisms:
 
 - **Trigger scope**: the Trend Agent only runs on items where a batch result's
   `shouldTranscreate` is true AND at least one scored rubric is tagged
-  `trendEligible: true` — a new required field on `Rubric`/`CreateRubricInput`.
-  `defaultRubrics.ts` marks the 5 existing rubrics `false` and adds one new "Slang /
-  meme reference" rubric marked `true`. The `POST`/`PATCH` rubric routes default a
-  caller-omitted `trendEligible` to `false`, matching `weight`'s existing default
-  behavior; the film-first project-creation bridge (`POST /api/films/:id/projects`)
-  does the same for caller-supplied custom rubrics, since an explicit `undefined`
-  value would otherwise reach Firestore's `.set()` and throw.
+  `trendEligible: true` **and that rubric's own score is ≥ `TREND_TRIGGER_SCORE_
+  THRESHOLD` (7)** — a new required field on `Rubric`/`CreateRubricInput`. The score
+  check matters because the Research agent scores every rubric exhaustively for
+  every item (one entry per rubric, always) — without it, a trend-eligible rubric's
+  mere presence in the project's rubric set would route *any* flagged item through
+  the Trend Agent, regardless of whether that item's actual concern was slang/memes
+  at all. This shared check lives in `trendAgent.ts`'s exported `triggeringRubric()`
+  and is used both by the route (to decide whether to call the Trend Agent for a
+  batch at all) and internally by the Trend Agent (to build its search query) — one
+  source of truth, not two independently-drifting filters. `defaultRubrics.ts` marks
+  the 5 existing rubrics `false` and adds one new "Slang / meme reference" rubric
+  marked `true`. The `POST`/`PATCH` rubric routes default a caller-omitted
+  `trendEligible` to `false`, matching `weight`'s existing default behavior; the
+  film-first project-creation bridge (`POST /api/films/:id/projects`) does the same
+  for caller-supplied custom rubrics, since an explicit `undefined` value would
+  otherwise reach Firestore's `.set()` and throw.
 - **Additive, not replacing**: `ProjectItem` gains an optional
   `trendSuggestions: TrendSuggestion[] | null` field, persisted via a new
   `projectItemStore.setTrendSuggestions()` method — alongside the existing

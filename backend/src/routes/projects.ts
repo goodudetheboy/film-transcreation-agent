@@ -6,7 +6,7 @@ import type { ProjectItemStore } from '../services/projectItemStore.js';
 import type { ResearchRun, ResearchRunStore } from '../services/researchRunStore.js';
 import type { ResearchRunEventBus } from '../services/researchRunEventBus.js';
 import type { ResearchAgent, ResearchItem, ResearchResult } from '../services/researchAgent.js';
-import type { TrendAgent } from '../services/trendAgent.js';
+import { triggeringRubric, type TrendAgent } from '../services/trendAgent.js';
 import type { ProjectItem, ProjectItemAction, RubricScore, TrendSuggestion } from '../services/projectTypes.js';
 import { computeImportanceScore } from '../services/importanceScore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
@@ -331,7 +331,6 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
     const agent = useMock ? deps.mockResearchAgent : deps.researchAgent;
     const trendAgent = useMock ? deps.mockTrendAgent : deps.trendAgent;
     const targetItemsById = new Map(targetItems.map((i) => [i.id, i]));
-    const trendEligibleRubricIds = new Set(rubrics.filter((r) => r.trendEligible).map((r) => r.id));
 
     const run = await deps.researchRunStore.createRun({
       projectId: project.id,
@@ -379,7 +378,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
 
           const batchResults: BatchDoneResult[] = progress.results;
           const trendEligibleEntries = progress.results
-            .filter((r) => r.shouldTranscreate && r.scores.some((s) => trendEligibleRubricIds.has(s.rubricId)))
+            .filter((r) => r.shouldTranscreate && triggeringRubric(r, rubrics) !== undefined)
             .map((result) => ({ item: targetItemsById.get(result.itemId), result }))
             .filter(
               (entry): entry is { item: ProjectItem; result: ResearchResult } => entry.item !== undefined,

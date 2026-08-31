@@ -5,6 +5,14 @@ import type { ParallelSearchClient, ParallelSearchResultItem } from './parallelS
 
 const MAX_SUGGESTIONS_PER_ITEM = 2;
 
+/** Minimum rubric score to treat a trend-eligible rubric as the actual reason an item
+ * was flagged — matches the "high" tier threshold already used elsewhere (e.g. the
+ * score-chip coloring in DetailExpansionPanel.tsx). Exhaustive scoring means every
+ * rubric always has a score entry for every item, so presence alone isn't enough:
+ * without this, a trend-eligible rubric's mere existence in the project would route
+ * any flagged item (e.g. a food-aversion match) through the Trend Agent. */
+export const TREND_TRIGGER_SCORE_THRESHOLD = 7;
+
 export interface TrendAgent {
   findTrendSuggestions(input: {
     items: Array<{ item: ResearchItem; result: ResearchResult }>;
@@ -25,10 +33,13 @@ export interface TrendAgentDeps {
 }
 
 /** The rubric (if any) that made this item eligible for the Trend Agent — used both to
- * build a focused search query and to explain to Gemini what kind of match to look for. */
-function triggeringRubric(result: ResearchResult, rubrics: Rubric[]): Rubric | undefined {
+ * build a focused search query and to explain to Gemini what kind of match to look for.
+ * Only a rubric whose own score cleared the threshold counts — see
+ * TREND_TRIGGER_SCORE_THRESHOLD's comment for why presence alone isn't enough. */
+export function triggeringRubric(result: ResearchResult, rubrics: Rubric[]): Rubric | undefined {
   const rubricById = new Map(rubrics.map((r) => [r.id, r]));
   for (const score of result.scores) {
+    if (score.score < TREND_TRIGGER_SCORE_THRESHOLD) continue;
     const rubric = rubricById.get(score.rubricId);
     if (rubric?.trendEligible) return rubric;
   }

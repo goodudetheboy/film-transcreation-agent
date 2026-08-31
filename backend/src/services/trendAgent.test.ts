@@ -64,6 +64,42 @@ describe('createTrendAgent findTrendSuggestions', () => {
     expect(generateContent).not.toHaveBeenCalled();
   });
 
+  it('does not search when the only trend-eligible rubric score is low (item flagged for an unrelated reason)', async () => {
+    const search = vi.fn(async () => [searchResult()]);
+    const generateContent = vi.fn(async () => ({ text: '[]' }));
+    const agent = createTrendAgent(CONFIG, {
+      genAI: fakeGenAI(generateContent),
+      parallelSearchClient: fakeParallel(search),
+    });
+
+    // shouldTranscreate is true (e.g. a broccoli-style food-aversion match), but the
+    // trend-eligible rubric itself scored low — exhaustive scoring means every rubric
+    // always has an entry, so presence alone must not be enough to trigger a search.
+    const result = await agent.findTrendSuggestions({
+      items: [
+        {
+          item: item('a'),
+          result: {
+            itemId: 'a',
+            targetCountry: 'Brazil',
+            scores: [
+              { rubricId: 'food-aversion', score: 9, reasoning: 'r', evidence: 'e', sources: [] },
+              { rubricId: 'slang-meme-reference', score: 1, reasoning: 'no signal', evidence: 'e', sources: [] },
+            ],
+            summary: 'summary',
+            shouldTranscreate: true,
+          },
+        },
+      ],
+      targetCountry: 'Brazil',
+      rubrics: RUBRICS,
+    });
+
+    expect(result).toEqual({});
+    expect(search).not.toHaveBeenCalled();
+    expect(generateContent).not.toHaveBeenCalled();
+  });
+
   it('searches once per item using a query built from the triggering rubric and scene context', async () => {
     const search = vi.fn(async () => [searchResult()]);
     const generateContent = vi.fn(async () => ({ text: '[]' }));
