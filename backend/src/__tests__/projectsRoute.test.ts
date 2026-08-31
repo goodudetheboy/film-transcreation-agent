@@ -58,16 +58,10 @@ function noChangeAgent(): ResearchAgent {
   return fakeAgent((items) => [items.map((i) => resultFor(i))]);
 }
 
-/** Returns the given suggestions for every item it's asked about. */
+/** Returns the given suggestions regardless of item/rubrics passed in. */
 function fakeTrendAgent(suggestions: TrendSuggestion[] = []): TrendAgent {
   return {
-    findTrendSuggestions: vi.fn(async ({ items }) => {
-      const output: Record<string, TrendSuggestion[]> = {};
-      for (const { item } of items) {
-        if (suggestions.length > 0) output[item.id] = suggestions;
-      }
-      return output;
-    }),
+    findTrendSuggestions: vi.fn(async () => suggestions),
   };
 }
 
@@ -288,8 +282,10 @@ describe('POST /api/projects/:id/research-runs', () => {
     const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
     expect(runs.body[0].status).toBe('error');
   });
+});
 
-  it('chains the Trend Agent for a trend-eligible flagged item and merges trendSuggestions into batch_done and persisted items', async () => {
+describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)', () => {
+  it('calls the mock Trend Agent by default and persists trendSuggestions, ungated (item never researched)', async () => {
     const trendSuggestion: TrendSuggestion = {
       text: 'use the current trend',
       justification: 'because',
@@ -297,124 +293,87 @@ describe('POST /api/projects/:id/research-runs', () => {
       sourceTitle: 'Trend',
       publishedDate: '2026-05-01',
     };
-    // A single-batch agent whose result is built lazily from the real item/rubric ids
-    // seeded below, so it doesn't need to know the server-assigned rubric id up front.
-    let trendRubricId = '';
-    const agent = fakeAgent((batchItems) => [
-      [
-        {
-          itemId: batchItems[0].id,
-          targetCountry: 'Japan',
-          scores: [
-            { rubricId: trendRubricId, score: 9, reasoning: 'r', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
-          ],
-          summary: 'should change',
-          shouldTranscreate: true,
-        },
-      ],
-    ]);
     const trend = fakeTrendAgent([trendSuggestion]);
-    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent, mockTrendAgent: trend });
-
-    const rubric = await request(app)
+    const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
+    await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
       .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
-    trendRubricId = rubric.body.id;
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
 
+    // Item is still 'pending' and has never been researched (no scores, shouldTranscreate null) —
+    // the manual button is the trigger, so this must still work.
     const res = await request(app)
-      .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+      .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
+      .send({ passcode: TEST_PASSCODE });
 
+    expect(res.status).toBe(200);
+    expect(res.body.trendSuggestions).toEqual([trendSuggestion]);
     expect(trend.findTrendSuggestions).toHaveBeenCalled();
-    const events = parseEvents(res.text);
-    const batchDone = events.find((e) => e.type === 'batch_done');
-    expect(batchDone.results[0].trendSuggestions).toEqual([trendSuggestion]);
 
-    const fetchedItems = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
-    expect(fetchedItems.find((i: { id: string }) => i.id === items[0].id).trendSuggestions).toEqual([trendSuggestion]);
+    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).trendSuggestions).toEqual([trendSuggestion]);
   });
 
-  it('does not call the Trend Agent for an item flagged only on a non-trend-eligible rubric', async () => {
-    const agent = fakeAgent((batchItems) => [[resultFor(batchItems[0], { shouldTranscreate: true })]]);
-    const trend = fakeTrendAgent([
+  it('uses the real Trend Agent when testMode is explicitly false, never touching the mock', async () => {
+    const real = fakeTrendAgent([
       { text: 't', justification: 'j', sourceUrl: 'https://example.com', sourceTitle: 's', publishedDate: '2026-05-01' },
     ]);
-    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent, mockTrendAgent: trend });
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
-
-    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
-
-    expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
-  });
-
-  it('does not call the Trend Agent when a trend-eligible rubric merely has a (low) score entry — exhaustive scoring means every rubric always has one', async () => {
-    // Regression test: a non-trend rubric (food-aversion-style) is what actually
-    // flagged the item; the trend-eligible rubric is present in the exhaustive
-    // scores array too, but scored low, so its concern doesn't genuinely apply.
-    let trendRubricId = '';
-    const agent = fakeAgent((batchItems) => [
-      [
-        {
-          itemId: batchItems[0].id,
-          targetCountry: 'Japan',
-          scores: [
-            { rubricId: 'food-aversion-like', score: 9, reasoning: 'r', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
-            { rubricId: trendRubricId, score: 1, reasoning: 'no signal', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
-          ],
-          summary: 'should change',
-          shouldTranscreate: true,
-        },
-      ],
-    ]);
-    const trend = fakeTrendAgent([
-      { text: 't', justification: 'j', sourceUrl: 'https://example.com', sourceTitle: 's', publishedDate: '2026-05-01' },
-    ]);
-    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent, mockTrendAgent: trend });
-
-    const rubric = await request(app)
+    const mock = fakeTrendAgent([]);
+    const { app, project, items } = await seedAppAndProject({ trendAgent: real, mockTrendAgent: mock });
+    await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
       .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
-    trendRubricId = rubric.body.id;
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
 
-    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    await request(app)
+      .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
+      .send({ passcode: TEST_PASSCODE, testMode: false });
 
-    expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
+    expect(real.findTrendSuggestions).toHaveBeenCalled();
+    expect(mock.findTrendSuggestions).not.toHaveBeenCalled();
   });
 
-  it('delivers research results even when the Trend Agent throws', async () => {
-    let trendRubricId = '';
-    const agent = fakeAgent((batchItems) => [
-      [
-        {
-          itemId: batchItems[0].id,
-          targetCountry: 'Japan',
-          scores: [
-            { rubricId: trendRubricId, score: 9, reasoning: 'r', evidence: 'e', sources: [], updatedAt: new Date().toISOString(), updatedBy: 'batch-agent' },
-          ],
-          summary: 'should change',
-          shouldTranscreate: true,
-        },
-      ],
-    ]);
-    const trend: TrendAgent = { findTrendSuggestions: vi.fn().mockRejectedValue(new Error('trend boom')) };
-    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent, mockTrendAgent: trend });
-
-    const rubric = await request(app)
-      .post(`/api/projects/${project.id}/rubrics`)
-      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
-    trendRubricId = rubric.body.id;
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
+  it('returns 400 when the project has no trend-eligible rubric configured', async () => {
+    const trend = fakeTrendAgent([{ text: 't', justification: 'j', sourceUrl: 'https://example.com', sourceTitle: 's', publishedDate: '2026-05-01' }]);
+    const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
+    // The default rubric set includes one trend-eligible rubric — remove every
+    // rubric the project has so none remain trend-eligible.
+    const rubrics = await request(app).get(`/api/projects/${project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    for (const r of rubrics.body as Array<{ id: string }>) {
+      await request(app).delete(`/api/projects/${project.id}/rubrics/${r.id}?passcode=${TEST_PASSCODE}`);
+    }
 
     const res = await request(app)
-      .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+      .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
+      .send({ passcode: TEST_PASSCODE });
 
-    const events = parseEvents(res.text);
-    expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalRecommendedForChange: 1 } });
-    const batchDone = events.find((e) => e.type === 'batch_done');
-    expect(batchDone.results[0]).not.toHaveProperty('trendSuggestions');
+    expect(res.status).toBe(400);
+    expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for an unknown project or unknown item', async () => {
+    const { app, project, items } = await seedAppAndProject();
+    expect(
+      (await request(app).post(`/api/projects/does-not-exist/items/${items[0].id}/trend-research`).send({ passcode: TEST_PASSCODE })).status,
+    ).toBe(404);
+    expect(
+      (await request(app).post(`/api/projects/${project.id}/items/does-not-exist/trend-research`).send({ passcode: TEST_PASSCODE })).status,
+    ).toBe(404);
+  });
+
+  it('returns 500 with an error message when the Trend Agent throws, without persisting anything', async () => {
+    const trend: TrendAgent = { findTrendSuggestions: vi.fn().mockRejectedValue(new Error('trend boom')) };
+    const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
+    await request(app)
+      .post(`/api/projects/${project.id}/rubrics`)
+      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
+
+    const res = await request(app)
+      .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
+      .send({ passcode: TEST_PASSCODE });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toContain('trend boom');
+    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).trendSuggestions).toBeNull();
   });
 });
 

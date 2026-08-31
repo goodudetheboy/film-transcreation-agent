@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ProjectItemView } from './ProjectItemView';
 import * as projectsApiClient from '../api/projectsApiClient';
+import userEvent from '@testing-library/user-event';
 import type { ProjectItem, Rubric } from '../api/apiClient.types';
 
 vi.mock('../api/projectsApiClient');
@@ -95,5 +96,73 @@ describe('ProjectItemView', () => {
     expect(screen.getByText('it is what people are saying right now')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Trend Roundup' })).toHaveAttribute('href', 'https://example.com/trend');
     expect(screen.getByText(/4 months ago/i)).toBeInTheDocument();
+  });
+
+  it('does not show a "Find trend-sourced alternative" button when the project has no trend-eligible rubric', () => {
+    render(
+      <DetailExpansionPanel
+        projectId="proj-1"
+        passcode="secret"
+        testMode={true}
+        item={fakeItem()}
+        rubrics={RUBRICS}
+        allItems={[fakeItem()]}
+        onClose={() => {}}
+        onNavigate={() => {}}
+        onScorePatched={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /find trend-sourced alternative/i })).not.toBeInTheDocument();
+  });
+
+  it('shows a "Find trend-sourced alternative" button when a trend-eligible rubric exists, and clicking it calls runTrendResearch and patches the item', async () => {
+    const trendEligibleRubric: Rubric = {
+      id: 'rubric-1',
+      projectId: 'proj-1',
+      name: 'Slang / meme reference',
+      description: 'slang or memes',
+      weight: 3,
+      trendEligible: true,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const updatedItem = fakeItem({
+      trendSuggestions: [
+        {
+          text: 'use the current trend',
+          justification: 'because',
+          sourceUrl: 'https://example.com/trend',
+          sourceTitle: 'Trend Roundup',
+          publishedDate: '2026-05-01',
+        },
+      ],
+    });
+    vi.mocked(projectsApiClient.runTrendResearch).mockResolvedValue(updatedItem);
+    const onScorePatched = vi.fn();
+
+    render(
+      <DetailExpansionPanel
+        projectId="proj-1"
+        passcode="secret"
+        testMode={true}
+        item={fakeItem({ trendSuggestions: null })}
+        rubrics={[trendEligibleRubric]}
+        allItems={[fakeItem()]}
+        onClose={() => {}}
+        onNavigate={() => {}}
+        onScorePatched={onScorePatched}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /find trend-sourced alternative/i });
+    await userEvent.click(button);
+
+    expect(projectsApiClient.runTrendResearch).toHaveBeenCalledWith(
+      'proj-1',
+      'item-1',
+      { passcode: 'secret', testMode: true },
+    );
+    expect(onScorePatched).toHaveBeenCalledWith('item-1', updatedItem);
   });
 });

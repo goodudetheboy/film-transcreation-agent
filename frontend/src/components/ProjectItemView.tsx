@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ProjectItem, Rubric } from '../api/apiClient.types';
-import { updateItemScore } from '../api/projectsApiClient';
+import { runTrendResearch, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { ResearchChatPanel } from './ResearchChatPanel';
 
@@ -123,6 +123,48 @@ function ScoreBlock({
   );
 }
 
+/** Manual, per-item, ungated trigger — the click itself is the trigger, so unlike a
+ * bulk research run there's no shouldTranscreate/score gating here. Only rendered by
+ * the parent when the project has at least one trend-eligible rubric configured. */
+function TrendResearchButton({
+  projectId,
+  passcode,
+  testMode,
+  item,
+  onScorePatched,
+}: {
+  projectId: string;
+  passcode: string;
+  testMode: boolean;
+  item: ProjectItem;
+  onScorePatched: ProjectItemViewProps['onScorePatched'];
+}) {
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run() {
+    setRunning(true);
+    setError(null);
+    try {
+      const updated = await runTrendResearch(projectId, item.id, { passcode, testMode });
+      onScorePatched(item.id, updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to find a trend-sourced alternative.');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div className="field">
+      <button type="button" className="btn" onClick={run} disabled={running}>
+        {running ? 'Searching…' : 'Find Trend-Sourced Alternative'}
+      </button>
+      {error && <p className="passcode-gate__error">{error}</p>}
+    </div>
+  );
+}
+
 /**
  * The Project tab's "open one detail" state — renders IN PLACE of the items
  * table inside the workspace's left panel (see ProjectPanel.tsx), never as a
@@ -209,6 +251,16 @@ export function ProjectItemView({
               <p className="replacement-card__text">{item.suggestedReplacement.text}</p>
               <p className="replacement-card__why">{item.suggestedReplacement.justification}</p>
             </div>
+          )}
+
+          {rubrics.some((r) => r.trendEligible) && (
+            <TrendResearchButton
+              projectId={projectId}
+              passcode={passcode}
+              testMode={testMode}
+              item={item}
+              onScorePatched={onScorePatched}
+            />
           )}
 
           {item.trendSuggestions?.map((t, ti) => (

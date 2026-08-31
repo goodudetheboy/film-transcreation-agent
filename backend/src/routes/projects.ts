@@ -6,20 +6,14 @@ import type { ProjectItemStore } from '../services/projectItemStore.js';
 import type { ResearchRun, ResearchRunStore } from '../services/researchRunStore.js';
 import type { ResearchRunEventBus } from '../services/researchRunEventBus.js';
 import type { ResearchAgent, ResearchItem, ResearchResult } from '../services/researchAgent.js';
-import { triggeringRubric, type TrendAgent } from '../services/trendAgent.js';
-import type { ProjectItem, ProjectItemAction, RubricScore, TrendSuggestion } from '../services/projectTypes.js';
+import type { TrendAgent } from '../services/trendAgent.js';
+import type { ProjectItemAction, RubricScore } from '../services/projectTypes.js';
 import { computeImportanceScore } from '../services/importanceScore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
 
-/** Wire shape only — trendSuggestions isn't part of ResearchResult itself (that's the
- * Research agent's own output shape), it's merged in for this event so the run's
- * originating connection sees the Trend Agent's additive findings immediately,
- * without waiting for a re-fetch of the persisted ProjectItem. */
-type BatchDoneResult = ResearchResult & { trendSuggestions?: TrendSuggestion[] };
-
 export type ResearchRunStreamEvent =
   | { type: 'progress'; message: string }
-  | { type: 'batch_done'; batchIndex: number; totalBatches: number; itemIds: string[]; results: BatchDoneResult[] }
+  | { type: 'batch_done'; batchIndex: number; totalBatches: number; itemIds: string[]; results: ResearchResult[] }
   | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
   | { type: 'error'; message: string };
 
@@ -287,6 +281,45 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
     res.status(200).json(updated);
   });
 
+  // Manual, per-item, ungated Trend Agent trigger — the click itself is the
+  // trigger, so unlike a research run there's no shouldTranscreate/score check;
+  // it runs whenever a trend-eligible rubric exists for the project.
+  router.post('/api/projects/:id/items/:itemId/trend-research', async (req, res) => {
+    const project = await deps.projectStore.getProject(req.params.id);
+    if (!project) {
+      res.status(404).json({ error: 'project not found' });
+      return;
+    }
+    const item = await deps.projectItemStore.getItem(req.params.id, req.params.itemId);
+    if (!item) {
+      res.status(404).json({ error: 'item not found' });
+      return;
+    }
+
+    const rubrics = await deps.projectRubricStore.listRubrics(project.id);
+    const trendEligibleRubrics = rubrics.filter((r) => r.trendEligible);
+    if (trendEligibleRubrics.length === 0) {
+      res.status(400).json({ error: 'no trend-eligible rubric configured for this project' });
+      return;
+    }
+
+    const { testMode } = req.body ?? {};
+    const useMock = testMode !== false;
+    const agent = useMock ? deps.mockTrendAgent : deps.trendAgent;
+
+    try {
+      const suggestions = await agent.findTrendSuggestions({
+        item: { id: item.id, scriptLine: item.subtitleText, sceneDescription: item.sceneDescription },
+        targetCountry: project.country,
+        rubrics: trendEligibleRubrics,
+      });
+      const updated = await deps.projectItemStore.setTrendSuggestions(project.id, item.id, suggestions);
+      res.status(200).json(updated);
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : 'unknown error' });
+    }
+  });
+
   // ---- Research runs ------------------------------------------------------
 
   router.get('/api/projects/:id/research-runs', async (req, res) => {
@@ -329,8 +362,6 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
 
     const useMock = testMode !== false;
     const agent = useMock ? deps.mockResearchAgent : deps.researchAgent;
-    const trendAgent = useMock ? deps.mockTrendAgent : deps.trendAgent;
-    const targetItemsById = new Map(targetItems.map((i) => [i.id, i]));
 
     const run = await deps.researchRunStore.createRun({
       projectId: project.id,
@@ -376,37 +407,6 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
             });
           }
 
-          const batchResults: BatchDoneResult[] = progress.results;
-          const trendEligibleEntries = progress.results
-            .filter((r) => r.shouldTranscreate && triggeringRubric(r, rubrics) !== undefined)
-            .map((result) => ({ item: targetItemsById.get(result.itemId), result }))
-            .filter(
-              (entry): entry is { item: ProjectItem; result: ResearchResult } => entry.item !== undefined,
-            )
-            .map(({ item, result }) => ({
-              item: { id: item.id, scriptLine: item.subtitleText, sceneDescription: item.sceneDescription },
-              result,
-            }));
-
-          if (trendEligibleEntries.length > 0) {
-            try {
-              const trendSuggestionsByItemId = await trendAgent.findTrendSuggestions({
-                items: trendEligibleEntries,
-                targetCountry: project.country,
-                rubrics,
-              });
-              for (const batchResult of batchResults) {
-                const suggestions = trendSuggestionsByItemId[batchResult.itemId];
-                if (!suggestions) continue;
-                batchResult.trendSuggestions = suggestions;
-                await deps.projectItemStore.setTrendSuggestions(project.id, batchResult.itemId, suggestions);
-              }
-            } catch {
-              // Additive-only: a Trend Agent failure must not block delivering the
-              // Research results already computed for this batch.
-            }
-          }
-
           completedBatches++;
           const updatedRun = await deps.researchRunStore.updateRun(project.id, run.id, {
             totalBatches: progress.totalBatches,
@@ -418,7 +418,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
             batchIndex: progress.batchIndex,
             totalBatches: progress.totalBatches,
             itemIds: progress.itemIds,
-            results: batchResults,
+            results: progress.results,
           });
         },
       });

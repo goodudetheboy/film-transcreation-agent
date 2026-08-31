@@ -194,6 +194,26 @@ export async function updateItemScore(
   return (await res.json()) as ProjectItem;
 }
 
+/** Manual, per-item, ungated trigger — unlike a research run, the click itself is
+ * the trigger; runs whenever the project has at least one trend-eligible rubric. */
+export async function runTrendResearch(
+  projectId: string,
+  itemId: string,
+  payload: { passcode: string; testMode?: boolean },
+  options: ApiClientOptions = {},
+): Promise<ProjectItem> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/projects/${projectId}/items/${itemId}/trend-research`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await throwOnError(res);
+  return (await res.json()) as ProjectItem;
+}
+
 // ---- Research runs ------------------------------------------------------
 
 export async function listResearchRuns(

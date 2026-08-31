@@ -1,6 +1,6 @@
-# 0026. Trend Agent as a second, distinct pipeline stage
+# 0026. Trend Agent as a manual, per-item, ungated action
 
-Status: Accepted
+Status: Accepted (supersedes this ADR's own original automatic-chaining design)
 
 ## Context
 
@@ -26,93 +26,94 @@ date or url for what it found. `researchChatAgent.ts`'s `search_web` tool call i
 similarly informal (a raw `fetch` to Parallel's REST endpoint, model-mediated). Neither
 is enough for a feature whose entire value proposition is verifiability.
 
+### First design, and why it changed
+
+The original version of this ADR chained the Trend Agent automatically inside the
+research-run route: after each batch, any item that came back `shouldTranscreate:
+true` with a trend-eligible rubric scoring ≥7 was routed through the Trend Agent
+before `batch_done` fired. That required a real gating mechanism (a score threshold,
+because the Research agent scores every rubric exhaustively for every item, so a
+trend-eligible rubric's mere *presence* in the project would otherwise match nearly
+any flagged item) and an `await` fix in `researchAgent.ts`/`mockResearchAgent.ts`
+(their `onBatchComplete` callback was fire-and-forget, which raced with the route's
+own response lifecycle once the callback started doing async Trend Agent work).
+
+That design was replaced after using it: bundling the Trend Agent into "Kick off
+agentic research" made it a passenger on someone else's button — its behavior wasn't
+independently controllable, and every research run paid its latency/cost whether or
+not the reviewer wanted a trend suggestion. The decision below reflects the design
+actually shipped.
+
 ## Decision
 
-Added a **Trend Agent** (`backend/src/services/trendAgent.ts`, mock counterpart
-`mockTrendAgent.ts`, following the existing mock/real pair convention) as a **second,
-distinct pipeline stage** chained after the Research agent inside the research-run
-route, rather than folding trend-sourcing into Research's existing call. This keeps
-the mandatory-grounding/citation guarantee isolated from the exhaustive rubric-scoring
-logic Research already does.
+The Trend Agent is a **manual, per-item action**, entirely separate from "Kick off
+agentic research." A new button in `DetailExpansionPanel.tsx` — "Find Trend-Sourced
+Alternative," shown whenever the project has at least one `trendEligible` rubric
+configured — calls a new endpoint that runs the Trend Agent for exactly the one
+selected item, on demand.
 
 Specific mechanisms:
 
-- **Trigger scope**: the Trend Agent only runs on items where a batch result's
-  `shouldTranscreate` is true AND at least one scored rubric is tagged
-  `trendEligible: true` **and that rubric's own score is ≥ `TREND_TRIGGER_SCORE_
-  THRESHOLD` (7)** — a new required field on `Rubric`/`CreateRubricInput`. The score
-  check matters because the Research agent scores every rubric exhaustively for
-  every item (one entry per rubric, always) — without it, a trend-eligible rubric's
-  mere presence in the project's rubric set would route *any* flagged item through
-  the Trend Agent, regardless of whether that item's actual concern was slang/memes
-  at all. This shared check lives in `trendAgent.ts`'s exported `triggeringRubric()`
-  and is used both by the route (to decide whether to call the Trend Agent for a
-  batch at all) and internally by the Trend Agent (to build its search query) — one
-  source of truth, not two independently-drifting filters. `defaultRubrics.ts` marks
-  the 5 existing rubrics `false` and adds one new "Slang / meme reference" rubric
-  marked `true`. The `POST`/`PATCH` rubric routes default a caller-omitted
-  `trendEligible` to `false`, matching `weight`'s existing default behavior; the
-  film-first project-creation bridge (`POST /api/films/:id/projects`) does the same
-  for caller-supplied custom rubrics, since an explicit `undefined` value would
-  otherwise reach Firestore's `.set()` and throw.
-- **Additive, not replacing**: `ProjectItem` gains an optional
-  `trendSuggestions: TrendSuggestion[] | null` field, persisted via a new
-  `projectItemStore.setTrendSuggestions()` method — alongside the existing
-  `suggestedReplacement`, never overwriting it. The research-run route's `batch_done`
-  SSE event also carries `trendSuggestions` merged onto its per-item results (a
-  wire-only augmentation of `ResearchResult`, since that type itself is the Research
-  agent's own output shape and stays untouched) so the run's originating connection
-  sees the finding immediately, without waiting for a re-fetch.
+- **Ungated by design**: the click itself is the trigger. There is no
+  `shouldTranscreate` or score check — the reviewer can run it on any item, including
+  one that has never been through a research run at all (`shouldTranscreate: null`).
+  This is a deliberate simplification made possible by dropping automatic chaining:
+  gating only ever existed to avoid needless calls during a *bulk* run; a single
+  explicit click doesn't need that protection.
+- **New route**: `POST /api/projects/:id/items/:itemId/trend-research`. Looks up the
+  project's `trendEligible` rubrics (400 if there are none), calls the Trend Agent for
+  that one item using those rubrics, persists the result via
+  `projectItemStore.setTrendSuggestions()`, and returns the updated `ProjectItem`
+  synchronously (200) — no SSE, unlike the batch research-run route, since this is
+  always exactly one item.
+- **`trendAgent.ts`'s interface is single-item and rubric-driven**, not
+  batch/score-driven: `findTrendSuggestions({ item, targetCountry, rubrics })` where
+  `rubrics` is whatever the caller decides to search for (normally the project's
+  trend-eligible rubrics) — it returns `TrendSuggestion[]` directly, with no
+  score-threshold logic inside it at all. The batch-oriented shape, the
+  `TREND_TRIGGER_SCORE_THRESHOLD` constant, and the exported `triggeringRubric()`
+  gating helper from the first design are all gone — there is no longer anything to
+  gate.
+- **Additive, not replacing**: `ProjectItem.trendSuggestions: TrendSuggestion[] | null`
+  sits alongside the existing `suggestedReplacement`, never overwriting it — unchanged
+  from the original design. `null` still means "never run"; `[]` means "ran, found
+  nothing."
 - **Direct `parallel-web` SDK call**, not Gemini's built-in tool or a raw `fetch` —
   the first standalone external SDK client in this codebase not routed through Gemini
   tool-calling (`parallelSearchClient.ts`, mirroring the `createXClient(config)`
-  factory shape used elsewhere). It calls Parallel's `client.search({search_queries:
-  [...]})` directly and returns structured `{url, title, snippet, publishedDate}`
-  results. The Trend Agent then makes one Gemini call to pick/write suggestion text
-  grounded in those specific results, but `sourceUrl`/`sourceTitle`/`publishedDate`
-  are attached **programmatically from the SDK response**, not parsed from model
-  text — a suggestion whose model-reported `source_url` doesn't match one of the
-  given search results is dropped rather than trusted.
+  factory shape used elsewhere). One search per rubric passed in (normally one),
+  merged into a single Gemini call that picks/writes suggestion text grounded in those
+  results — `sourceUrl`/`sourceTitle`/`publishedDate` are attached **programmatically
+  from the SDK response**, not parsed from model text; a suggestion whose
+  model-reported `source_url` doesn't match a real search result is dropped.
 - **Reuses the existing `PARALLEL_API_KEY`/`config.parallelApiKey`** rather than
-  introducing a second env var — it's the same Parallel account either way, and there
-  is no independent-key-rotation need between the two call sites.
-- **Automatic, chained per Research-agent batch**: the research-run route's
-  `onBatchComplete` callback (already `async`, and — a real bugfix found while wiring
-  this in — now properly `await`ed by `researchAgent.ts`/`mockResearchAgent.ts`,
-  which previously fired it fire-and-forget) filters each batch's newly-flagged
-  trend-eligible items, calls the Trend Agent, and merges `trendSuggestions` onto the
-  batch's results before persisting and before the `batch_done` SSE event fires. A
-  Trend Agent failure is swallowed (try/catch) and does not block delivering the
-  Research results already computed for that batch. The await fix was necessary, not
-  cosmetic: without it, the route's response could `res.end()` before a batch's Trend
-  Agent lookup finished, and a subsequent `writeSSE` call would throw
-  `ERR_STREAM_WRITE_AFTER_END` — caught via a real integration test failure during
-  this work, not by inspection.
-- **Staleness signal**: `TrendSuggestion.publishedDate` is a required field, and the
-  frontend (`DetailExpansionPanel.tsx`) renders an explicit relative-age string (e.g.
-  "sourced 3 months ago") next to the trend suggestion — the reviewer judges
-  freshness themselves; there is no auto-expiry logic, consistent with this tool's
-  human-in-the-loop review model.
+  introducing a second env var.
+- **`testMode` still applies**: the route picks `mockTrendAgent`/`trendAgent` the same
+  way the research-run route does, defaulting to mock unless the request explicitly
+  sets `testMode: false`.
+- **Staleness signal unchanged**: `TrendSuggestion.publishedDate` is required, and
+  `DetailExpansionPanel.tsx` renders an explicit relative-age string ("sourced 3
+  months ago") — the reviewer judges freshness themselves; no auto-expiry.
+- **`researchAgent.ts`'s `onBatchComplete` await fix is kept** even though the Trend
+  Agent no longer runs inside it — it was a genuine pre-existing correctness gap
+  (found via a real `ERR_STREAM_WRITE_AFTER_END` failure during the original chaining
+  work), not something specific to the removed feature.
 
 ## Consequences
 
 - A second external paid dependency (`parallel-web` npm package, billed against the
   same Parallel account as the existing Marketplace subscription and the chat agent's
-  raw REST call) is now called directly from backend code. Future changes to
-  Parallel's Search API response shape only need updating in
-  `parallelSearchClient.ts`'s narrow mapping function.
-- Every `Rubric`/`CreateRubricInput` literal across the codebase (config, tests,
-  fixtures) now must declare `trendEligible` explicitly — matches the
-  exhaustive-declaration philosophy already used for `RubricScore`, but is a real,
-  deliberate widening of the type's required surface, not an optional add-on.
-- The Trend Agent adds one extra Parallel search call per trend-eligible flagged item,
-  plus one extra Gemini call per Research batch that has any such items — additional
-  latency and cost is scoped to trend-eligible rubrics only, not every research run.
-- This does not solve freshness decay by itself (a trend picked during development can
-  still be dead by ship time) — that risk is handed to the reviewer via the staleness
-  indicator, not eliminated.
+  raw REST call) is called directly from backend code, one item at a time, only when
+  a reviewer explicitly asks for it — cost/latency is opt-in, not a tax on every
+  research run.
+- Every `Rubric`/`CreateRubricInput` literal across the codebase still must declare
+  `trendEligible` explicitly (unchanged from the original design) — this is what
+  drives the new button's visibility, not any scoring behavior.
 - There is no UI yet for toggling `trendEligible` on a custom rubric created through
   `RubricsEditor.tsx` — it always defaults to `false` for rubrics created that way.
   Only `defaultRubrics.ts`'s "Slang / meme reference" entry, or a rubric created
-  directly via the API with `trendEligible: true`, will route to the Trend Agent.
-  Left as a follow-up since it's additive UI, not required for the feature to work.
+  directly via the API with `trendEligible: true`, makes the button appear. Left as a
+  follow-up, not required for the feature to work.
+- This does not solve freshness decay by itself (a trend picked during development can
+  still be dead by ship time) — that risk is handed to the reviewer via the staleness
+  indicator, not eliminated.
