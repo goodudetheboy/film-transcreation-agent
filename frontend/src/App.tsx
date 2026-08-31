@@ -4,8 +4,6 @@ import { PasscodeGate } from './components/PasscodeGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
 import { ProjectsLibraryView } from './views/ProjectsLibraryView';
-import { NewProjectWizardView } from './views/NewProjectWizardView';
-import { ProjectWorkspaceView } from './views/ProjectWorkspaceView';
 import { StartScreen } from './views/StartScreen';
 import { ImportFilmModal } from './views/ImportFilmModal';
 import { FilmPreparingView } from './views/FilmPreparingView';
@@ -59,15 +57,7 @@ function App() {
             path="/films/:id"
             element={<FilmWorkspaceView passcode={passcode} testMode={testMode} />}
           />
-          <Route
-            path="/films/:filmId/projects/new"
-            element={<NewProjectWizardView passcode={passcode} testMode={testMode} />}
-          />
           <Route path="/projects" element={<ProjectsLibraryView passcode={passcode} />} />
-          <Route
-            path="/projects/:id"
-            element={<ProjectWorkspaceView passcode={passcode} testMode={testMode} />}
-          />
         </Routes>
       </main>
     </>

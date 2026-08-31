@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { deleteFilm, getFilm, listDetails, listDiscoveryJobs } from '../api/filmsApiClient';
+import { listProjects } from '../api/projectsApiClient';
+import type { EnrichedProject } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { TransportBar } from '../components/TransportBar';
@@ -10,6 +12,8 @@ import { DetailsTable } from '../components/DetailsTable';
 import { AgentKickoffPanel } from '../components/AgentKickoffPanel';
 import { AgentRunningList } from '../components/AgentRunningList';
 import { AgentStatusPanel } from '../components/AgentStatusPanel';
+import { ProjectPanel } from '../components/ProjectPanel';
+import { NewProjectModal } from '../components/NewProjectModal';
 
 export interface FilmWorkspaceViewProps {
   passcode: string;
@@ -45,6 +49,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: Tab = tabParam === 'progress' ? 'progress' : tabParam === 'project' ? 'project' : 'details';
+  const projectId = searchParams.get('projectId');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -56,6 +61,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showKickoff, setShowKickoff] = useState(false);
+  const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   const splitRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
@@ -107,6 +114,22 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, passcode]);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    listProjects(passcode)
+      .then((all) => {
+        if (!cancelled) setFilmProjects(all.filter((p) => p.sourceFilmId === id));
+      })
+      .catch(() => {
+        // Non-fatal — the Project tab's picker just shows empty; the rest of
+        // the workspace (Details/Progress) doesn't depend on this.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, passcode, showNewProjectModal]);
 
   useLayoutEffect(() => {
     const container = splitRef.current;
@@ -215,6 +238,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     setSearchParams(next === 'details' ? {} : { tab: next });
   }
 
+  function selectProject(nextProjectId: string | null) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', 'project');
+      if (nextProjectId) next.set('projectId', nextProjectId);
+      else next.delete('projectId');
+      return next;
+    });
+  }
+
   function handleSeek(ms: number) {
     if (videoRef.current) videoRef.current.currentTime = ms / 1000;
     setCurrentTimeMs(ms);
@@ -319,13 +352,64 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
 
           {tab === 'project' && (
             <>
-              <p className="section-heading">Project</p>
-              {rows.length > 0 ? (
-                <Link to={`/films/${film.id}/projects/new`} className="btn btn--primary" style={{ width: 'fit-content', marginTop: 20 }}>
-                  New project from this film
-                </Link>
+              {!projectId ? (
+                <>
+                  <p className="section-heading">Projects for this film</p>
+                  {filmProjects.length === 0 ? (
+                    <p className="results-placeholder">No projects yet for this film.</p>
+                  ) : (
+                    <div className="details-table-wrap details-table-wrap--standalone">
+                      <div className="details-table-scroll">
+                        <table className="details-table">
+                          <thead>
+                            <tr>
+                              <th>Country</th>
+                              <th>Agent Status</th>
+                              <th>Project Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filmProjects.map((p) => (
+                              <tr key={p.id} className="details-table__row--clickable" onClick={() => selectProject(p.id)}>
+                                <td>{p.country}</td>
+                                <td>
+                                  {p.agentStatus ? (
+                                    <span className={`status-badge status-badge--${p.agentStatus}`}>{p.agentStatus}</span>
+                                  ) : (
+                                    <span className="results-placeholder">—</span>
+                                  )}
+                                </td>
+                                <td>
+                                  <span className={`status-badge status-badge--${p.status}`}>{p.status}</span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {rows.length > 0 ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary"
+                      style={{ width: 'fit-content', marginTop: 12 }}
+                      onClick={() => setShowNewProjectModal(true)}
+                    >
+                      + New Project
+                    </button>
+                  ) : (
+                    <p className="results-placeholder">Add at least one detail row before creating a project.</p>
+                  )}
+                </>
               ) : (
-                <p className="results-placeholder">Add at least one detail row before creating a project.</p>
+                <ProjectPanel
+                  projectId={projectId}
+                  passcode={passcode}
+                  testMode={testMode}
+                  onSeek={handleSeek}
+                  onBackToProjects={() => selectProject(null)}
+                />
               )}
             </>
           )}
@@ -427,6 +511,19 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
             setTab('progress');
           }}
           onClose={() => setShowKickoff(false)}
+        />
+      )}
+
+      {showNewProjectModal && (
+        <NewProjectModal
+          filmId={film.id}
+          passcode={passcode}
+          testMode={testMode}
+          onCreated={(project) => {
+            setShowNewProjectModal(false);
+            selectProject(project.id);
+          }}
+          onClose={() => setShowNewProjectModal(false)}
         />
       )}
     </div>

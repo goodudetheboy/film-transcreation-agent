@@ -2469,22 +2469,47 @@ textarea {
   }
 }
 
-/* ---------- Project item detail modal ---------- */
+/* ---------- Project item view (inline in the workspace, not a modal) ---------- */
 
-.project-item-modal {
-  width: 900px;
-  max-width: 95vw;
+/* Replaces the whole Project-tab table area in place when a row is open —
+   fills `.workspace__panel--left` the same way `.details-table-wrap` does,
+   never a `.modal-backdrop` overlay. Detail content and the "Research agent"
+   chat sit side by side as one panel, per the wireframe. */
+.project-item-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  flex: 1 1 0;
+  min-height: 0;
 }
 
-.project-item-modal__body {
+.project-item-view__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-default);
+  flex-wrap: wrap;
+}
+
+.project-item-view__title {
+  font-weight: 600;
+}
+
+.project-item-view__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.project-item-view__body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-loose);
+  flex: 1 1 0;
   min-height: 0;
-  max-height: 70vh;
 }
 
-.project-item-modal__detail {
+.project-item-view__detail {
   display: flex;
   flex-direction: column;
   gap: var(--space-default);
@@ -2492,7 +2517,7 @@ textarea {
   padding-right: var(--space-snug);
 }
 
-.project-item-modal__chat {
+.project-item-view__chat {
   border-left: 1px solid var(--border);
   padding-left: var(--space-loose);
   min-height: 0;
@@ -2500,16 +2525,42 @@ textarea {
 }
 
 @media (max-width: 860px) {
-  .project-item-modal__body {
+  .project-item-view__body {
     grid-template-columns: 1fr;
-    max-height: none;
   }
-  .project-item-modal__chat {
+  .project-item-view__chat {
     border-left: none;
     border-top: 1px solid var(--border);
     padding-left: 0;
     padding-top: var(--space-loose);
   }
+}
+
+/* ---------- Project panel (Project tab content) ---------- */
+
+.project-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-default);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-snug);
+}
+
+.project-panel__heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.project-panel__actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.new-project-modal {
+  width: 640px;
+  max-width: 95vw;
 }
 
 /* ---------- Research chat panel ---------- */

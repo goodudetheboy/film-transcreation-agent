@@ -78,9 +78,16 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
                   </thead>
                   <tbody>
                     {group.map((p) => (
-                      <tr key={p.id} className="details-table__row--clickable" onClick={() => navigate(`/projects/${p.id}`)}>
+                      <tr
+                        key={p.id}
+                        className="details-table__row--clickable"
+                        onClick={() => navigate(`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`)}
+                      >
                         <td>
-                          <Link to={`/projects/${p.id}`} onClick={(e) => e.stopPropagation()}>
+                          <Link
+                            to={`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {p.name}
                           </Link>
                         </td>
