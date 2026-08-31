@@ -85,6 +85,17 @@ describe('createInMemoryProjectItemStore', () => {
     expect(updated?.lastResearchedAt).not.toBeNull();
   });
 
+  it('setSuggestedReplacement sets the suggestion and flips shouldTranscreate to true', async () => {
+    const store = createInMemoryProjectItemStore();
+    const [item] = await store.createItems('proj-a', [baseInput]);
+    expect(item.shouldTranscreate).toBeNull();
+
+    const updated = await store.setSuggestedReplacement('proj-a', item.id, { text: 'new line', justification: 'because' });
+    expect(updated?.suggestedReplacement).toEqual({ text: 'new line', justification: 'because' });
+    expect(updated?.shouldTranscreate).toBe(true);
+    expect(await store.setSuggestedReplacement('proj-b', item.id, { text: 'x', justification: 'y' })).toBeUndefined();
+  });
+
   it('deleteItem removes only the targeted item for the right project', async () => {
     const store = createInMemoryProjectItemStore();
     const [item] = await store.createItems('proj-a', [baseInput]);

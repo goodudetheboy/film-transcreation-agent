@@ -3,6 +3,7 @@ import cors from 'cors';
 import { healthRoute } from './routes/health.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
+import { projectChatRoute } from './routes/projectChat.js';
 import { filmsRoute } from './routes/films.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
@@ -24,11 +25,15 @@ import { createDiscoveryEventBus, type DiscoveryEventBus } from './services/disc
 import { createFilmPrepPipeline, type FilmPrepPipeline } from './services/filmPrepPipeline.js';
 import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
 import type { VideoBucketUploader } from './services/videoBucketUploader.js';
+import type { ResearchChatAgent } from './services/researchChatAgent.js';
+import { createMockResearchChatAgent } from './services/mockResearchChatAgent.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
   researchAgent?: ResearchAgent;
   mockResearchAgent?: ResearchAgent;
+  researchChatAgent?: ResearchChatAgent;
+  mockResearchChatAgent?: ResearchChatAgent;
   projectStore?: ProjectStore;
   projectRubricStore?: ProjectRubricStore;
   projectItemStore?: ProjectItemStore;
@@ -47,6 +52,13 @@ export interface AppDeps {
 const notConfiguredResearchAgent: ResearchAgent = {
   async researchBatch() {
     throw new Error('researchAgent not provided to createApp()');
+  },
+};
+
+const notConfiguredResearchChatAgent: ResearchChatAgent = {
+  // eslint-disable-next-line require-yield
+  async *runTurn() {
+    throw new Error('researchChatAgent not provided to createApp()');
   },
 };
 
@@ -90,6 +102,9 @@ export function createApp(deps: AppDeps = {}): Express {
   const researchRunStore = deps.researchRunStore ?? createInMemoryResearchRunStore();
   const chatSessionStore = deps.chatSessionStore ?? createInMemoryChatSessionStore();
   const researchRunEventBus = deps.researchRunEventBus ?? createResearchRunEventBus();
+  const researchChatAgent = deps.researchChatAgent ?? notConfiguredResearchChatAgent;
+  const mockResearchChatAgent =
+    deps.mockResearchChatAgent ?? createMockResearchChatAgent({ projectItemStore, projectRubricStore, chatSessionStore });
   const filmStore = deps.filmStore ?? createInMemoryFilmStore();
   const detailRowsStore = deps.detailRowsStore ?? createInMemoryDetailRowsStore();
   const discoveryJobStore = deps.discoveryJobStore ?? createInMemoryDiscoveryJobStore();
@@ -130,6 +145,14 @@ export function createApp(deps: AppDeps = {}): Express {
       researchAgent,
       mockResearchAgent,
       eventBus: researchRunEventBus,
+    }),
+  );
+  guarded.use(
+    projectChatRoute({
+      projectStore,
+      chatSessionStore,
+      researchChatAgent,
+      mockResearchChatAgent,
     }),
   );
   // Serves mock-mode uploaded video bytes back over HTTP. Sits behind the same

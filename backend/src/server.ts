@@ -12,6 +12,7 @@ import { createFirestoreProjectItemStore } from './services/projectItemStore.js'
 import { createFirestoreResearchRunStore } from './services/researchRunStore.js';
 import { createFirestoreChatSessionStore } from './services/chatSessionStore.js';
 import { createResearchRunEventBus } from './services/researchRunEventBus.js';
+import { createResearchChatAgent } from './services/researchChatAgent.js';
 import { createDiscoveryAgent } from './services/discoveryAgent.js';
 import { createMockDiscoveryAgent } from './services/mockDiscoveryAgent.js';
 import { createDiscoveryEventBus } from './services/discoveryEventBus.js';
@@ -32,6 +33,7 @@ const chatSessionStore = createFirestoreChatSessionStore(firestore);
 const researchRunEventBus = createResearchRunEventBus();
 
 const researchAgent = createResearchAgent(config);
+const researchChatAgent = createResearchChatAgent(config, { projectItemStore, projectRubricStore, chatSessionStore });
 const discoveryAgent = createDiscoveryAgent(config);
 const mockDiscoveryAgent = createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
 const eventBus = createDiscoveryEventBus();
@@ -44,6 +46,7 @@ const videoBucketUploader = createVideoBucketUploader({
 const app = createApp({
   config,
   researchAgent,
+  researchChatAgent,
   discoveryAgent,
   mockDiscoveryAgent,
   videoBucketUploader,

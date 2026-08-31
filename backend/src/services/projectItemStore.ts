@@ -90,6 +90,9 @@ export interface ProjectItemStore {
   /** Applied by the batch research-run path: replaces the full exhaustive score set
    * plus summary/verdict/suggestion in one write, and stamps lastResearchedAt. */
   applyResearchResult(projectId: string, itemId: string, result: ApplyResearchResultInput): Promise<ProjectItem | undefined>;
+  /** Used by the chat tool executor's propose_replacement tool — setting a suggestion
+   * implies recommending transcreation, so shouldTranscreate flips to true alongside it. */
+  setSuggestedReplacement(projectId: string, itemId: string, suggestion: SuggestedReplacement): Promise<ProjectItem | undefined>;
 }
 
 function itemsCollection(firestore: Firestore, projectId: string) {
@@ -178,6 +181,20 @@ export function createFirestoreProjectItemStore(firestore: Firestore): ProjectIt
       await ref.set(updated);
       return updated;
     },
+
+    async setSuggestedReplacement(projectId, itemId, suggestion) {
+      const ref = itemsCollection(firestore, projectId).doc(itemId);
+      const doc = await ref.get();
+      if (!doc.exists) return undefined;
+      const updated: ProjectItem = {
+        ...(doc.data() as ProjectItem),
+        suggestedReplacement: suggestion,
+        shouldTranscreate: true,
+        updatedAt: new Date().toISOString(),
+      };
+      await ref.set(updated);
+      return updated;
+    },
   };
 }
 
@@ -253,6 +270,19 @@ export function createInMemoryProjectItemStore(): ProjectItemStore {
         importanceScore: result.importanceScore,
         lastResearchedAt: now,
         updatedAt: now,
+      };
+      items.set(itemId, updated);
+      return updated;
+    },
+
+    async setSuggestedReplacement(projectId, itemId, suggestion) {
+      const current = items.get(itemId);
+      if (!current || current.projectId !== projectId) return undefined;
+      const updated: ProjectItem = {
+        ...current,
+        suggestedReplacement: suggestion,
+        shouldTranscreate: true,
+        updatedAt: new Date().toISOString(),
       };
       items.set(itemId, updated);
       return updated;
