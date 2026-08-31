@@ -3,8 +3,17 @@ import { createMockResearchAgent } from './mockResearchAgent.js';
 import type { Rubric } from './researchAgent.js';
 
 const NOW = new Date().toISOString();
-function rubric(id: string, description: string, weight = 3): Rubric {
-  return { id, projectId: 'proj-a', name: id, description, weight, createdAt: NOW, updatedAt: NOW };
+function rubric(id: string, description: string, weight = 3, opts: { name?: string; trendEligible?: boolean } = {}): Rubric {
+  return {
+    id,
+    projectId: 'proj-a',
+    name: opts.name ?? id,
+    description,
+    weight,
+    trendEligible: opts.trendEligible ?? false,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
 }
 
 const RUBRICS = [
@@ -79,6 +88,61 @@ describe('createMockResearchAgent', () => {
     expect(result[0].shouldTranscreate).toBe(true);
     expect(result[0].suggestedReplacement?.text.length).toBeGreaterThan(0);
     expect(result[0].suggestedReplacement?.justification.length).toBeGreaterThan(0);
+  });
+
+  it('still detects "broccoli" when the food-aversion rubric has a real server-assigned id, matching by name not a hardcoded id string', async () => {
+    // Regression test: real rubrics get a randomUUID() id (projectRubricStore.ts),
+    // never the literal string "food-aversion" — a mock that only matches that
+    // exact id would never fire through the real app, only in tests that happen
+    // to hand-construct a rubric with that id.
+    const agent = createMockResearchAgent();
+    const realisticRubrics = [
+      rubric('a1b2c3d4-food', 'A food or drink reference that reads differently.', 3, { name: 'Food aversion' }),
+      rubric('e5f6g7h8-word', 'wordplay that depends on the source language', 3, { name: 'Wordplay' }),
+    ];
+
+    const result = await agent.researchBatch({
+      items: [
+        {
+          id: 'a',
+          scriptLine: "I'm not eating that broccoli.",
+          sceneDescription: 'Riley pushes a plate of broccoli away',
+        },
+      ],
+      targetCountry: 'Japan',
+      rubrics: realisticRubrics,
+    });
+
+    const foodScore = result[0].scores.find((s) => s.rubricId === 'a1b2c3d4-food');
+    expect(foodScore?.score).toBeGreaterThanOrEqual(7);
+    expect(result[0].shouldTranscreate).toBe(true);
+    expect(result[0].suggestedReplacement?.text.length).toBeGreaterThan(0);
+  });
+
+  it('detects "meme" and scores a trendEligible rubric high (by the flag, not a hardcoded id), recommending transcreation', async () => {
+    const agent = createMockResearchAgent();
+    const realisticRubrics = [
+      rubric('a1b2c3d4-food', 'A food or drink reference that reads differently.', 3, { name: 'Food aversion' }),
+      rubric('i9j0k1l2-slang', 'Slang or memes tied to a moment.', 3, { name: 'Slang / meme reference', trendEligible: true }),
+    ];
+
+    const result = await agent.researchBatch({
+      items: [
+        {
+          id: 'a',
+          scriptLine: "That's such an old meme, nobody says that anymore.",
+          sceneDescription: 'A character references a dated meme',
+        },
+      ],
+      targetCountry: 'Brazil',
+      rubrics: realisticRubrics,
+    });
+
+    const slangScore = result[0].scores.find((s) => s.rubricId === 'i9j0k1l2-slang');
+    const foodScore = result[0].scores.find((s) => s.rubricId === 'a1b2c3d4-food');
+    expect(slangScore?.score).toBeGreaterThanOrEqual(7);
+    expect(foodScore?.score).toBeLessThan(7);
+    expect(result[0].shouldTranscreate).toBe(true);
   });
 
   it('fires onBatchComplete per batch, same as the real agent, so callers can rely on the contract', async () => {
