@@ -100,14 +100,14 @@ describe('ProjectItemView', () => {
 
   it('does not show a "Find trend-sourced alternative" button when the project has no trend-eligible rubric', () => {
     render(
-      <DetailExpansionPanel
+      <ProjectItemView
         projectId="proj-1"
         passcode="secret"
         testMode={true}
         item={fakeItem()}
         rubrics={RUBRICS}
         allItems={[fakeItem()]}
-        onClose={() => {}}
+        onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
       />,
@@ -142,14 +142,14 @@ describe('ProjectItemView', () => {
     const onScorePatched = vi.fn();
 
     render(
-      <DetailExpansionPanel
+      <ProjectItemView
         projectId="proj-1"
         passcode="secret"
         testMode={true}
         item={fakeItem({ trendSuggestions: null })}
         rubrics={[trendEligibleRubric]}
         allItems={[fakeItem()]}
-        onClose={() => {}}
+        onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={onScorePatched}
       />,

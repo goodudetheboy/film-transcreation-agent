@@ -25,6 +25,7 @@ function item(overrides: Partial<ProjectItem> = {}): ProjectItem {
     summary: null,
     shouldTranscreate: null,
     suggestedReplacement: null,
+    trendSuggestions: null,
     lastResearchedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
