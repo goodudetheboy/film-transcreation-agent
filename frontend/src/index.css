@@ -2583,22 +2583,65 @@ textarea {
 
 .project-panel__header {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  margin-bottom: var(--space-loose);
+  padding-bottom: var(--space-default);
+  border-bottom: 1px solid var(--border);
+}
+
+.link-back {
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
-  gap: var(--space-default);
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color;
+}
+
+.link-back:hover {
+  color: var(--accent);
+}
+
+.project-panel__toprow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  margin-bottom: var(--space-snug);
+  gap: var(--space-default);
 }
 
 .project-panel__heading {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: var(--space-snug);
+}
+
+.project-panel__heading .section-heading {
+  margin: 0;
+  font-size: 19px;
+}
+
+.project-panel__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .project-panel__actions {
   display: flex;
-  gap: 8px;
-  margin-left: auto;
+  align-items: center;
+  gap: var(--space-snug);
+  flex: 0 0 auto;
 }
 
 .new-project-modal {

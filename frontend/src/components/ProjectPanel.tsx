@@ -24,6 +24,7 @@ export interface ProjectPanelProps {
   passcode: string;
   testMode: boolean;
   onSeek?: (ms: number) => void;
+  onHighlightRanges?: (ranges: { startMs: number; endMs: number }[]) => void;
   onBackToProjects: () => void;
 }
 
@@ -37,7 +38,7 @@ const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-r
  * the whole time, same as the Details tab — this is a workspace panel, not a
  * separate page.
  */
-export function ProjectPanel({ projectId, passcode, testMode, onSeek, onBackToProjects }: ProjectPanelProps) {
+export function ProjectPanel({ projectId, passcode, testMode, onSeek, onHighlightRanges, onBackToProjects }: ProjectPanelProps) {
   const [tab, setTab] = useState<'items' | 'rubrics'>('items');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
@@ -72,6 +73,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onBackToPr
     reset();
     setLoadError(null);
     setOpenItemId(null);
+    onHighlightRanges?.([]);
     let cancelled = false;
     Promise.all([getProject(projectId, passcode), listRubrics(projectId, passcode), listItems(projectId, passcode)])
       .then(([p, r, i]) => {
@@ -100,6 +102,16 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onBackToPr
     if (sortBy === 'startMs') return a.startMs - b.startMs;
     return (b.importanceScore ?? -1) - (a.importanceScore ?? -1);
   });
+
+  // Keep the scrub bar showing every item currently marked "need-research" —
+  // not just whichever one was last clicked — so it stays accurate as items
+  // are added/changed/re-fetched, not only on direct user interaction.
+  useEffect(() => {
+    onHighlightRanges?.(
+      allItems.filter((i) => i.action === 'need-research').map((i) => ({ startMs: i.startMs, endMs: i.endMs })),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   async function handleActionChange(itemId: string, action: ProjectItemAction) {
     patchItem(itemId, { action });
@@ -156,21 +168,25 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onBackToPr
   return (
     <>
       <div className="project-panel__header">
-        <button type="button" className="btn btn--ghost" onClick={onBackToProjects}>
+        <button type="button" className="link-back" onClick={onBackToProjects}>
           ← All projects for this film
         </button>
-        <div className="project-panel__heading">
-          <p className="section-heading">{project.name}</p>
-          <span className="status-badge status-badge--pending">{project.country}</span>
-          <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
-        </div>
-        <div className="project-panel__actions">
-          <button type="button" className="btn" onClick={() => setShowAddDetails(true)}>
-            + Manually add details
-          </button>
-          <button type="button" className="btn btn--primary" onClick={() => setShowKickoff(true)} disabled={runStatus === 'streaming'}>
-            {runStatus === 'streaming' ? 'Researching…' : '✨ Kick off agentic research'}
-          </button>
+        <div className="project-panel__toprow">
+          <div className="project-panel__heading">
+            <p className="section-heading">{project.name}</p>
+            <div className="project-panel__badges">
+              <span className="status-badge status-badge--pending">{project.country}</span>
+              <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
+            </div>
+          </div>
+          <div className="project-panel__actions">
+            <button type="button" className="btn" onClick={() => setShowAddDetails(true)}>
+              + Manually add details
+            </button>
+            <button type="button" className="btn btn--primary" onClick={() => setShowKickoff(true)} disabled={runStatus === 'streaming'}>
+              {runStatus === 'streaming' ? 'Researching…' : '✨ Kick off agentic research'}
+            </button>
+          </div>
         </div>
       </div>
 

@@ -8,6 +8,10 @@ export interface VideoScrubberProps {
   durationMs: number;
   currentTimeMs: number;
   onSeek: (ms: number) => void;
+  /** Time ranges to paint across the whole timeline (e.g. every Project tab
+   * line currently marked "need-research"), independent of the playhead
+   * position. */
+  highlightRanges?: { startMs: number; endMs: number }[];
 }
 
 const MIN_ZOOM = 1;
@@ -48,7 +52,7 @@ function detailRowLabel(row: DetailRow): string {
  * Details-row track all live on one wide "track" whose percentage-based
  * positions automatically scale with zoom — only the track's pixel width and
  * the viewport's scroll position change. */
-export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, onSeek }: VideoScrubberProps) {
+export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, onSeek, highlightRanges }: VideoScrubberProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const pendingScrollLeftRef = useRef<number | null>(null);
@@ -230,6 +234,14 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
                 );
               })}
           </div>
+          {durationMs > 0 &&
+            highlightRanges?.map((range, i) => {
+              if (range.startMs >= durationMs) return null;
+              const leftPct = Math.max(0, (range.startMs / durationMs) * 100);
+              const rawWidthPct = ((range.endMs - range.startMs) / durationMs) * 100;
+              const widthPct = Math.max(0, Math.min(100 - leftPct, rawWidthPct));
+              return <div key={i} className="scrubber-highlight" style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
+            })}
           <div className="scrubber-handle" style={{ left: `${progressPct}%` }} />
         </div>
       </div>

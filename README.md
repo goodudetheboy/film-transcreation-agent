@@ -78,3 +78,8 @@ npm run test:frontend     # frontend unit/component tests only
 npm run test:backend      # backend unit tests only (Dialogflow CX call is mocked)
 npm run test:integration  # real backend + real HTTP, only the Google hop is faked
 ```
+
+
+default project so that even when I change the tab around (to details or progress) i dont need to choose which project to go to
+
+whenever i change the action in the line (to research) the scrub bar also need to be colored correspondingly.
