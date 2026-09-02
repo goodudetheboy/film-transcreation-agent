@@ -29,13 +29,24 @@ export interface ProjectItemViewProps {
   onScorePatched: (itemId: string, patch: Partial<ProjectItem>) => void;
 }
 
+function SearchIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 function ScoreBlock({
+  index,
   rubric,
   item,
   projectId,
   passcode,
   onScorePatched,
 }: {
+  index: number;
   rubric: Rubric;
   item: ProjectItem;
   projectId: string;
@@ -43,10 +54,21 @@ function ScoreBlock({
   onScorePatched: ProjectItemViewProps['onScorePatched'];
 }) {
   const existing = item.scores.find((s) => s.rubricId === rubric.id);
+  const [expanded, setExpanded] = useState(false);
+  const [showDescription, setShowDescription] = useState(false);
   const [editing, setEditing] = useState(false);
   const [score, setScore] = useState(existing?.score ?? 0);
   const [reasoning, setReasoning] = useState(existing?.reasoning ?? '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!showDescription) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowDescription(false);
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showDescription]);
 
   async function save() {
     setSaving(true);
@@ -64,58 +86,96 @@ function ScoreBlock({
   return (
     <div className="finding-card">
       <div className="finding-card__top">
+        <span className="finding-card__index">{index + 1}</span>
         <p className="finding-card__rubric">
-          {rubric.name} <span className="results-placeholder">(weight {rubric.weight})</span>
+          {rubric.name}
+          <button
+            type="button"
+            className="icon-btn"
+            title="View rubric description"
+            aria-label={`View rubric description for ${rubric.name}`}
+            onClick={() => setShowDescription(true)}
+          >
+            <SearchIcon />
+          </button>
         </p>
         {existing && (
-          <span className={`score-chip score-chip--${tier}`}>
-            {existing.score}
-            <span className="score-chip__max">/10</span>
+          <span className={`score-circle score-circle--${tier}`}>
+            <span className="score-circle__value">{existing.score}</span>
+            <span className="score-circle__max">/10</span>
           </span>
         )}
       </div>
 
-      {!editing ? (
-        <>
-          <p className="finding-card__text">{existing?.reasoning || <em>Not yet scored.</em>}</p>
-          {existing?.evidence && (
-            <p className="finding-card__text">
-              <strong>Evidence: </strong>
-              {existing.evidence}
-            </p>
-          )}
-          {existing?.userNote && (
-            <p className="finding-card__text">
-              <strong>Note: </strong>
-              {existing.userNote}
-            </p>
-          )}
-          {existing?.sources && existing.sources.length > 0 && (
-            <div className="source-list">
-              {existing.sources.map((src, i) => (
-                <a key={i} href={src} target="_blank" rel="noreferrer" className="source-link">
-                  {src}
-                </a>
-              ))}
+      <button
+        type="button"
+        className="finding-card__toggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((v) => !v)}
+      >
+        {expanded ? 'Hide details' : 'Show details'}
+      </button>
+
+      {expanded &&
+        (!editing ? (
+          <>
+            <p className="finding-card__text">{existing?.reasoning || <em>Not yet scored.</em>}</p>
+            {existing?.evidence && (
+              <p className="finding-card__text">
+                <strong>Evidence: </strong>
+                {existing.evidence}
+              </p>
+            )}
+            {existing?.sources && existing.sources.length > 0 && (
+              <div className="source-list">
+                {existing.sources.map((src, i) => (
+                  <a key={i} href={src} target="_blank" rel="noreferrer" className="source-link">
+                    {src}
+                  </a>
+                ))}
+              </div>
+            )}
+            {existing?.userNote && (
+              <p className="finding-card__text">
+                <strong>Note: </strong>
+                {existing.userNote}
+              </p>
+            )}
+            <button type="button" className="btn" onClick={() => setEditing(true)}>
+              Edit
+            </button>
+          </>
+        ) : (
+          <div className="field">
+            <label>Score (0-10)</label>
+            <input type="number" min={0} max={10} value={score} onChange={(e) => setScore(Number(e.target.value))} />
+            <label>Reasoning</label>
+            <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
+                Cancel
+              </button>
             </div>
-          )}
-          <button type="button" className="btn" onClick={() => setEditing(true)}>
-            Edit
-          </button>
-        </>
-      ) : (
-        <div className="field">
-          <label>Score (0-10)</label>
-          <input type="number" min={0} max={10} value={score} onChange={(e) => setScore(Number(e.target.value))} />
-          <label>Reasoning</label>
-          <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
-              Cancel
-            </button>
+          </div>
+        ))}
+
+      {showDescription && (
+        <div className="modal-backdrop" onClick={() => setShowDescription(false)}>
+          <div className="modal rubric-description-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal__header">
+              <p className="modal__title">{rubric.name}</p>
+              <button type="button" className="modal__close" onClick={() => setShowDescription(false)}>
+                ×
+              </button>
+            </div>
+            <p className="finding-card__text">{rubric.description || <em>No description provided.</em>}</p>
+            <p className="finding-card__text results-placeholder">
+              Weight {rubric.weight}
+              {rubric.trendEligible ? ' · Trend-eligible' : ''}
+            </p>
           </div>
         </div>
       )}
@@ -278,9 +338,10 @@ export function ProjectItemView({
             </div>
           ))}
 
-          {rubrics.map((rubric) => (
+          {rubrics.map((rubric, index) => (
             <ScoreBlock
               key={rubric.id}
+              index={index}
               rubric={rubric}
               item={item}
               projectId={projectId}

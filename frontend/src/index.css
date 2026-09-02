@@ -585,6 +585,27 @@ textarea {
   background: var(--danger-dim);
 }
 
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color;
+}
+
+.icon-btn:hover {
+  color: var(--accent);
+}
+
 /* ---------- Passcode gate ---------- */
 
 .passcode-gate {
@@ -981,8 +1002,10 @@ textarea {
 /* ---------- Rubric score card ---------- */
 
 .finding-card {
-  border-left: 2px solid var(--border-strong);
-  padding-left: var(--space-default);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-default);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -994,12 +1017,45 @@ textarea {
   gap: var(--space-snug);
 }
 
+.finding-card__index {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .finding-card__rubric {
   margin: 0;
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.finding-card__toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.finding-card__toggle:hover {
+  text-decoration: underline;
 }
 
 .finding-card__text {
@@ -1014,37 +1070,52 @@ textarea {
   font-weight: 600;
 }
 
-.score-chip {
+.score-circle {
   flex: 0 0 auto;
   display: inline-flex;
-  align-items: baseline;
-  gap: 2px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid transparent;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 3px 10px;
-  border-radius: var(--radius-pill);
-  border: 1px solid transparent;
 }
 
-.score-chip--low {
+.score-circle--low {
   color: var(--success);
   background: var(--success-dim);
+  border-color: var(--success);
 }
 
-.score-chip--mid {
+.score-circle--mid {
   color: var(--warning);
   background: var(--warning-dim);
+  border-color: var(--warning);
 }
 
-.score-chip--high {
+.score-circle--high {
   color: var(--danger);
   background: var(--danger-dim);
+  border-color: var(--danger);
 }
 
-.score-chip__max {
-  opacity: 0.6;
-  font-weight: 500;
+.score-circle__value {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.score-circle__max {
+  font-size: 8px;
+  opacity: 0.7;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.rubric-description-modal {
+  width: 400px;
 }
 
 .source-list {
