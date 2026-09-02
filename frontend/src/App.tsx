@@ -3,6 +3,7 @@ import { Routes, Route, NavLink } from 'react-router-dom';
 import { PasscodeGate } from './components/PasscodeGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
+import { useTheme } from './utils/useTheme';
 import { ProjectsLibraryView } from './views/ProjectsLibraryView';
 import { StartScreen } from './views/StartScreen';
 import { ImportFilmModal } from './views/ImportFilmModal';
@@ -18,6 +19,7 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 function App() {
   const [passcode, setPasscode] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(true);
+  const [theme, setTheme] = useTheme();
 
   if (passcode === null) {
     return <PasscodeGate onUnlock={setPasscode} />;
@@ -56,7 +58,12 @@ function App() {
             Projects
           </NavLink>
         </nav>
-        <HeaderSettings testMode={testMode} onTestModeChange={setTestMode} />
+        <HeaderSettings
+          testMode={testMode}
+          onTestModeChange={setTestMode}
+          theme={theme}
+          onThemeChange={setTheme}
+        />
       </div>
       <main className="app-body">
         <Routes>
