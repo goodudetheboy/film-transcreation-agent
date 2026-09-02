@@ -35,7 +35,7 @@ jobs:
             --project "$PROJECT_ID" \
             --region "$REGION" \
             --allow-unauthenticated \
-            --set-env-vars "SHARED_PASSCODE=${{ secrets.SHARED_PASSCODE }}"
+            --set-env-vars "SHARED_PASSCODE=${{ secrets.SHARED_PASSCODE }},PARALLEL_API_KEY=${{ secrets.PARALLEL_API_KEY }}"
 
       - name: Get deployed backend URL
         id: backend
