@@ -2526,16 +2526,20 @@ textarea {
   opacity: 0.5;
 }
 
+/* Mirrors the scrub bar's Details-track block coloring (VideoScrubber.tsx):
+   pending = yellow (an agent finished and it's awaiting review), accepted =
+   green, rejected = red. need-research gets no rule here at all — no agent
+   has looked at it yet, so it stays the default untinted row. */
+.details-table tbody tr.details-table__row--pending {
+  border-left: 2px solid var(--warning);
+}
+
 .details-table tbody tr.details-table__row--accepted {
   border-left: 2px solid var(--success);
 }
 
 .details-table tbody tr.details-table__row--rejected {
   border-left: 2px solid var(--danger);
-}
-
-.details-table tbody tr.details-table__row--need-research {
-  border-left: 2px solid var(--accent);
 }
 
 /* `.details-table-wrap`'s `flex: 1 1 0` only resolves to a real height when
