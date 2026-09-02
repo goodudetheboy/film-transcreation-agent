@@ -268,7 +268,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   }
 
   function selectProject(nextProjectId: string | null) {
-    setHighlightRanges([]);
+    setItemStatusByRow({});
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('tab', 'project');
