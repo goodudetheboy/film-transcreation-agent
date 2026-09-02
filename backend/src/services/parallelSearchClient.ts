@@ -28,11 +28,20 @@ export function createParallelSearchClient(
   config: { apiKey?: string },
   deps: { client?: ParallelClientLike } = {},
 ): ParallelSearchClient {
-  const client: ParallelClientLike = deps.client ?? new Parallel({ apiKey: config.apiKey });
+  // Constructed lazily (on first real search), not here: the Parallel SDK's
+  // constructor throws synchronously when no API key is configured, and this
+  // factory runs eagerly at server startup even when testMode/mock keeps the
+  // real client from ever being called — a missing key must only fail an
+  // actual search, not crash the whole process before it can bind its port.
+  let client: ParallelClientLike | undefined = deps.client;
+  function getClient(): ParallelClientLike {
+    if (!client) client = new Parallel({ apiKey: config.apiKey });
+    return client;
+  }
 
   return {
     async search({ query }) {
-      const response = await client.search({ search_queries: [query] });
+      const response = await getClient().search({ search_queries: [query] });
       return response.results.map((r) => ({
         url: r.url,
         title: r.title ?? '',
