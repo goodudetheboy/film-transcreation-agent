@@ -1296,6 +1296,11 @@ textarea {
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   background: var(--panel-2);
   overflow: hidden;
+  /* Cancels .scrubber-wrap's flex `gap` on this side only, so the label
+     gutter sits flush against .scrubber-viewport's left border instead of
+     floating next to it — the missing border-right above already assumes
+     they're touching. */
+  margin-right: calc(-1 * var(--space-snug));
 }
 
 .scrubber-labels__ruler-spacer {
@@ -1396,8 +1401,8 @@ textarea {
 }
 
 .scrubber__block--detail {
-  background: var(--accent-dim);
-  border-color: var(--accent);
+  background: var(--panel-2);
+  border-color: var(--border-strong);
 }
 
 .scrubber__block-label {
@@ -1410,7 +1415,7 @@ textarea {
 }
 
 .scrubber__block--detail .scrubber__block-label {
-  color: var(--accent);
+  color: var(--text-dim);
 }
 
 .scrubber__block--active {
@@ -1459,7 +1464,10 @@ textarea {
   bottom: -3px;
   width: 3px;
   background: var(--accent);
-  transform: translateX(-1.5px);
+  /* translateZ(0) forces this onto its own compositor layer — without it the
+     blurred box-shadow gets rasterized in separate tiles where it crosses the
+     subtitles/details row border, leaving a visible seam in the bar. */
+  transform: translateX(-1.5px) translateZ(0);
   border-radius: 2px;
   box-shadow: 0 0 6px var(--accent);
   pointer-events: none;
@@ -2107,7 +2115,9 @@ textarea {
 .workspace__scrubber-divider {
   flex: 0 0 auto;
   height: 10px;
-  margin: -3px 0;
+  /* Cancels .workspace's flex `gap` on both sides so the handle sits flush
+     against the panels it resizes, instead of floating in a gap-sized band. */
+  margin: calc(-1 * var(--space-tight)) 0;
   align-self: stretch;
   cursor: row-resize;
   position: relative;
@@ -2638,15 +2648,29 @@ textarea {
   margin-left: auto;
 }
 
+.chat-toggle-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+}
+
+.chat-toggle-btn--active {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-dim);
+}
+
 .project-item-view__body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: var(--space-loose);
   flex: 1 1 0;
   min-height: 0;
 }
 
 .project-item-view__detail {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-default);
@@ -2654,22 +2678,52 @@ textarea {
   padding-right: var(--space-snug);
 }
 
+/* Closed by default (toggled via the sparkle button) — collapses to zero
+   width rather than unmounting, so its session/thread state survives
+   toggling. Opening pushes .project-item-view__detail over, it never
+   overlays it. */
 .project-item-view__chat {
-  border-left: 1px solid var(--border);
-  padding-left: var(--space-loose);
+  flex: 0 0 0;
+  width: 0;
   min-height: 0;
-  display: flex;
+  overflow: hidden;
+  border-left: 1px solid transparent;
+  padding-left: 0;
+  transition: width 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
+}
+
+.project-item-view__chat--open {
+  flex-basis: 420px;
+  width: 420px;
+  border-left-color: var(--border);
+  padding-left: var(--space-loose);
+}
+
+.project-item-view__chat > .chat-panel {
+  width: 420px;
 }
 
 @media (max-width: 860px) {
   .project-item-view__body {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+  .project-item-view__chat,
+  .project-item-view__chat--open {
+    width: auto;
+    flex-basis: auto;
   }
   .project-item-view__chat {
+    height: 0;
+  }
+  .project-item-view__chat--open {
+    height: auto;
     border-left: none;
     border-top: 1px solid var(--border);
     padding-left: 0;
     padding-top: var(--space-loose);
+  }
+  .project-item-view__chat > .chat-panel {
+    width: 100%;
   }
 }
 
@@ -2753,11 +2807,56 @@ textarea {
   width: 100%;
 }
 
-.chat-panel__sessions {
+.chat-panel__library {
+  flex: 1;
+  min-height: 200px;
+  overflow-y: auto;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-panel__library-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-snug) var(--space-default);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: border-color;
+}
+
+.chat-panel__library-item:hover {
+  border-color: var(--accent);
+}
+
+.chat-panel__library-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.chat-panel__library-item-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.chat-panel__library-item-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.chat-panel__library-item-meta {
+  font-size: 11px;
+  color: var(--text-dim);
 }
 
 .chat-panel__thread {

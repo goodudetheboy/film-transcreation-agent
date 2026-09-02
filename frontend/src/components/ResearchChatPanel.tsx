@@ -86,6 +86,7 @@ function TurnParts({ turn, nextTurn }: { turn: ChatTurn; nextTurn?: ChatTurn }) 
 export function ResearchChatPanel({ projectId, passcode, testMode, itemId }: ResearchChatPanelProps) {
   const { chatSessions, activeChatSessionId, setChatSessions, addChatSession, setActiveChatSessionId, applyChatEvent } =
     useProjectWorkspaceStore();
+  const [panelView, setPanelView] = useState<'library' | 'chat'>('library');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState<ChatStreamEvent[]>([]);
@@ -97,9 +98,6 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId }: Res
     listChatSessions(projectId, passcode).then((sessions) => {
       if (cancelled) return;
       setChatSessions(sessions);
-      if (sessions.length > 0 && !activeChatSessionId) {
-        setActiveChatSessionId(sessions[sessions.length - 1].id);
-      }
     });
     return () => {
       cancelled = true;
@@ -116,6 +114,12 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId }: Res
   async function handleNewSession() {
     const session = await createChatSession(projectId, { passcode });
     addChatSession(session);
+    setPanelView('chat');
+  }
+
+  function openSession(id: string) {
+    setActiveChatSessionId(id);
+    setPanelView('chat');
   }
 
   async function handleSend(e: FormEvent) {
@@ -154,23 +158,41 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId }: Res
     }
   }
 
-  return (
-    <div className="chat-panel">
-      <div className="chat-panel__sessions">
-        {chatSessions.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={`workspace-tabs__tab${s.id === activeChatSessionId ? ' workspace-tabs__tab--active' : ''}`}
-            onClick={() => setActiveChatSessionId(s.id)}
-          >
-            {s.name ?? `Session ${s.sessionNumber}`}
-          </button>
-        ))}
-        <button type="button" className="btn" onClick={handleNewSession}>
+  if (panelView === 'library') {
+    return (
+      <div className="chat-panel">
+        <div className="chat-panel__library">
+          {chatSessions.length === 0 && (
+            <p className="results-placeholder">No sessions yet — start one to talk with the research agent.</p>
+          )}
+          {[...chatSessions].reverse().map((s) => {
+            const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                className="chat-panel__library-item"
+                onClick={() => openSession(s.id)}
+              >
+                <span className="chat-panel__library-item-name">{s.name ?? `Session ${s.sessionNumber}`}</span>
+                {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
+                <span className="chat-panel__library-item-meta">{new Date(s.updatedAt).toLocaleString()}</span>
+              </button>
+            );
+          })}
+        </div>
+        <button type="button" className="btn btn--primary" onClick={handleNewSession}>
           + New session
         </button>
       </div>
+    );
+  }
+
+  return (
+    <div className="chat-panel">
+      <button type="button" className="link-back" onClick={() => setPanelView('library')}>
+        ← Library
+      </button>
 
       <div className="chat-panel__thread" ref={threadRef}>
         {!activeSession && chatSessions.length === 0 && (

@@ -38,6 +38,24 @@ function SearchIcon() {
   );
 }
 
+function SparkleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2c.4 3.6 1 5.9 2.2 7.1S17.6 10.9 22 11c-4.4.1-6.6.7-7.8 1.9S12.4 16.4 12 20c-.4-3.6-1-5.9-2.2-7.1S6.4 11.1 2 11c4.4-.1 6.6-.7 7.8-1.9S11.6 5.6 12 2z" />
+    </svg>
+  );
+}
+
+const CHAT_OPEN_STORAGE_KEY = 'projectItemView.chatOpen';
+
+function readStoredChatOpen(): boolean {
+  try {
+    return window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function ScoreBlock({
   index,
   rubric,
@@ -250,6 +268,16 @@ export function ProjectItemView({
   const prev = index > 0 ? allItems[index - 1] : undefined;
   const next = index >= 0 && index < allItems.length - 1 ? allItems[index + 1] : undefined;
 
+  const [chatOpen, setChatOpen] = useState(readStoredChatOpen);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, chatOpen ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }, [chatOpen]);
+
   // Keep the video scrubbed to whichever item is open, same as DetailsTable's
   // row-click behavior — parity with the rest of the Film workspace.
   useEffect(() => {
@@ -282,6 +310,16 @@ export function ProjectItemView({
               ))}
             </select>
           )}
+          <button
+            type="button"
+            className={`icon-btn chat-toggle-btn${chatOpen ? ' chat-toggle-btn--active' : ''}`}
+            title={chatOpen ? 'Close research agent' : 'Open research agent'}
+            aria-label={chatOpen ? 'Close research agent' : 'Open research agent'}
+            aria-pressed={chatOpen}
+            onClick={() => setChatOpen((v) => !v)}
+          >
+            <SparkleIcon />
+          </button>
         </div>
       </div>
 
@@ -351,7 +389,7 @@ export function ProjectItemView({
           ))}
         </div>
 
-        <div className="project-item-view__chat">
+        <div className={`project-item-view__chat${chatOpen ? ' project-item-view__chat--open' : ''}`}>
           <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} />
         </div>
       </div>
