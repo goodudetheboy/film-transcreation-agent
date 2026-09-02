@@ -1,11 +1,19 @@
 import { useEffect, useState } from 'react';
+import type { Theme } from '../utils/useTheme';
 
 export interface HeaderSettingsProps {
   testMode: boolean;
   onTestModeChange: (value: boolean) => void;
+  theme: Theme;
+  onThemeChange: (value: Theme) => void;
 }
 
-export function HeaderSettings({ testMode, onTestModeChange }: HeaderSettingsProps) {
+export function HeaderSettings({
+  testMode,
+  onTestModeChange,
+  theme,
+  onThemeChange,
+}: HeaderSettingsProps) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -59,6 +67,17 @@ export function HeaderSettings({ testMode, onTestModeChange }: HeaderSettingsPro
               />
               Test mode (mock data, no live API)
             </label>
+            <div className="field">
+              <label htmlFor="theme-select">Theme</label>
+              <select
+                id="theme-select"
+                value={theme}
+                onChange={(e) => onThemeChange(e.target.value as Theme)}
+              >
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </div>
           </div>
         </div>
       )}
