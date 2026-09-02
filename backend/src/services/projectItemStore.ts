@@ -45,7 +45,9 @@ function newItem(id: string, projectId: string, input: CreateProjectItemInput, n
     subtitleText: input.subtitleText,
     sceneDescription: input.sceneDescription,
     customValues: input.customValues,
-    action: 'pending',
+    // No agent has looked at this item yet — 'pending' is reserved for "an agent
+    // researched this and it's awaiting human review" (see applyResearchResult).
+    action: 'need-research',
     importanceScore: null,
     scores: [],
     summary: null,
@@ -185,6 +187,10 @@ export function createFirestoreProjectItemStore(firestore: Firestore): ProjectIt
         shouldTranscreate: result.shouldTranscreate,
         suggestedReplacement: result.suggestedReplacement,
         importanceScore: result.importanceScore,
+        // An agent just finished looking at this item — flag it for human review.
+        // Only bumps the untouched default; a human-set accepted/rejected (or an
+        // already-pending item from an earlier pass) is left alone.
+        action: current.action === 'need-research' ? 'pending' : current.action,
         lastResearchedAt: now,
         updatedAt: now,
       };
@@ -291,6 +297,7 @@ export function createInMemoryProjectItemStore(): ProjectItemStore {
         shouldTranscreate: result.shouldTranscreate,
         suggestedReplacement: result.suggestedReplacement,
         importanceScore: result.importanceScore,
+        action: current.action === 'need-research' ? 'pending' : current.action,
         lastResearchedAt: now,
         updatedAt: now,
       };

@@ -3,7 +3,6 @@ import { createProjectFromFilm } from '../../frontend/src/api/filmsApiClient';
 import {
   listRubrics,
   listItems,
-  updateItemAction,
   streamResearchRun,
   createChatSession,
   runTrendResearch,
@@ -111,13 +110,10 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     expect(project.sourceFilmId).toBe(filmId);
     expect(items).toHaveLength(1);
     expect(items[0].subtitleText).toBe("I'm not eating that broccoli.");
-    expect(items[0].action).toBe('pending');
+    expect(items[0].action).toBe('need-research');
 
     const rubrics = await listRubrics(project.id, TEST_PASSCODE, { baseUrl: backend.url });
     expect(rubrics.length).toBeGreaterThan(0); // fell back to DEFAULT_RUBRICS
-
-    // Mark the item need-research, then kick off a batch research run against it.
-    await updateItemAction(project.id, items[0].id, { passcode: TEST_PASSCODE, action: 'need-research' }, { baseUrl: backend.url });
 
     const runEvents: ResearchRunStreamEvent[] = [];
     await streamResearchRun(
@@ -133,6 +129,9 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
     expect(afterRun[0].shouldTranscreate).toBe(true);
     expect(afterRun[0].summary).toContain('does not translate to Japan');
+    // The agent just finished researching a fresh item — bumped from need-research to
+    // pending so the user knows there's now something to review.
+    expect(afterRun[0].action).toBe('pending');
 
     // Now open a chat session and send a message that triggers the fake chat
     // agent's canned tool call — confirms the SSE round trip AND that the

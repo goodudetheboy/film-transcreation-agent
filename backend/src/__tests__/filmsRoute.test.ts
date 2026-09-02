@@ -409,7 +409,7 @@ describe('POST /api/films/:id/projects', () => {
       detailRowId: selectedRow.id,
       subtitleText: 'Hello there',
       sceneDescription: 'a scene',
-      action: 'pending',
+      action: 'need-research',
     });
 
     const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics?passcode=${TEST_PASSCODE}`);

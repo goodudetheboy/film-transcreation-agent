@@ -1422,16 +1422,35 @@ textarea {
   color: var(--warning);
 }
 
-.scrubber-highlight {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  min-width: 2px;
+/* Project-item review status, colored on the Details-track block itself
+   (rather than a separate overlay) — 'need-research' gets no modifier and
+   falls back to --detail's default untinted look. Declared after --active so
+   a reviewed status stays visible even while the block is the active one. */
+.scrubber__block--status-pending {
+  background: var(--warning-dim);
+  border-color: var(--warning);
+}
+
+.scrubber__block--status-pending .scrubber__block-label {
+  color: var(--warning);
+}
+
+.scrubber__block--status-accepted {
   background: var(--success-dim);
-  border-left: 2px solid var(--success);
-  border-right: 2px solid var(--success);
-  pointer-events: none;
-  z-index: 1;
+  border-color: var(--success);
+}
+
+.scrubber__block--status-accepted .scrubber__block-label {
+  color: var(--success);
+}
+
+.scrubber__block--status-rejected {
+  background: var(--danger-dim);
+  border-color: var(--danger);
+}
+
+.scrubber__block--status-rejected .scrubber__block-label {
+  color: var(--danger);
 }
 
 .scrubber-handle {

@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as Reac
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { deleteFilm, getFilm, listDetails, listDiscoveryJobs } from '../api/filmsApiClient';
 import { listProjects } from '../api/projectsApiClient';
-import type { EnrichedProject } from '../api/apiClient.types';
+import type { EnrichedProject, ProjectItemAction } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { TransportBar } from '../components/TransportBar';
@@ -65,7 +65,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [showKickoff, setShowKickoff] = useState(false);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [highlightRanges, setHighlightRanges] = useState<{ startMs: number; endMs: number }[]>([]);
+  const [itemStatusByRow, setItemStatusByRow] = useState<Record<string, ProjectItemAction>>({});
 
   const splitRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
@@ -446,7 +446,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   passcode={passcode}
                   testMode={testMode}
                   onSeek={handleSeek}
-                  onHighlightRanges={setHighlightRanges}
+                  onItemStatusByRow={setItemStatusByRow}
                   onBackToProjects={() => selectProject(null)}
                 />
               )}
@@ -534,7 +534,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           durationMs={durationMs}
           currentTimeMs={currentTimeMs}
           onSeek={handleSeek}
-          highlightRanges={highlightRanges}
+          rowStatus={itemStatusByRow}
         />
       </div>
 

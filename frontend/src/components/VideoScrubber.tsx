@@ -2,16 +2,24 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DetailRow, SubtitleEntry } from '../api/apiClient.types';
 import { formatClock } from '../utils/timeFormat';
 
+/** Mirrors ProjectItemAction (apiClient.types.ts) without importing the Project
+ * domain into this general-purpose video component. 'need-research' (or no entry
+ * at all, when this track isn't showing Project data) renders as the default
+ * untinted block — it means "no agent has looked at this yet," not a status worth
+ * flagging in the timeline. */
+export type DetailRowStatus = 'pending' | 'accepted' | 'rejected' | 'need-research';
+
 export interface VideoScrubberProps {
   entries: SubtitleEntry[];
   detailRows: DetailRow[];
   durationMs: number;
   currentTimeMs: number;
   onSeek: (ms: number) => void;
-  /** Time ranges to paint across the whole timeline (e.g. every Project tab
-   * line currently marked "need-research"), independent of the playhead
-   * position. */
-  highlightRanges?: { startMs: number; endMs: number }[];
+  /** Project-item status (accepted/rejected/pending/need-research) keyed by
+   * DetailRow id, so the Details track can color each block by review status
+   * instead of a separate overlay. Omitted rows (or when not viewing a project)
+   * render with the default untinted styling. */
+  rowStatus?: Record<string, DetailRowStatus>;
 }
 
 const MIN_ZOOM = 1;
@@ -52,7 +60,7 @@ function detailRowLabel(row: DetailRow): string {
  * Details-row track all live on one wide "track" whose percentage-based
  * positions automatically scale with zoom — only the track's pixel width and
  * the viewport's scroll position change. */
-export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, onSeek, highlightRanges }: VideoScrubberProps) {
+export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, onSeek, rowStatus }: VideoScrubberProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const pendingScrollLeftRef = useRef<number | null>(null);
@@ -222,10 +230,12 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
                 const rawWidthPct = ((row.endMs - row.startMs) / durationMs) * 100;
                 const widthPct = Math.max(0, Math.min(100 - leftPct, rawWidthPct));
                 const label = detailRowLabel(row);
+                const status = rowStatus?.[row.id];
+                const statusClass = status && status !== 'need-research' ? ` scrubber__block--status-${status}` : '';
                 return (
                   <div
                     key={row.id}
-                    className={`scrubber__block scrubber__block--detail${isActive ? ' scrubber__block--active' : ''}`}
+                    className={`scrubber__block scrubber__block--detail${statusClass}${isActive ? ' scrubber__block--active' : ''}`}
                     style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                     title={label}
                   >
@@ -234,14 +244,6 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
                 );
               })}
           </div>
-          {durationMs > 0 &&
-            highlightRanges?.map((range, i) => {
-              if (range.startMs >= durationMs) return null;
-              const leftPct = Math.max(0, (range.startMs / durationMs) * 100);
-              const rawWidthPct = ((range.endMs - range.startMs) / durationMs) * 100;
-              const widthPct = Math.max(0, Math.min(100 - leftPct, rawWidthPct));
-              return <div key={i} className="scrubber-highlight" style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
-            })}
           <div className="scrubber-handle" style={{ left: `${progressPct}%` }} />
         </div>
       </div>

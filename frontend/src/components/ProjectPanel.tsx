@@ -24,7 +24,9 @@ export interface ProjectPanelProps {
   passcode: string;
   testMode: boolean;
   onSeek?: (ms: number) => void;
-  onHighlightRanges?: (ranges: { startMs: number; endMs: number }[]) => void;
+  /** Every item's review status, keyed by its source DetailRow id, so the
+   * workspace's Details track on the scrub bar can color each block by status. */
+  onItemStatusByRow?: (statusByRow: Record<string, ProjectItemAction>) => void;
   onBackToProjects: () => void;
 }
 
@@ -38,7 +40,7 @@ const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-r
  * the whole time, same as the Details tab — this is a workspace panel, not a
  * separate page.
  */
-export function ProjectPanel({ projectId, passcode, testMode, onSeek, onHighlightRanges, onBackToProjects }: ProjectPanelProps) {
+export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStatusByRow, onBackToProjects }: ProjectPanelProps) {
   const [tab, setTab] = useState<'items' | 'rubrics'>('items');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
@@ -73,7 +75,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onHighligh
     reset();
     setLoadError(null);
     setOpenItemId(null);
-    onHighlightRanges?.([]);
+    onItemStatusByRow?.({});
     let cancelled = false;
     Promise.all([getProject(projectId, passcode), listRubrics(projectId, passcode), listItems(projectId, passcode)])
       .then(([p, r, i]) => {
@@ -87,6 +89,10 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onHighligh
       });
     return () => {
       cancelled = true;
+      // Clear the scrub-bar coloring on unmount too (not just re-load), so
+      // switching to Details/Progress doesn't leave a stale project's status
+      // colors painted on unrelated rows.
+      onItemStatusByRow?.({});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
@@ -103,13 +109,14 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onHighligh
     return (b.importanceScore ?? -1) - (a.importanceScore ?? -1);
   });
 
-  // Keep the scrub bar showing every item currently marked "need-research" —
-  // not just whichever one was last clicked — so it stays accurate as items
-  // are added/changed/re-fetched, not only on direct user interaction.
+  // Keep the scrub bar's Details-track blocks colored by every item's current
+  // review status — not just whichever one was last clicked — so it stays
+  // accurate as items are added/changed/re-fetched, not only on direct
+  // user interaction.
   useEffect(() => {
-    onHighlightRanges?.(
-      allItems.filter((i) => i.action === 'need-research').map((i) => ({ startMs: i.startMs, endMs: i.endMs })),
-    );
+    const statusByRow: Record<string, ProjectItemAction> = {};
+    for (const item of allItems) statusByRow[item.detailRowId] = item.action;
+    onItemStatusByRow?.(statusByRow);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items]);
 

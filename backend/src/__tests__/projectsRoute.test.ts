@@ -139,7 +139,7 @@ describe('GET /api/projects and /api/projects/:id', () => {
     const list = await request(app).get(`/api/projects?passcode=${TEST_PASSCODE}`);
     const found = list.body.find((p: { id: string }) => p.id === project.id);
     expect(found).toBeTruthy();
-    expect(found).toMatchObject({ pendingCount: 1, acceptedCount: 0, rejectedCount: 0, needResearchCount: 0, agentStatus: null });
+    expect(found).toMatchObject({ pendingCount: 0, acceptedCount: 0, rejectedCount: 0, needResearchCount: 1, agentStatus: null });
 
     const fetched = await request(app).get(`/api/projects/${project.id}?passcode=${TEST_PASSCODE}`);
     expect(fetched.status).toBe(200);
@@ -253,11 +253,12 @@ describe('POST /api/projects/:id/research-runs', () => {
   });
 
   it('returns 400 for an invalid mode, and 400 when nothing matches', async () => {
-    const { app, project } = await seedAppAndProject();
+    const { app, project, items } = await seedAppAndProject();
     expect(
       (await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'bogus' })).status,
     ).toBe(400);
-    // fresh item defaults to 'pending', not 'need-research', so nothing matches
+    // fresh item defaults to 'need-research', so flip it to 'accepted' first so nothing matches
+    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'accepted' });
     expect(
       (await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' })).status,
     ).toBe(400);
@@ -299,7 +300,7 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
       .post(`/api/projects/${project.id}/rubrics`)
       .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
 
-    // Item is still 'pending' and has never been researched (no scores, shouldTranscreate null) —
+    // Item is still 'need-research' and has never been researched (no scores, shouldTranscreate null) —
     // the manual button is the trigger, so this must still work.
     const res = await request(app)
       .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)

@@ -12,11 +12,11 @@ const baseInput = {
 };
 
 describe('createInMemoryProjectItemStore', () => {
-  it('createItems imports new items with pending action and null scores', async () => {
+  it('createItems imports new items with need-research action and null scores', async () => {
     const store = createInMemoryProjectItemStore();
     const created = await store.createItems('proj-a', [baseInput]);
     expect(created).toHaveLength(1);
-    expect(created[0].action).toBe('pending');
+    expect(created[0].action).toBe('need-research');
     expect(created[0].importanceScore).toBeNull();
     expect(created[0].scores).toEqual([]);
     expect(created[0].trendSuggestions).toBeNull();
@@ -89,10 +89,11 @@ describe('createInMemoryProjectItemStore', () => {
     expect(afterUnrelatedPatch?.scores[0].userNote).toBe('flagged for follow-up');
   });
 
-  it('applyResearchResult replaces the full score set and stamps lastResearchedAt', async () => {
+  it('applyResearchResult replaces the full score set, stamps lastResearchedAt, and bumps a fresh item to pending', async () => {
     const store = createInMemoryProjectItemStore();
     const [item] = await store.createItems('proj-a', [baseInput]);
     expect(item.lastResearchedAt).toBeNull();
+    expect(item.action).toBe('need-research');
 
     const updated = await store.applyResearchResult('proj-a', item.id, {
       scores: [
@@ -108,6 +109,22 @@ describe('createInMemoryProjectItemStore', () => {
     expect(updated?.suggestedReplacement).toEqual({ text: 'new line', justification: 'why' });
     expect(updated?.importanceScore).toBe(9);
     expect(updated?.lastResearchedAt).not.toBeNull();
+    expect(updated?.action).toBe('pending');
+  });
+
+  it('applyResearchResult leaves a human-set action (accepted/rejected/pending) untouched', async () => {
+    const store = createInMemoryProjectItemStore();
+    const [item] = await store.createItems('proj-a', [baseInput]);
+    await store.updateItem('proj-a', item.id, { action: 'accepted' });
+
+    const updated = await store.applyResearchResult('proj-a', item.id, {
+      scores: [],
+      summary: 're-researched',
+      shouldTranscreate: false,
+      suggestedReplacement: null,
+      importanceScore: 1,
+    });
+    expect(updated?.action).toBe('accepted');
   });
 
   it('setSuggestedReplacement sets the suggestion and flips shouldTranscreate to true', async () => {
