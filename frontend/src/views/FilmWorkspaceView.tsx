@@ -34,6 +34,8 @@ const MIN_SCRUBBER_HEIGHT = 84;
 const MAX_SCRUBBER_HEIGHT = 400;
 const DEFAULT_SCRUBBER_HEIGHT = 96;
 
+const LAST_PROJECT_ID_STORAGE_PREFIX = 'workspace.lastProjectId.';
+
 function clampScrubberHeight(value: number): number {
   return Math.min(MAX_SCRUBBER_HEIGHT, Math.max(MIN_SCRUBBER_HEIGHT, value));
 }
@@ -63,6 +65,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [showKickoff, setShowKickoff] = useState(false);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [highlightRanges, setHighlightRanges] = useState<{ startMs: number; endMs: number }[]>([]);
 
   const splitRef = useRef<HTMLDivElement>(null);
   const [leftWidth, setLeftWidth] = useState<number | null>(null);
@@ -178,6 +181,27 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     }
   }, []);
 
+  // Fall back to this film's last-selected project (from a previous visit) when
+  // the URL doesn't already name one — e.g. landing on Details/Progress fresh.
+  useEffect(() => {
+    if (!id || searchParams.get('projectId')) return;
+    try {
+      const stored = window.localStorage.getItem(LAST_PROJECT_ID_STORAGE_PREFIX + id);
+      if (!stored) return;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('projectId', stored);
+          return next;
+        },
+        { replace: true },
+      );
+    } catch {
+      // private mode / storage disabled — user just picks a project manually
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   // The <video> element's volume/muted aren't reactive props — they have to be
   // pushed onto the element imperatively, same as currentTime elsewhere here.
   useEffect(() => {
@@ -235,10 +259,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   }
 
   function setTab(next: Tab) {
-    setSearchParams(next === 'details' ? {} : { tab: next });
+    setSearchParams((prev) => {
+      const nextParams = new URLSearchParams(prev);
+      if (next === 'details') nextParams.delete('tab');
+      else nextParams.set('tab', next);
+      return nextParams;
+    });
   }
 
   function selectProject(nextProjectId: string | null) {
+    setHighlightRanges([]);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('tab', 'project');
@@ -246,6 +276,14 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       else next.delete('projectId');
       return next;
     });
+    if (id) {
+      try {
+        if (nextProjectId) window.localStorage.setItem(LAST_PROJECT_ID_STORAGE_PREFIX + id, nextProjectId);
+        else window.localStorage.removeItem(LAST_PROJECT_ID_STORAGE_PREFIX + id);
+      } catch {
+        // private mode / storage disabled — selection still works for this session
+      }
+    }
   }
 
   function handleSeek(ms: number) {
@@ -408,6 +446,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   passcode={passcode}
                   testMode={testMode}
                   onSeek={handleSeek}
+                  onHighlightRanges={setHighlightRanges}
                   onBackToProjects={() => selectProject(null)}
                 />
               )}
@@ -495,6 +534,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           durationMs={durationMs}
           currentTimeMs={currentTimeMs}
           onSeek={handleSeek}
+          highlightRanges={highlightRanges}
         />
       </div>
 
