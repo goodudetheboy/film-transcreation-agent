@@ -3,6 +3,7 @@ import type { ProjectItem, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { ResearchChatPanel } from './ResearchChatPanel';
+import { SparkleIcon } from './icons';
 
 /** Relative age string for a Trend Suggestion's publishedDate, so a reviewer can judge
  * staleness themselves rather than trusting a trend suggestion blindly. */
@@ -34,14 +35,6 @@ function SearchIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="11" cy="11" r="7" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-
-function SparkleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2c.4 3.6 1 5.9 2.2 7.1S17.6 10.9 22 11c-4.4.1-6.6.7-7.8 1.9S12.4 16.4 12 20c-.4-3.6-1-5.9-2.2-7.1S6.4 11.1 2 11c4.4-.1 6.6-.7 7.8-1.9S11.6 5.6 12 2z" />
     </svg>
   );
 }
@@ -318,7 +311,7 @@ export function ProjectItemView({
             aria-pressed={chatOpen}
             onClick={() => setChatOpen((v) => !v)}
           >
-            <SparkleIcon />
+            <SparkleIcon width={18} height={18} />
           </button>
         </div>
       </div>

@@ -2581,6 +2581,76 @@ textarea {
   gap: 4px;
 }
 
+/* ---------- Details tab: table + sliding Discovery agent panel ----------
+   Same mechanism as .project-item-view__body/__chat — a docked side panel
+   that slides open/closed via width, pushing the table over rather than
+   overlaying it, so its session/thread state survives toggling. */
+.workspace-details__body {
+  display: flex;
+  gap: var(--space-loose);
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.workspace-details__main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  overflow-y: auto;
+}
+
+.workspace-details__toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.workspace-details__chat {
+  flex: 0 0 0;
+  width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid transparent;
+  padding-left: 0;
+  transition: width 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
+}
+
+.workspace-details__chat--open {
+  flex-basis: 420px;
+  width: 420px;
+  border-left-color: var(--border);
+  padding-left: var(--space-loose);
+}
+
+.workspace-details__chat > .chat-panel {
+  width: 420px;
+}
+
+@media (max-width: 860px) {
+  .workspace-details__body {
+    flex-direction: column;
+  }
+  .workspace-details__chat,
+  .workspace-details__chat--open {
+    width: auto;
+    flex-basis: auto;
+  }
+  .workspace-details__chat {
+    height: 0;
+  }
+  .workspace-details__chat--open {
+    height: auto;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: var(--space-loose);
+  }
+  .workspace-details__chat > .chat-panel {
+    width: 100%;
+  }
+}
+
 .video-stage {
   flex: 1;
   display: flex;
@@ -3219,19 +3289,6 @@ textarea {
   gap: var(--space-snug);
   min-height: 0;
   width: 100%;
-}
-
-/* Used when a chat panel IS the page content (Details tab's Discovery agent
-   view) rather than a fixed-size docked drawer — fills the bounding
-   .workspace__panel--left the same way .project-item-view does, instead of
-   the drawer-tuned .chat-panel__thread max-height. */
-.chat-panel--workspace {
-  flex: 1 1 0;
-  min-height: 0;
-}
-
-.chat-panel--workspace .chat-panel__thread {
-  max-height: none;
 }
 
 .chat-panel__library {

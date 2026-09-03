@@ -28,10 +28,9 @@ function Icon({ children, ...props }: IconProps & { children: React.ReactNode })
 
 export function SparkleIcon(props: IconProps) {
   return (
-    <Icon {...props}>
-      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.1 2.1M15.6 15.6l2.1 2.1M17.7 6.3l-2.1 2.1M8.4 15.6l-2.1 2.1" />
-      <path d="M12 8l1.4 3.6L17 13l-3.6 1.4L12 18l-1.4-3.6L7 13l3.6-1.4L12 8Z" fill="currentColor" stroke="none" />
-    </Icon>
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M12 2c.4 3.6 1 5.9 2.2 7.1S17.6 10.9 22 11c-4.4.1-6.6.7-7.8 1.9S12.4 16.4 12 20c-.4-3.6-1-5.9-2.2-7.1S6.4 11.1 2 11c4.4-.1 6.6-.7 7.8-1.9S11.6 5.6 12 2z" />
+    </svg>
   );
 }
 

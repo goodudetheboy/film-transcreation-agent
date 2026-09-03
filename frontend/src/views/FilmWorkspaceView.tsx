@@ -20,7 +20,16 @@ export interface FilmWorkspaceViewProps {
 }
 
 type Tab = 'details' | 'project';
-type DetailsView = 'table' | 'agent';
+
+const DISCOVERY_OPEN_STORAGE_KEY = 'workspace.discoveryOpen';
+
+function readStoredDiscoveryOpen(): boolean {
+  try {
+    return window.localStorage.getItem(DISCOVERY_OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 const LEFT_WIDTH_STORAGE_KEY = 'workspace.leftPanelWidth';
 const MIN_LEFT = 360;
@@ -52,7 +61,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const tabParam = searchParams.get('tab');
   const tab: Tab = tabParam === 'project' ? 'project' : 'details';
   const projectId = searchParams.get('projectId');
-  const [detailsView, setDetailsView] = useState<DetailsView>('table');
+  const [discoveryOpen, setDiscoveryOpen] = useState(readStoredDiscoveryOpen);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -79,9 +88,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const { film, rows, columns, setFilm, setDetails, addRow, updateRow, removeRow, addColumn, reset } = useFilmWorkspaceStore();
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem(DISCOVERY_OPEN_STORAGE_KEY, discoveryOpen ? '1' : '0');
+    } catch {
+      // private mode / storage disabled — toggling still works, just won't persist
+    }
+  }, [discoveryOpen]);
+
+  useEffect(() => {
     reset();
     setLoadError(null);
-    setDetailsView('table');
     if (!id) return;
     let cancelled = false;
 
@@ -343,24 +359,21 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       >
         <div className="workspace__panel workspace__panel--left">
           {tab === 'details' && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => setDetailsView((v) => (v === 'table' ? 'agent' : 'table'))}
-                >
-                  {detailsView === 'table' ? (
-                    <>
-                      <SparkleIcon /> Kick off agentic discovery
-                    </>
-                  ) : (
-                    '← Back to table'
-                  )}
-                </button>
-              </div>
+            <div className="workspace-details__body">
+              <div className="workspace-details__main">
+                <div className="workspace-details__toolbar">
+                  <button
+                    type="button"
+                    className={`icon-btn chat-toggle-btn${discoveryOpen ? ' chat-toggle-btn--active' : ''}`}
+                    title={discoveryOpen ? 'Close discovery agent' : 'Open discovery agent'}
+                    aria-label={discoveryOpen ? 'Close discovery agent' : 'Open discovery agent'}
+                    aria-pressed={discoveryOpen}
+                    onClick={() => setDiscoveryOpen((v) => !v)}
+                  >
+                    <SparkleIcon width={18} height={18} />
+                  </button>
+                </div>
 
-              {detailsView === 'table' ? (
                 <DetailsTable
                   film={film}
                   passcode={passcode}
@@ -374,10 +387,12 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   onRowDeleted={removeRow}
                   onColumnAdded={addColumn}
                 />
-              ) : (
+              </div>
+
+              <div className={`workspace-details__chat${discoveryOpen ? ' workspace-details__chat--open' : ''}`}>
                 <DiscoveryChatPanel filmId={film.id} passcode={passcode} testMode={testMode} columns={columns} />
-              )}
-            </>
+              </div>
+            </div>
           )}
 
           {tab === 'project' && (

@@ -377,7 +377,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
 
   if (panelView === 'library') {
     return (
-      <div className="chat-panel chat-panel--workspace">
+      <div className="chat-panel">
         <div className="chat-panel__library">
           {discoveryChatSessions.length === 0 && (
             <p className="results-placeholder">No agents yet — kick one off to start finding new lines.</p>
@@ -401,7 +401,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   }
 
   return (
-    <div className="chat-panel chat-panel--workspace">
+    <div className="chat-panel">
       <button type="button" className="link-back" onClick={() => setPanelView('library')}>
         ← Library
       </button>
