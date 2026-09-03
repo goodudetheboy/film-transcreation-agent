@@ -11,6 +11,7 @@ import type {
 } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
+import { Button } from './Button';
 import { CheckIcon, SparkleIcon } from './icons';
 
 export interface DiscoveryChatPanelProps {
@@ -128,13 +129,13 @@ function KickoffForm({
       {error && <p className="passcode-gate__error">{error}</p>}
 
       <div style={{ display: 'flex', gap: 12 }}>
-        <button type="submit" className="btn btn--primary" disabled={submitting || selectedColumns.length === 0}>
+        <Button type="submit" variant="primary" disabled={submitting || selectedColumns.length === 0}>
           {submitting ? 'Kicking off…' : 'Kick off agent'}
-        </button>
+        </Button>
         {onCancel && (
-          <button type="button" className="btn" onClick={onCancel} disabled={submitting}>
+          <Button onClick={onCancel} disabled={submitting}>
             Cancel
-          </button>
+          </Button>
         )}
       </div>
     </form>
@@ -214,12 +215,12 @@ function DiscoveryRunCard({
                       .join(' · ')}
                   </p>
                   <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
+                    <Button variant="primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
                       Add
-                    </button>
-                    <button type="button" className="btn btn--ghost" disabled={busyTempId === r.tempId} onClick={() => handleDiscard(r.tempId)}>
+                    </Button>
+                    <Button variant="danger" disabled={busyTempId === r.tempId} onClick={() => handleDiscard(r.tempId)}>
                       Delete
-                    </button>
+                    </Button>
                   </div>
                 </li>
               ))}
@@ -393,18 +394,18 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
             );
           })}
         </div>
-        <button type="button" className="btn btn--primary" onClick={handleNewAgent}>
+        <Button variant="primary" onClick={handleNewAgent}>
           <SparkleIcon /> Kick off agentic discovery
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="chat-panel">
-      <button type="button" className="link-back" onClick={() => setPanelView('library')}>
+      <Button variant="text" onClick={() => setPanelView('library')}>
         ← Library
-      </button>
+      </Button>
 
       <div className="chat-panel__thread" ref={threadRef}>
         {activeSession?.turns.map((turn: DiscoveryChatTurn, i) => {
@@ -483,9 +484,9 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
                 onCancel={() => setShowKickoffForm(false)}
               />
             ) : (
-              <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
+              <Button style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
                 <SparkleIcon /> Kick off another pass
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -495,9 +496,9 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
 
       <div className="chat-panel__quick-prompts">
         {QUICK_PROMPTS.map((p) => (
-          <button key={p} type="button" className="btn btn--ghost" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-dim)' }} onClick={() => setDraft(p)}>
+          <Button key={p} onClick={() => setDraft(p)}>
             {p}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -509,9 +510,9 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           placeholder="Ask about this agent's runs, or ask it to edit a row…"
           disabled={sending}
         />
-        <button type="submit" className="btn btn--primary" disabled={sending || draft.trim() === ''}>
+        <Button type="submit" variant="primary" disabled={sending || draft.trim() === ''}>
           Send
-        </button>
+        </Button>
       </form>
     </div>
   );

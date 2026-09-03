@@ -3,6 +3,7 @@ import { createChatSession, listChatSessions, listItems, logResearchRun, streamR
 import { sendChatMessage } from '../api/projectChatApiClient';
 import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchRun } from '../api/apiClient.types';
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
+import { Button } from './Button';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon } from './icons';
 
 export interface ResearchChatPanelProps {
@@ -231,17 +232,17 @@ function KickoffForm({
       {error && <p className="passcode-gate__error">{error}</p>}
 
       <div style={{ display: 'flex', gap: 12 }}>
-        <button
+        <Button
           type="submit"
-          className="btn btn--primary"
+          variant="primary"
           disabled={submitting || (mode === 'need-research' ? needResearchCount === 0 : selected.size === 0)}
         >
           {submitting ? 'Kicking off…' : 'Kick off research'}
-        </button>
+        </Button>
         {onCancel && (
-          <button type="button" className="btn" onClick={onCancel} disabled={submitting}>
+          <Button onClick={onCancel} disabled={submitting}>
             Cancel
-          </button>
+          </Button>
         )}
       </div>
     </form>
@@ -381,18 +382,18 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
             );
           })}
         </div>
-        <button type="button" className="btn btn--primary" onClick={handleNewSession}>
+        <Button variant="primary" onClick={handleNewSession}>
           + New session
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="chat-panel">
-      <button type="button" className="link-back" onClick={() => setPanelView('library')}>
+      <Button variant="text" onClick={() => setPanelView('library')}>
         ← Library
-      </button>
+      </Button>
 
       <div className="chat-panel__thread" ref={threadRef}>
         {!activeSession && chatSessions.length === 0 && (
@@ -461,9 +462,9 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
                 onCancel={() => setShowKickoffForm(false)}
               />
             ) : (
-              <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
+              <Button style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
                 <SparkleIcon /> Kick off a research run
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -473,9 +474,9 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
 
       <div className="chat-panel__quick-prompts">
         {QUICK_PROMPTS.map((p) => (
-          <button key={p} type="button" className="btn btn--ghost" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-dim)' }} onClick={() => setDraft(p)}>
+          <Button key={p} onClick={() => setDraft(p)}>
             {p}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -487,9 +488,9 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           placeholder={itemId ? 'Ask about this line…' : 'Open a detail row to discuss a specific item…'}
           disabled={sending}
         />
-        <button type="submit" className="btn btn--primary" disabled={sending || draft.trim() === ''}>
+        <Button type="submit" variant="primary" disabled={sending || draft.trim() === ''}>
           Send
-        </button>
+        </Button>
       </form>
     </div>
   );

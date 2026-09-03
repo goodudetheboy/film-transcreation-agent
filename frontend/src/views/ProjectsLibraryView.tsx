@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listProjects } from '../api/projectsApiClient';
+import { LinkButton } from '../components/Button';
 import type { EnrichedProject } from '../api/apiClient.types';
 
 export interface ProjectsLibraryViewProps {
@@ -46,9 +47,9 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
           <p className="page-header__subtitle">Localization projects, grouped by target country.</p>
         </div>
         <div className="page-header__actions">
-          <Link to="/" className="btn btn--primary">
+          <LinkButton to="/" variant="primary">
             New Project (pick a film)
-          </Link>
+          </LinkButton>
         </div>
       </div>
 

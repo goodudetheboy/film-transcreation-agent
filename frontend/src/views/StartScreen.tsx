@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteFilm, listFilms } from '../api/filmsApiClient';
+import { Button } from '../components/Button';
 import type { Film } from '../api/apiClient.types';
 
 export interface StartScreenProps {
@@ -82,9 +83,9 @@ export function StartScreen({ passcode }: StartScreenProps) {
                       <span className={`status-badge status-badge--${f.status === 'processed' ? 'done' : 'running'}`}>{f.status}</span>
                     </div>
                   </Link>
-                  <button type="button" className="btn" onClick={() => handleDelete(f)} disabled={deletingId === f.id}>
+                  <Button variant="danger" onClick={() => handleDelete(f)} disabled={deletingId === f.id}>
                     {deletingId === f.id ? 'Deleting…' : 'Delete'}
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}

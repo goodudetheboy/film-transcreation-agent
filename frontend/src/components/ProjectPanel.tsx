@@ -13,10 +13,12 @@ import { listDetails } from '../api/filmsApiClient';
 import type { DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
+import { Button } from './Button';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
 import { ResearchChatPanel } from './ResearchChatPanel';
 import { ProjectItemView } from './ProjectItemView';
+import { Tab, TabGroup } from './Tabs';
 import { SparkleIcon } from './icons';
 
 const AGENTS_OPEN_STORAGE_KEY = 'projectPanel.agentsOpen';
@@ -179,9 +181,9 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
   return (
     <>
       <div className="project-panel__header">
-        <button type="button" className="link-back" onClick={onBackToProjects}>
+        <Button variant="text" onClick={onBackToProjects}>
           ← All projects for this film
-        </button>
+        </Button>
         <div className="project-panel__toprow">
           <div className="project-panel__heading">
             <p className="section-heading">{project.name}</p>
@@ -191,9 +193,9 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
             </div>
           </div>
           <div className="project-panel__actions">
-            <button type="button" className="btn" onClick={() => setShowAddDetails(true)}>
+            <Button onClick={() => setShowAddDetails(true)}>
               + Manually add details
-            </button>
+            </Button>
             <button
               type="button"
               className={`chat-toggle-btn${agentsOpen ? ' chat-toggle-btn--active' : ''}`}
@@ -211,24 +213,24 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
 
       <div className="project-panel__body">
         <div className="project-panel__main">
-          <nav className="workspace-tabs">
-            <button type="button" className={`workspace-tabs__tab${tab === 'items' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('items')}>
+          <TabGroup>
+            <Tab active={tab === 'items'} onClick={() => setTab('items')}>
               Items
-            </button>
-            <button type="button" className={`workspace-tabs__tab${tab === 'rubrics' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('rubrics')}>
+            </Tab>
+            <Tab active={tab === 'rubrics'} onClick={() => setTab('rubrics')}>
               Rubrics
-            </button>
-          </nav>
+            </Tab>
+          </TabGroup>
 
           {tab === 'items' && (
             <>
-              <nav className="workspace-tabs">
+              <TabGroup>
                 {FILTERS.map((f) => (
-                  <button key={f} type="button" className={`workspace-tabs__tab${filter === f ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setFilter(f)}>
+                  <Tab key={f} active={filter === f} onClick={() => setFilter(f)}>
                     {f}
-                  </button>
+                  </Tab>
                 ))}
-              </nav>
+              </TabGroup>
 
               <div className="field" style={{ maxWidth: 220 }}>
                 <label htmlFor="sort-by">Sort by</label>
@@ -323,9 +325,9 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
           <div className="modal" style={{ width: 600 }} onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <p className="modal__title">+ Manually add details</p>
-              <button type="button" className="modal__close" onClick={() => setShowAddDetails(false)}>
+              <Button variant="icon" onClick={() => setShowAddDetails(false)}>
                 ×
-              </button>
+              </Button>
             </div>
             <DetailRowPicker
               rows={filmRows}
@@ -340,9 +342,9 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
               }
               alreadyImportedIds={alreadyImportedIds}
             />
-            <button type="button" className="btn btn--primary" onClick={handleAddDetails} disabled={addSelection.size === 0}>
+            <Button variant="primary" onClick={handleAddDetails} disabled={addSelection.size === 0}>
               Add {addSelection.size || ''} detail{addSelection.size === 1 ? '' : 's'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

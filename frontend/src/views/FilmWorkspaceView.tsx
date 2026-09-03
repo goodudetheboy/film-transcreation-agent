@@ -12,6 +12,8 @@ import { DetailsTable } from '../components/DetailsTable';
 import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
+import { Button } from '../components/Button';
+import { Tab, TabGroup } from '../components/Tabs';
 import { SparkleIcon } from '../components/icons';
 
 export interface FilmWorkspaceViewProps {
@@ -337,20 +339,20 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         </div>
         <div className="page-header__actions">
           <span className={`status-badge status-badge--${film.status === 'processed' ? 'done' : 'running'}`}>{film.status}</span>
-          <button type="button" className="btn" onClick={handleDelete} disabled={deleting}>
+          <Button variant="danger" onClick={handleDelete} disabled={deleting}>
             {deleting ? 'Deleting…' : 'Delete Film'}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <nav className="workspace-tabs">
-        <button type="button" className={`workspace-tabs__tab${tab === 'details' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('details')}>
+      <TabGroup>
+        <Tab active={tab === 'details'} onClick={() => setTab('details')}>
           Details
-        </button>
-        <button type="button" className={`workspace-tabs__tab${tab === 'project' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('project')}>
+        </Tab>
+        <Tab active={tab === 'project'} onClick={() => setTab('project')}>
           Project
-        </button>
-      </nav>
+        </Tab>
+      </TabGroup>
 
       <div
         className="workspace__split"
@@ -436,14 +438,13 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                     </div>
                   )}
                   {rows.length > 0 ? (
-                    <button
-                      type="button"
-                      className="btn btn--primary"
+                    <Button
+                      variant="primary"
                       style={{ width: 'fit-content', marginTop: 12 }}
                       onClick={() => setShowNewProjectModal(true)}
                     >
                       + New Project
-                    </button>
+                    </Button>
                   ) : (
                     <p className="results-placeholder">Add at least one detail row before creating a project.</p>
                   )}

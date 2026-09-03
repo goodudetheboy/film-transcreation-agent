@@ -1,6 +1,7 @@
 import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { createFilm, uploadSubtitleFile, uploadVideoFile } from '../api/filmsApiClient';
+import { Button, LinkButton } from '../components/Button';
 
 export interface ImportFilmPageProps {
   passcode: string;
@@ -118,9 +119,9 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
   return (
     <form className="import-page" onSubmit={handleSubmit}>
       <div className="import-page__header">
-        <Link to="/" className="btn import-page__back">
+        <LinkButton to="/" variant="text" className="import-page__back">
           ← Back
-        </Link>
+        </LinkButton>
         <div className="page-header__heading import-page__heading">
           <h1 className="page-header__title import-page__title">Import new film</h1>
           <p className="page-header__subtitle import-page__subtitle">We&rsquo;ll need&hellip;</p>
@@ -177,9 +178,9 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
           {error && <p className="passcode-gate__error">{error}</p>}
         </div>
 
-        <button type="submit" className="btn btn--primary" disabled={submitting || !canSubmit}>
+        <Button type="submit" variant="primary" disabled={submitting || !canSubmit}>
           {submitting ? 'Preparing…' : 'Submit'}
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -3,6 +3,7 @@ import type { ProjectItem, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { ResearchChatPanel } from './ResearchChatPanel';
+import { Button } from './Button';
 import { SparkleIcon } from './icons';
 
 /** Relative age string for a Trend Suggestion's publishedDate, so a reviewer can judge
@@ -100,15 +101,14 @@ function ScoreBlock({
         <span className="finding-card__index">{index + 1}</span>
         <p className="finding-card__rubric">
           {rubric.name}
-          <button
-            type="button"
-            className="icon-btn"
+          <Button
+            variant="icon"
             title="View rubric description"
             aria-label={`View rubric description for ${rubric.name}`}
             onClick={() => setShowDescription(true)}
           >
             <SearchIcon />
-          </button>
+          </Button>
         </p>
         {existing && (
           <span className={`score-circle score-circle--${tier}`}>
@@ -118,14 +118,9 @@ function ScoreBlock({
         )}
       </div>
 
-      <button
-        type="button"
-        className="finding-card__toggle"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
+      <Button variant="text" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
         {expanded ? 'Hide details' : 'Show details'}
-      </button>
+      </Button>
 
       {expanded &&
         (!editing ? (
@@ -152,9 +147,9 @@ function ScoreBlock({
                 {existing.userNote}
               </p>
             )}
-            <button type="button" className="btn" onClick={() => setEditing(true)}>
+            <Button onClick={() => setEditing(true)}>
               Edit
-            </button>
+            </Button>
           </>
         ) : (
           <div className="field">
@@ -163,12 +158,12 @@ function ScoreBlock({
             <label>Reasoning</label>
             <textarea value={reasoning} onChange={(e) => setReasoning(e.target.value)} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+              <Button variant="primary" onClick={save} disabled={saving}>
                 {saving ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
+              </Button>
+              <Button onClick={() => setEditing(false)} disabled={saving}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -178,9 +173,9 @@ function ScoreBlock({
           <div className="modal rubric-description-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <p className="modal__title">{rubric.name}</p>
-              <button type="button" className="modal__close" onClick={() => setShowDescription(false)}>
+              <Button variant="icon" onClick={() => setShowDescription(false)}>
                 ×
-              </button>
+              </Button>
             </div>
             <p className="finding-card__text">{rubric.description || <em>No description provided.</em>}</p>
             <p className="finding-card__text results-placeholder">
@@ -228,9 +223,9 @@ function TrendResearchButton({
 
   return (
     <div className="field">
-      <button type="button" className="btn" onClick={run} disabled={running}>
+      <Button onClick={run} disabled={running}>
         {running ? 'Searching…' : 'Find Trend-Sourced Alternative'}
-      </button>
+      </Button>
       {error && <p className="passcode-gate__error">{error}</p>}
     </div>
   );
@@ -281,19 +276,19 @@ export function ProjectItemView({
   return (
     <div className="project-item-view">
       <div className="project-item-view__header">
-        <button type="button" className="btn" onClick={onBack}>
+        <Button variant="text" onClick={onBack}>
           ← Back to table
-        </button>
+        </Button>
         <p className="project-item-view__title">
           {formatClock(item.startMs)}–{formatClock(item.endMs)}
         </p>
         <div className="project-item-view__nav">
-          <button type="button" className="btn" disabled={!prev} onClick={() => prev && onNavigate(prev.id)}>
+          <Button disabled={!prev} onClick={() => prev && onNavigate(prev.id)}>
             ← Previous
-          </button>
-          <button type="button" className="btn" disabled={!next} onClick={() => next && onNavigate(next.id)}>
+          </Button>
+          <Button disabled={!next} onClick={() => next && onNavigate(next.id)}>
             Next →
-          </button>
+          </Button>
           {allItems.length > 1 && (
             <select value={item.id} onChange={(e) => onNavigate(e.target.value)} aria-label="Load another detail">
               {allItems.map((i) => (

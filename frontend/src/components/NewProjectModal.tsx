@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { getFilm, listDetails, createProjectFromFilm } from '../api/filmsApiClient';
 import { streamResearchRun } from '../api/projectsApiClient';
 import type { DetailRow, Film, Project } from '../api/apiClient.types';
+import { Button } from './Button';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor, type DraftRubric } from './RubricsEditor';
+import { Tab, TabGroup } from './Tabs';
 
 export interface NewProjectModalProps {
   filmId: string;
@@ -128,9 +130,9 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
       <div className="modal new-project-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
           <p className="modal__title">Add new Project{film ? ` — ${film.title}` : ''}</p>
-          <button type="button" className="modal__close" onClick={onClose} disabled={submitting}>
+          <Button variant="icon" onClick={onClose} disabled={submitting}>
             ×
-          </button>
+          </Button>
         </div>
 
         {loadError && <p className="passcode-gate__error">{loadError}</p>}
@@ -138,18 +140,13 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
 
         {film && (
           <>
-            <nav className="workspace-tabs">
+            <TabGroup>
               {STEPS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={`workspace-tabs__tab${step === s ? ' workspace-tabs__tab--active' : ''}`}
-                  onClick={() => setStep(s)}
-                >
+                <Tab key={s} active={step === s} onClick={() => setStep(s)}>
                   {STEP_LABELS[s]}
-                </button>
+                </Tab>
               ))}
-            </nav>
+            </TabGroup>
 
             {step === 'info' && (
               <div className="new-project-form">
@@ -161,9 +158,9 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   <label htmlFor="note">Note (optional)</label>
                   <input id="note" type="text" value={note} onChange={(e) => setNote(e.target.value)} />
                 </div>
-                <button type="button" className="btn btn--primary" disabled={!canProceedFromInfo} onClick={goNext}>
+                <Button variant="primary" disabled={!canProceedFromInfo} onClick={goNext}>
                   Next
-                </button>
+                </Button>
               </div>
             )}
 
@@ -175,12 +172,12 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                 </p>
                 <DetailRowPicker rows={rows} selected={selectedRowIds} onToggle={toggleRow} />
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <button type="button" className="btn" onClick={goBack}>
+                  <Button onClick={goBack}>
                     Back
-                  </button>
-                  <button type="button" className="btn btn--primary" disabled={!canProceedFromSelect} onClick={goNext}>
+                  </Button>
+                  <Button variant="primary" disabled={!canProceedFromSelect} onClick={goNext}>
                     Next ({selectedRowIds.size} selected)
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -200,12 +197,12 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   onRemove={(i) => setRubrics((prev) => prev.filter((_, idx) => idx !== i))}
                 />
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <button type="button" className="btn" onClick={goBack}>
+                  <Button onClick={goBack}>
                     Back
-                  </button>
-                  <button type="button" className="btn btn--primary" onClick={goNext}>
+                  </Button>
+                  <Button variant="primary" onClick={goNext}>
                     Next
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -231,12 +228,12 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                 {submitError && <p className="passcode-gate__error">{submitError}</p>}
 
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <button type="button" className="btn" onClick={goBack} disabled={submitting}>
+                  <Button onClick={goBack} disabled={submitting}>
                     Back
-                  </button>
-                  <button type="button" className="btn btn--primary" onClick={handleFinish} disabled={submitting}>
+                  </Button>
+                  <Button variant="primary" onClick={handleFinish} disabled={submitting}>
                     {submitting ? 'Creating…' : 'Create project'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

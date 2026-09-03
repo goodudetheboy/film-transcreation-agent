@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DetailRow, SubtitleEntry } from '../api/apiClient.types';
+import { Button } from './Button';
 import { formatClock } from '../utils/timeFormat';
 
 /** Mirrors ProjectItemAction (apiClient.types.ts) without importing the Project
@@ -248,16 +249,16 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
         </div>
       </div>
       <div className="scrubber-zoom">
-        <button type="button" className="scrubber-zoom__btn" title="Zoom out" onClick={() => zoomBy(1 / 1.5)} disabled={zoom <= MIN_ZOOM}>
+        <Button variant="icon" title="Zoom out" onClick={() => zoomBy(1 / 1.5)} disabled={zoom <= MIN_ZOOM}>
           −
-        </button>
+        </Button>
         <span className="scrubber-zoom__level">{Math.round(zoom * 100)}%</span>
-        <button type="button" className="scrubber-zoom__btn" title="Zoom in" onClick={() => zoomBy(1.5)} disabled={zoom >= MAX_ZOOM}>
+        <Button variant="icon" title="Zoom in" onClick={() => zoomBy(1.5)} disabled={zoom >= MAX_ZOOM}>
           ＋
-        </button>
-        <button type="button" className="scrubber-zoom__btn scrubber-zoom__btn--fit" title="Fit to window" onClick={resetZoom} disabled={zoom === 1}>
+        </Button>
+        <Button variant="icon" fit title="Fit to window" onClick={resetZoom} disabled={zoom === 1}>
           Fit
-        </button>
+        </Button>
       </div>
     </div>
   );

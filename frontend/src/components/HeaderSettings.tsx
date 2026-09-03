@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button } from './Button';
 import type { Theme } from '../utils/useTheme';
 
 export interface HeaderSettingsProps {
@@ -27,14 +28,9 @@ export function HeaderSettings({
 
   return (
     <div className="header-settings">
-      <button
-        type="button"
-        className="btn"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
+      <Button aria-expanded={open} onClick={() => setOpen(true)}>
         Settings
-      </button>
+      </Button>
       {open && (
         <div
           className="modal-backdrop"
@@ -50,14 +46,9 @@ export function HeaderSettings({
           >
             <div className="modal__header">
               <p className="modal__title">Settings</p>
-              <button
-                type="button"
-                className="modal__close"
-                aria-label="Close"
-                onClick={() => setOpen(false)}
-              >
+              <Button variant="icon" aria-label="Close" onClick={() => setOpen(false)}>
                 ×
-              </button>
+              </Button>
             </div>
             <label className="checkbox-field">
               <input

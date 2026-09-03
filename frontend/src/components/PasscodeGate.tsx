@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { verifyPasscode } from '../api/apiClient';
+import { Button } from './Button';
 
 export const PASSCODE_STORAGE_KEY = 'film-transcreation-agent:passcode';
 
@@ -75,9 +76,9 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
             {error}
           </p>
         )}
-        <button type="submit" className="btn btn--primary" disabled={checking}>
+        <Button type="submit" variant="primary" disabled={checking}>
           {checking ? 'Checking…' : 'Log in'}
-        </button>
+        </Button>
       </form>
     </div>
   );

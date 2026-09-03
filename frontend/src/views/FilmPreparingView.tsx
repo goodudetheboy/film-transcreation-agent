@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getFilm, streamFilmPrep } from '../api/filmsApiClient';
 import { useFilmPrepStore } from '../store/filmPrepStore';
+import { Button } from '../components/Button';
 import { PrepAnimation } from '../components/PrepAnimation';
 import { useStageDwell, type DisplayPrepStage } from '../utils/useStageDwell';
 import type { Film, FilmPrepStage } from '../api/apiClient.types';
@@ -110,9 +111,9 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
         </>
       )}
 
-      <button type="button" className="btn btn--primary" disabled={!isReady} onClick={() => id && navigate(`/films/${id}`)}>
+      <Button variant="primary" disabled={!isReady} onClick={() => id && navigate(`/films/${id}`)}>
         Start Creating
-      </button>
+      </Button>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { formatClock } from '../utils/timeFormat';
+import { Button } from './Button';
 import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerLowIcon, SpeakerMuteIcon } from './icons';
 
 export interface TransportBarProps {
@@ -43,21 +44,21 @@ export function TransportBar({
   return (
     <div className="transport-bar">
       <div className="transport-bar__group">
-        <button type="button" className="transport-bar__btn" title="Back 5s" onClick={() => onSeekRelative(-5)}>
+        <Button variant="icon" size="lg" title="Back 5s" onClick={() => onSeekRelative(-5)}>
           <SkipBackIcon />
-        </button>
-        <button type="button" className="transport-bar__btn transport-bar__btn--primary" title={playing ? 'Pause' : 'Play'} onClick={onTogglePlay}>
+        </Button>
+        <Button variant="icon" size="lg" tone="primary" title={playing ? 'Pause' : 'Play'} onClick={onTogglePlay}>
           {playing ? <PauseIcon /> : <PlayIcon />}
-        </button>
-        <button type="button" className="transport-bar__btn" title="Forward 5s" onClick={() => onSeekRelative(5)}>
+        </Button>
+        <Button variant="icon" size="lg" title="Forward 5s" onClick={() => onSeekRelative(5)}>
           <SkipForwardIcon />
-        </button>
+        </Button>
       </div>
 
       <div className="transport-bar__group transport-bar__volume">
-        <button type="button" className="transport-bar__btn" title={muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
+        <Button variant="icon" size="lg" title={muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
           <VolumeIcon volume={volume} muted={muted} />
-        </button>
+        </Button>
         <input
           type="range"
           className="transport-bar__volume-slider"
@@ -81,13 +82,13 @@ export function TransportBar({
       <div className="transport-bar__spacer" />
 
       <div className="transport-bar__group">
-        <button type="button" className="transport-bar__btn" title="Zoom out" onClick={onZoomOut} disabled={zoom <= 1}>
+        <Button variant="icon" size="lg" title="Zoom out" onClick={onZoomOut} disabled={zoom <= 1}>
           −
-        </button>
+        </Button>
         <span className="transport-bar__zoom">{Math.round(zoom * 100)}%</span>
-        <button type="button" className="transport-bar__btn" title="Zoom in" onClick={onZoomIn} disabled={zoom >= 2}>
+        <Button variant="icon" size="lg" title="Zoom in" onClick={onZoomIn} disabled={zoom >= 2}>
           ＋
-        </button>
+        </Button>
       </div>
     </div>
   );

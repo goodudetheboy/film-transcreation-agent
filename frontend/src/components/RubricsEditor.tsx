@@ -1,3 +1,5 @@
+import { Button } from './Button';
+
 export interface DraftRubric {
   /** Present only once persisted (the wizard's draft rubrics don't have one yet). */
   id?: string;
@@ -54,14 +56,14 @@ export function RubricsEditor({ rubrics, onAdd, onChange, onRemove }: RubricsEdi
               </option>
             ))}
           </select>
-          <button type="button" className="btn btn--ghost" onClick={() => onRemove(i)} aria-label={`Remove rubric ${i + 1}`}>
+          <Button variant="icon" tone="danger" onClick={() => onRemove(i)} aria-label={`Remove rubric ${i + 1}`}>
             ×
-          </button>
+          </Button>
         </div>
       ))}
-      <button type="button" className="btn" onClick={onAdd}>
+      <Button onClick={onAdd}>
         + Add rubric
-      </button>
+      </Button>
     </div>
   );
 }

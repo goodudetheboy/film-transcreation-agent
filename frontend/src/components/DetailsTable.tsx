@@ -8,6 +8,7 @@ import {
 } from '../api/apiClient.types';
 import { addColumn, addDetailRow, deleteDetailRow, updateDetailRow } from '../api/filmsApiClient';
 import { formatClock, parseClockToMs } from '../utils/timeFormat';
+import { Button } from './Button';
 import { ClockIcon, InfoIcon } from './icons';
 
 export interface DetailsTableProps {
@@ -426,9 +427,9 @@ export function DetailsTable({
                     <span className={`status-badge status-badge--${provenanceModifier(row)}`}>{provenanceLabel(row)}</span>
                   </td>
                   <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(row.id)}>
+                    <Button variant="danger" disabled={busy} onClick={() => handleDelete(row.id)}>
                       Delete
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               );
@@ -438,12 +439,12 @@ export function DetailsTable({
       </div>
 
       <div style={{ display: 'flex', gap: 12 }}>
-        <button type="button" className="btn" disabled={busy} onClick={handleManualAdd}>
+        <Button disabled={busy} onClick={handleManualAdd}>
           + Manually add details
-        </button>
-        <button type="button" className="btn" disabled={busy} onClick={openAddColumnModal}>
+        </Button>
+        <Button disabled={busy} onClick={openAddColumnModal}>
           + Add column
-        </button>
+        </Button>
       </div>
 
       {editingRowId && draft && (
@@ -451,9 +452,9 @@ export function DetailsTable({
           <div className="modal detail-row-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal__header">
               <p className="modal__title">Edit detail</p>
-              <button type="button" className="modal__close" onClick={cancelEdit} disabled={busy}>
+              <Button variant="icon" onClick={cancelEdit} disabled={busy}>
                 ×
-              </button>
+              </Button>
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
@@ -466,9 +467,9 @@ export function DetailsTable({
                     onChange={(e) => setDraft({ ...draft, startText: e.target.value })}
                     onBlur={(e) => commitStart(e.target.value)}
                   />
-                  <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForStart}>
+                  <Button variant="icon" title="Set to current playhead position" onClick={useCurrentForStart}>
                     <ClockIcon width={14} height={14} />
-                  </button>
+                  </Button>
                 </span>
               </div>
               <div className="field" style={{ flex: 1 }}>
@@ -480,9 +481,9 @@ export function DetailsTable({
                     onChange={(e) => setDraft({ ...draft, endText: e.target.value })}
                     onBlur={(e) => commitEnd(e.target.value)}
                   />
-                  <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForEnd}>
+                  <Button variant="icon" title="Set to current playhead position" onClick={useCurrentForEnd}>
                     <ClockIcon width={14} height={14} />
-                  </button>
+                  </Button>
                 </span>
               </div>
             </div>
@@ -516,16 +517,16 @@ export function DetailsTable({
             {error && <p className="passcode-gate__error">{error}</p>}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(editingRowId)}>
+              <Button variant="danger" disabled={busy} onClick={() => handleDelete(editingRowId)}>
                 Delete
-              </button>
+              </Button>
               <span style={{ display: 'flex', gap: 8 }}>
-                <button type="button" className="btn" disabled={busy} onClick={cancelEdit}>
+                <Button disabled={busy} onClick={cancelEdit}>
                   Cancel
-                </button>
-                <button type="button" className="btn btn--primary" disabled={busy} onClick={() => saveEdit(editingRowId)}>
+                </Button>
+                <Button variant="primary" disabled={busy} onClick={() => saveEdit(editingRowId)}>
                   Save
-                </button>
+                </Button>
               </span>
             </div>
           </div>
@@ -544,9 +545,9 @@ export function DetailsTable({
           >
             <div className="modal__header">
               <p className="modal__title">Add column</p>
-              <button type="button" className="modal__close" onClick={cancelAddColumn} disabled={busy}>
+              <Button variant="icon" onClick={cancelAddColumn} disabled={busy}>
                 ×
-              </button>
+              </Button>
             </div>
 
             <div className="field">
@@ -577,12 +578,12 @@ export function DetailsTable({
             {error && <p className="passcode-gate__error">{error}</p>}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button type="button" className="btn" disabled={busy} onClick={cancelAddColumn}>
+              <Button disabled={busy} onClick={cancelAddColumn}>
                 Cancel
-              </button>
-              <button type="submit" className="btn btn--primary" disabled={busy || newColumnName.trim() === ''}>
+              </Button>
+              <Button type="submit" variant="primary" disabled={busy || newColumnName.trim() === ''}>
                 Add
-              </button>
+              </Button>
             </div>
           </form>
         </div>
