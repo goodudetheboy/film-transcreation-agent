@@ -10,8 +10,6 @@ import { ImportFilmPage } from './views/ImportFilmPage';
 import { FilmPreparingView } from './views/FilmPreparingView';
 import { FilmWorkspaceView } from './views/FilmWorkspaceView';
 
-const MENU_LABELS = ['File', 'Edit', 'View', 'Window', 'Help'];
-
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   return `app-nav__link${isActive ? ' app-nav__link--active' : ''}`;
 }
@@ -43,13 +41,6 @@ function App() {
             Film <span className="menu-bar__brand-word--accent">Transcreation</span> Agent
           </span>
         </span>
-        <nav className="menu-bar__menus">
-          {MENU_LABELS.map((label) => (
-            <span key={label} className="menu-bar__menu">
-              {label}
-            </span>
-          ))}
-        </nav>
         <nav className="menu-bar__nav">
           <NavLink to="/" end className={navLinkClass}>
             Films
@@ -58,6 +49,7 @@ function App() {
             Projects
           </NavLink>
         </nav>
+        <div className="menu-bar__spacer" />
         <HeaderSettings
           testMode={testMode}
           onTestModeChange={setTestMode}

@@ -264,36 +264,17 @@ textarea {
   color: transparent;
 }
 
-.menu-bar__menus {
-  display: flex;
-  gap: 2px;
-}
-
-.menu-bar__menu {
-  padding: 6px 10px;
-  font-size: var(--text-caption-size);
-  font-weight: 500;
-  color: var(--text-dim);
-  border-radius: var(--radius-sm);
-  cursor: default;
-  user-select: none;
-  transition: var(--transition-fast);
-  transition-property: color, background-color;
-}
-
-.menu-bar__menu:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.06);
-}
-
 .menu-bar__nav {
   display: flex;
   gap: 4px;
-  margin-left: auto;
   padding: 4px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
+}
+
+.menu-bar__spacer {
+  flex: 1;
 }
 
 .app-nav__link {
