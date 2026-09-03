@@ -6,7 +6,7 @@ import { HeaderSettings } from './components/HeaderSettings';
 import { useTheme } from './utils/useTheme';
 import { ProjectsLibraryView } from './views/ProjectsLibraryView';
 import { StartScreen } from './views/StartScreen';
-import { ImportFilmModal } from './views/ImportFilmModal';
+import { ImportFilmPage } from './views/ImportFilmPage';
 import { FilmPreparingView } from './views/FilmPreparingView';
 import { FilmWorkspaceView } from './views/FilmWorkspaceView';
 
@@ -68,7 +68,7 @@ function App() {
       <main className="app-body">
         <Routes>
           <Route path="/" element={<StartScreen passcode={passcode} />} />
-          <Route path="/films/new" element={<ImportFilmModal passcode={passcode} testMode={testMode} />} />
+          <Route path="/films/new" element={<ImportFilmPage passcode={passcode} testMode={testMode} />} />
           <Route path="/films/:id/preparing" element={<FilmPreparingView passcode={passcode} />} />
           <Route
             path="/films/:id"
