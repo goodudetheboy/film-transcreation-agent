@@ -299,6 +299,37 @@ textarea {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.45);
 }
 
+/* Matches the pill-button family (.app-nav__link, .chat-toggle-btn) so the
+   top bar reads as one set of controls instead of mixing pills with the
+   plain rectangular .btn shape. */
+.header-settings__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--text-caption-size);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.header-settings__trigger:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.header-settings__trigger--active {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

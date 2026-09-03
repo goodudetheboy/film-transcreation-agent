@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Theme } from '../utils/useTheme';
+import { GearIcon } from './icons';
 
 export interface HeaderSettingsProps {
   testMode: boolean;
@@ -29,10 +30,11 @@ export function HeaderSettings({
     <div className="header-settings">
       <button
         type="button"
-        className="btn"
+        className={`header-settings__trigger${open ? ' header-settings__trigger--active' : ''}`}
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
+        <GearIcon />
         Settings
       </button>
       {open && (
