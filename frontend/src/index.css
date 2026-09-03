@@ -2607,18 +2607,21 @@ textarea {
 }
 
 .workspace-details__chat {
+  /* Sized purely via flex-basis (never a separate `width`) — animating
+     `width` alongside a flex item's flex-basis makes the two fight each
+     other (flex-basis wins layout instantly, width tries to animate
+     separately), which is what made the open transition look jittery.
+     flex-basis alone animates cleanly. */
   flex: 0 0 0;
-  width: 0;
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid transparent;
   padding-left: 0;
-  transition: width 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
+  transition: flex-basis 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
 }
 
 .workspace-details__chat--open {
   flex-basis: 420px;
-  width: 420px;
   border-left-color: var(--border);
   padding-left: var(--space-loose);
 }
@@ -2633,7 +2636,6 @@ textarea {
   }
   .workspace-details__chat,
   .workspace-details__chat--open {
-    width: auto;
     flex-basis: auto;
   }
   .workspace-details__chat {
@@ -3131,17 +3133,35 @@ textarea {
   margin-left: auto;
 }
 
+/* Explicitly flagged as an AI feature — a bordered, labeled pill rather than
+   a bare icon, so it reads as "this opens an agent" at a glance. */
 .chat-toggle-btn {
-  width: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 30px;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-dim);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--text-caption-size);
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.chat-toggle-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .chat-toggle-btn--active {
-  color: var(--accent);
-  border-color: var(--accent-dim);
-  background: var(--accent-dim);
+  color: var(--accent-on);
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .project-item-view__body {
@@ -3166,18 +3186,21 @@ textarea {
    toggling. Opening pushes .project-item-view__detail over, it never
    overlays it. */
 .project-item-view__chat {
+  /* Sized purely via flex-basis (never a separate `width`) — animating
+     `width` alongside a flex item's flex-basis makes the two fight each
+     other (flex-basis wins layout instantly, width tries to animate
+     separately), which made the open transition look jittery. flex-basis
+     alone animates cleanly — see .workspace-details__chat. */
   flex: 0 0 0;
-  width: 0;
   min-height: 0;
   overflow: hidden;
   border-left: 1px solid transparent;
   padding-left: 0;
-  transition: width 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
+  transition: flex-basis 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
 }
 
 .project-item-view__chat--open {
   flex-basis: 420px;
-  width: 420px;
   border-left-color: var(--border);
   padding-left: var(--space-loose);
 }
@@ -3192,7 +3215,6 @@ textarea {
   }
   .project-item-view__chat,
   .project-item-view__chat--open {
-    width: auto;
     flex-basis: auto;
   }
   .project-item-view__chat {
@@ -3292,8 +3314,11 @@ textarea {
 }
 
 .chat-panel__library {
+  /* No min-height floor — a short list (or just one session) should hug its
+     own content instead of stretching a big empty gap before the button
+     below it; flex: 1 still lets it grow to fill real extra space when
+     there are enough sessions to need it. */
   flex: 1;
-  min-height: 200px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

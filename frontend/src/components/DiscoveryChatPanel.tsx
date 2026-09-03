@@ -394,7 +394,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           })}
         </div>
         <button type="button" className="btn btn--primary" onClick={handleNewAgent}>
-          <SparkleIcon /> New agent
+          <SparkleIcon /> Kick off agentic discovery
         </button>
       </div>
     );

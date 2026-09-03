@@ -305,13 +305,14 @@ export function ProjectItemView({
           )}
           <button
             type="button"
-            className={`icon-btn chat-toggle-btn${chatOpen ? ' chat-toggle-btn--active' : ''}`}
+            className={`chat-toggle-btn${chatOpen ? ' chat-toggle-btn--active' : ''}`}
             title={chatOpen ? 'Close research agent' : 'Open research agent'}
             aria-label={chatOpen ? 'Close research agent' : 'Open research agent'}
             aria-pressed={chatOpen}
             onClick={() => setChatOpen((v) => !v)}
           >
-            <SparkleIcon width={18} height={18} />
+            <SparkleIcon width={16} height={16} />
+            Agents
           </button>
         </div>
       </div>

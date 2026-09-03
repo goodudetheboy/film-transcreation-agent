@@ -364,13 +364,14 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                 <div className="workspace-details__toolbar">
                   <button
                     type="button"
-                    className={`icon-btn chat-toggle-btn${discoveryOpen ? ' chat-toggle-btn--active' : ''}`}
+                    className={`chat-toggle-btn${discoveryOpen ? ' chat-toggle-btn--active' : ''}`}
                     title={discoveryOpen ? 'Close discovery agent' : 'Open discovery agent'}
                     aria-label={discoveryOpen ? 'Close discovery agent' : 'Open discovery agent'}
                     aria-pressed={discoveryOpen}
                     onClick={() => setDiscoveryOpen((v) => !v)}
                   >
-                    <SparkleIcon width={18} height={18} />
+                    <SparkleIcon width={16} height={16} />
+                    Agents
                   </button>
                 </div>
 
