@@ -14,6 +14,7 @@ import { AgentRunningList } from '../components/AgentRunningList';
 import { AgentStatusPanel } from '../components/AgentStatusPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
+import { SparkleIcon } from '../components/icons';
 
 export interface FilmWorkspaceViewProps {
   passcode: string;
@@ -367,7 +368,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         <div className="workspace__panel workspace__panel--left">
           {tab === 'details' && (
             <>
-              <p className="section-heading">Details</p>
               <DetailsTable
                 film={film}
                 passcode={passcode}
@@ -383,7 +383,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               />
 
               <button type="button" className="btn btn--primary" style={{ width: 'fit-content' }} onClick={() => setShowKickoff(true)}>
-                ✨ Kick off agentic discovery
+                <SparkleIcon /> Kick off agentic discovery
               </button>
             </>
           )}

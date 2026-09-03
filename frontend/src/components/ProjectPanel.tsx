@@ -18,6 +18,7 @@ import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
 import { ResearchKickoffPanel } from './ResearchKickoffPanel';
 import { ProjectItemView } from './ProjectItemView';
+import { SparkleIcon } from './icons';
 
 export interface ProjectPanelProps {
   projectId: string;
@@ -191,7 +192,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
               + Manually add details
             </button>
             <button type="button" className="btn btn--primary" onClick={() => setShowKickoff(true)} disabled={runStatus === 'streaming'}>
-              {runStatus === 'streaming' ? 'Researching…' : '✨ Kick off agentic research'}
+              {runStatus === 'streaming' ? 'Researching…' : <><SparkleIcon /> Kick off agentic research</>}
             </button>
           </div>
         </div>

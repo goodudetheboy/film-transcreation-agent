@@ -8,6 +8,7 @@ import {
 } from '../api/apiClient.types';
 import { addColumn, addDetailRow, deleteDetailRow, updateDetailRow } from '../api/filmsApiClient';
 import { formatClock, parseClockToMs } from '../utils/timeFormat';
+import { ClockIcon, InfoIcon } from './icons';
 
 export interface DetailsTableProps {
   film: Film;
@@ -102,7 +103,7 @@ function ResizableTh({
 function ColInfoIcon({ text }: { text: string }) {
   return (
     <span className="details-table__col-info" title={text}>
-      ⓘ
+      <InfoIcon width={12} height={12} />
     </span>
   );
 }
@@ -466,7 +467,7 @@ export function DetailsTable({
                     onBlur={(e) => commitStart(e.target.value)}
                   />
                   <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForStart}>
-                    ⏱
+                    <ClockIcon width={14} height={14} />
                   </button>
                 </span>
               </div>
@@ -480,7 +481,7 @@ export function DetailsTable({
                     onBlur={(e) => commitEnd(e.target.value)}
                   />
                   <button type="button" className="btn btn--ghost" title="Set to current playhead position" onClick={useCurrentForEnd}>
-                    ⏱
+                    <ClockIcon width={14} height={14} />
                   </button>
                 </span>
               </div>

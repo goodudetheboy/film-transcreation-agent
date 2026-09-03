@@ -1,3 +1,5 @@
+import { CheckIcon } from './icons';
+
 export type PrepStageState = 'pending' | 'active' | 'done' | 'skipped' | 'error';
 
 export interface PrepStageProps {
@@ -9,7 +11,7 @@ export function PrepStage({ label, state }: PrepStageProps) {
   return (
     <div className={`prep-stage prep-stage--${state}`}>
       <span className="prep-stage__icon" aria-hidden="true">
-        {state === 'done' && '✓'}
+        {state === 'done' && <CheckIcon width={12} height={12} />}
         {state === 'error' && '!'}
         {state === 'active' && <span className="prep-stage__spinner" />}
         {(state === 'pending' || state === 'skipped') && '•'}

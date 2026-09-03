@@ -1,4 +1,5 @@
 import { formatClock } from '../utils/timeFormat';
+import { PauseIcon, PlayIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerLowIcon, SpeakerMuteIcon } from './icons';
 
 export interface TransportBarProps {
   playing: boolean;
@@ -15,10 +16,10 @@ export interface TransportBarProps {
   onToggleMute: () => void;
 }
 
-function volumeIcon(volume: number, muted: boolean): string {
-  if (muted || volume === 0) return '🔇';
-  if (volume < 0.5) return '🔉';
-  return '🔊';
+function VolumeIcon({ volume, muted }: { volume: number; muted: boolean }) {
+  if (muted || volume === 0) return <SpeakerMuteIcon />;
+  if (volume < 0.5) return <SpeakerLowIcon />;
+  return <SpeakerHighIcon />;
 }
 
 /** The horizontal transport row under the video frame — playback controls,
@@ -43,19 +44,19 @@ export function TransportBar({
     <div className="transport-bar">
       <div className="transport-bar__group">
         <button type="button" className="transport-bar__btn" title="Back 5s" onClick={() => onSeekRelative(-5)}>
-          ⏮
+          <SkipBackIcon />
         </button>
         <button type="button" className="transport-bar__btn transport-bar__btn--primary" title={playing ? 'Pause' : 'Play'} onClick={onTogglePlay}>
-          {playing ? '⏸' : '▶'}
+          {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
         <button type="button" className="transport-bar__btn" title="Forward 5s" onClick={() => onSeekRelative(5)}>
-          ⏭
+          <SkipForwardIcon />
         </button>
       </div>
 
       <div className="transport-bar__group transport-bar__volume">
         <button type="button" className="transport-bar__btn" title={muted ? 'Unmute' : 'Mute'} onClick={onToggleMute}>
-          {volumeIcon(volume, muted)}
+          <VolumeIcon volume={volume} muted={muted} />
         </button>
         <input
           type="range"

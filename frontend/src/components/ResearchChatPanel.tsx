@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createChatSession, listChatSessions } from '../api/projectsApiClient';
 import { sendChatMessage } from '../api/projectChatApiClient';
 import type { ChatStreamEvent, ChatTurn } from '../api/apiClient.types';
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
+import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon } from './icons';
 
 export interface ResearchChatPanelProps {
   projectId: string;
@@ -19,11 +20,11 @@ const QUICK_PROMPTS = [
   'Propose a replacement line.',
 ];
 
-function toolStepLabel(name: string): string {
-  if (name === 'search_web') return '🔍 Searching the web via Parallel…';
-  if (name === 'update_rubric_score') return '✏️ Updating a rubric score…';
-  if (name === 'propose_replacement') return '💡 Proposing a replacement…';
-  return `Calling ${name}…`;
+function toolStepLabel(name: string): ReactNode {
+  if (name === 'search_web') return <><SearchIcon /> Searching the web via Parallel…</>;
+  if (name === 'update_rubric_score') return <><PencilIcon /> Updating a rubric score…</>;
+  if (name === 'propose_replacement') return <><LightbulbIcon /> Proposing a replacement…</>;
+  return <>Calling {name}…</>;
 }
 
 interface SearchResultCard {
@@ -36,7 +37,9 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
   const isSearch = name === 'search_web';
   return (
     <div className={`chat-step-card${isSearch ? ' chat-step-card--search' : ''}`}>
-      <p className="chat-step-card__label">{result ? (isSearch ? '🔍 Searched the web via Parallel' : `✓ ${name}`) : toolStepLabel(name)}</p>
+      <p className="chat-step-card__label">
+        {result ? isSearch ? <><SearchIcon /> Searched the web via Parallel</> : <><CheckIcon /> {name}</> : toolStepLabel(name)}
+      </p>
       {isSearch && Array.isArray(args.search_queries) && (
         <p className="chat-step-card__query">Query: {(args.search_queries as string[]).join(', ')}</p>
       )}

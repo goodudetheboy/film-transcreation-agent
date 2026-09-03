@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import type { ProjectItem } from '../api/apiClient.types';
+import { SparkleIcon } from './icons';
 
 export interface ResearchKickoffPanelProps {
   items: ProjectItem[];
@@ -37,7 +38,9 @@ export function ResearchKickoffPanel({ items, testMode, onKickoff, onClose }: Re
     <div className="modal-backdrop" onClick={onClose}>
       <form className="modal kickoff-modal" onSubmit={handleSubmit} onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
-          <p className="modal__title">✨ Kick off agentic research</p>
+          <p className="modal__title">
+            <SparkleIcon /> Kick off agentic research
+          </p>
           <button type="button" className="modal__close" onClick={onClose}>
             ×
           </button>
