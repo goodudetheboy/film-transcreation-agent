@@ -12,7 +12,7 @@ import { computeImportanceScore } from '../services/importanceScore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
 
 export type ResearchRunStreamEvent =
-  | { type: 'progress'; message: string }
+  | { type: 'progress'; message: string; runId: string }
   | { type: 'batch_done'; batchIndex: number; totalBatches: number; itemIds: string[]; results: ResearchResult[] }
   | { type: 'done'; summary: { totalItems: number; totalRecommendedForChange: number } }
   | { type: 'error'; message: string };
@@ -382,7 +382,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
         startedAt: new Date().toISOString(),
       });
       if (running) publishRunUpdate(running);
-      emit({ type: 'progress', message: useMock ? 'researching (test mode — mock data)' : 'researching' });
+      emit({ type: 'progress', message: useMock ? 'researching (test mode — mock data)' : 'researching', runId: run.id });
 
       const researchItems: ResearchItem[] = targetItems.map((i) => ({
         id: i.id,

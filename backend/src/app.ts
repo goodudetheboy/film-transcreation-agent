@@ -183,6 +183,7 @@ export function createApp(deps: AppDeps = {}): Express {
     projectChatRoute({
       projectStore,
       chatSessionStore,
+      researchRunStore,
       researchChatAgent,
       mockResearchChatAgent,
     }),

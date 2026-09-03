@@ -318,6 +318,28 @@ export async function listChatSessions(
   return (await res.json()) as ChatSession[];
 }
 
+/** Records that a bulk research run was kicked off from this chat session's
+ * thread — the run itself is created via streamResearchRun (unchanged); this
+ * just files a `run` reference turn so it renders inline in the conversation,
+ * mirroring discoveryChatApiClient.ts's logDiscoveryRun. */
+export async function logResearchRun(
+  projectId: string,
+  sessionId: string,
+  payload: { passcode: string; runId: string },
+  options: ApiClientOptions = {},
+): Promise<ChatSession> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/projects/${projectId}/chat-sessions/${sessionId}/research-runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await throwOnError(res);
+  return (await res.json()) as ChatSession;
+}
+
 export async function getChatSession(
   projectId: string,
   sessionId: string,

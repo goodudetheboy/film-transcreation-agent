@@ -3298,6 +3298,69 @@ textarea {
   flex: 0 0 auto;
 }
 
+/* ---------- Project tab: items/rubrics + sliding research agent panel ----------
+   Same mechanism as .project-item-view__body/__chat and
+   .workspace-details__body/__chat — a docked side panel that slides
+   open/closed via flex-basis, pushing the main content over rather than
+   overlaying it, so its session/thread state survives toggling. */
+.project-panel__body {
+  display: flex;
+  gap: var(--space-loose);
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.project-panel__main {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  overflow-y: auto;
+}
+
+.project-panel__chat {
+  flex: 0 0 0;
+  min-height: 0;
+  overflow: hidden;
+  border-left: 1px solid transparent;
+  padding-left: 0;
+  transition: flex-basis 0.25s ease, padding-left 0.25s ease, border-color 0.25s ease;
+}
+
+.project-panel__chat--open {
+  flex-basis: 420px;
+  border-left-color: var(--border);
+  padding-left: var(--space-loose);
+}
+
+.project-panel__chat > .chat-panel {
+  width: 420px;
+}
+
+@media (max-width: 860px) {
+  .project-panel__body {
+    flex-direction: column;
+  }
+  .project-panel__chat,
+  .project-panel__chat--open {
+    flex-basis: auto;
+  }
+  .project-panel__chat {
+    height: 0;
+  }
+  .project-panel__chat--open {
+    height: auto;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: var(--space-loose);
+  }
+  .project-panel__chat > .chat-panel {
+    width: 100%;
+  }
+}
+
 .new-project-modal {
   width: 640px;
   max-width: 95vw;
@@ -3490,9 +3553,10 @@ textarea {
   padding: 8px 12px;
 }
 
-/* ---------- Discovery agent chat — run cards + inline kickoff form ---------- */
+/* ---------- Agent chat — run cards + inline kickoff form (shared by the
+   Discovery agent and the Project tab's research agent) ---------- */
 
-.discovery-run-card {
+.agent-run-card {
   align-self: stretch;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -3503,13 +3567,13 @@ textarea {
   gap: var(--space-snug);
 }
 
-.discovery-run-card__header {
+.agent-run-card__header {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.discovery-kickoff-form {
+.agent-kickoff-form {
   align-self: stretch;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
@@ -3520,7 +3584,7 @@ textarea {
   gap: var(--space-default);
 }
 
-.discovery-kickoff-form__title {
+.agent-kickoff-form__title {
   margin: 0;
   font-size: var(--text-item-size);
   font-weight: var(--text-item-weight);

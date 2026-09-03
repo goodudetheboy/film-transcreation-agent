@@ -384,7 +384,7 @@ export function ProjectItemView({
         </div>
 
         <div className={`project-item-view__chat${chatOpen ? ' project-item-view__chat--open' : ''}`}>
-          <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} />
+          <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} items={allItems} />
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import type { ProjectItemStore } from './projectItemStore.js';
 import type { ProjectRubricStore } from './projectRubricStore.js';
 import type { ChatSessionStore } from './chatSessionStore.js';
+import type { ResearchRunStore } from './researchRunStore.js';
 import type { ChatPart, ChatSession, ChatTurn } from './projectTypes.js';
 import { computeImportanceScore } from './importanceScore.js';
 
@@ -47,6 +48,7 @@ export interface ResearchChatAgentDeps {
   projectItemStore: ProjectItemStore;
   projectRubricStore: ProjectRubricStore;
   chatSessionStore: ChatSessionStore;
+  researchRunStore: ResearchRunStore;
 }
 
 export interface RunTurnInput {
@@ -248,6 +250,24 @@ function buildItemContext(item: Awaited<ReturnType<ProjectItemStore['getItem']>>
   return `\n\nCURRENT ITEM (id: ${item.id}):\nSubtitle: ${item.subtitleText || '(no dialogue in this span)'}\nScene: ${item.sceneDescription}\nExisting scores: ${JSON.stringify(item.scores)}`;
 }
 
+/** Summarizes any bulk ResearchRuns logged into this session's thread (via `run`
+ * marker turns) so the model can answer questions about them — same idea as
+ * discoveryChatAgent.ts's "THIS AGENT'S RUNS" block, cross-referencing the
+ * turns against the run store directly rather than duplicating run state in chat. */
+async function buildRunsContext(researchRunStore: ResearchRunStore, projectId: string, turns: ChatTurn[]): Promise<string> {
+  const runIds = [...new Set(turns.flatMap((t) => t.parts.filter((p) => p.run).map((p) => p.run!.runId)))];
+  if (runIds.length === 0) return '';
+  const runs = (await Promise.all(runIds.map((id) => researchRunStore.getRun(projectId, id)))).filter(
+    (r): r is NonNullable<typeof r> => r !== undefined,
+  );
+  if (runs.length === 0) return '';
+  const lines = runs.map(
+    (r) =>
+      `Run (id: ${r.id}, mode: ${r.mode}, status: ${r.status}): ${r.completedBatches}/${r.totalBatches} batches complete, ${r.itemIds.length} item(s) targeted${r.errorMessage ? `, error: ${r.errorMessage}` : ''}`,
+  );
+  return `\n\nTHIS SESSION'S RUNS:\n${lines.join('\n')}`;
+}
+
 // Safety guard against a runaway tool-calling loop — generous enough for a real
 // multi-tool investigation (e.g. search, then update, then propose) but bounded.
 const MAX_ROUNDS = 8;
@@ -260,19 +280,27 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
   return {
     async *runTurn({ session, userText, itemId }) {
       const now = () => new Date().toISOString();
-      const contents: ChatTurn[] = [...session.turns, { role: 'user', parts: [{ text: userText }], ts: now() }];
+      // Persisted history keeps `run` marker turns (role: 'system') so the frontend
+      // timeline sees them — but those never go to Gemini as `contents`; the model
+      // gets the same info via THIS SESSION'S RUNS below (see discoveryChatAgent.ts
+      // for the identical convention).
+      const persistedTurns: ChatTurn[] = [...session.turns, { role: 'user', parts: [{ text: userText }], ts: now() }];
 
       try {
-        const item = itemId ? await deps.projectItemStore.getItem(session.projectId, itemId) : undefined;
-        const systemInstruction = SYSTEM_INSTRUCTION + buildItemContext(item);
+        const [item, runsContext] = await Promise.all([
+          itemId ? deps.projectItemStore.getItem(session.projectId, itemId) : undefined,
+          buildRunsContext(deps.researchRunStore, session.projectId, session.turns),
+        ]);
+        const systemInstruction = SYSTEM_INSTRUCTION + buildItemContext(item) + runsContext;
 
         let done = false;
         let round = 0;
         while (!done && round < MAX_ROUNDS) {
           round++;
+          const apiContents = persistedTurns.filter((t) => t.role !== 'system');
           const stream = await ai.models.generateContentStream({
             model: config.geminiModel,
-            contents,
+            contents: apiContents,
             config: { tools: CHAT_TOOLS, systemInstruction },
           });
 
@@ -290,8 +318,8 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
               }
             }
           }
-          contents.push({ role: 'model', parts: modelParts, ts: now() });
-          await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: contents });
+          persistedTurns.push({ role: 'model', parts: modelParts, ts: now() });
+          await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: persistedTurns });
 
           if (!sawFunctionCall) {
             done = true;
@@ -313,8 +341,8 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (itemPatch) yield { type: 'item_patched', itemId: itemPatch.itemId, rubricId: itemPatch.rubricId, patch: itemPatch.patch };
 
-            contents.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
-            await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: contents });
+            persistedTurns.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
+            await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: persistedTurns });
           }
         }
         yield { type: 'turn_done' };

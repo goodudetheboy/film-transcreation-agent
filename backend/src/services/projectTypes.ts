@@ -117,10 +117,16 @@ export interface ChatPart {
   text?: string;
   functionCall?: { name: string; args: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
+  /** A reference to a bulk ResearchRun kicked off from this session's thread — mirrors
+   * DiscoveryChatPart's `run` variant. Rendered inline in the timeline as a run card. */
+  run?: { runId: string };
 }
 
 export interface ChatTurn {
-  role: 'user' | 'model';
+  /** 'system' marks a `run` reference turn (see ChatPart.run) — kept in the persisted
+   * timeline for the frontend but stripped before sending `contents` to Gemini,
+   * same convention as DiscoveryChatTurn. */
+  role: 'user' | 'model' | 'system';
   parts: ChatPart[];
   ts: string;
 }

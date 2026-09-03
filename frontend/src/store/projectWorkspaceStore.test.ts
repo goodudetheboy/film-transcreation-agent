@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useProjectWorkspaceStore } from './projectWorkspaceStore';
-import type { ChatStreamEvent, Project, ProjectItem, ResearchRunStreamEvent } from '../api/apiClient.types';
+import type { ChatSession, ChatStreamEvent, Project, ProjectItem, ResearchRunStreamEvent } from '../api/apiClient.types';
 
 const NOW = new Date().toISOString();
 
@@ -142,6 +142,19 @@ describe('useProjectWorkspaceStore', () => {
     store.setItems([item({ id: 'item-1' })]);
     store.applyChatEvent({ type: 'text_delta', text: 'hi' });
     expect(useProjectWorkspaceStore.getState().items['item-1']).toEqual(item({ id: 'item-1' }));
+  });
+
+  it('upsertChatSession adds a new session or replaces an existing one by id, and sets it active', () => {
+    const store = useProjectWorkspaceStore.getState();
+    const session: ChatSession = { id: 's1', projectId: 'proj-a', name: null, sessionNumber: 1, status: 'idle', turns: [], createdAt: NOW, updatedAt: NOW };
+
+    store.upsertChatSession(session);
+    expect(useProjectWorkspaceStore.getState().chatSessions).toEqual([session]);
+    expect(useProjectWorkspaceStore.getState().activeChatSessionId).toBe('s1');
+
+    const updated: ChatSession = { ...session, turns: [{ role: 'system', parts: [{ run: { runId: 'run-1' } }], ts: NOW }] };
+    store.upsertChatSession(updated);
+    expect(useProjectWorkspaceStore.getState().chatSessions).toEqual([updated]);
   });
 
   it('setFilter/setSort update UI-only state', () => {

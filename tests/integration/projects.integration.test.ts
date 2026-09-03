@@ -5,6 +5,7 @@ import {
   listItems,
   streamResearchRun,
   createChatSession,
+  logResearchRun,
   runTrendResearch,
 } from '../../frontend/src/api/projectsApiClient';
 import { sendChatMessage } from '../../frontend/src/api/projectChatApiClient';
@@ -153,6 +154,30 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const afterChat = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
     const chatPatchedScore = afterChat[0].scores.find((s) => s.updatedBy === 'chat-agent');
     expect(chatPatchedScore).toMatchObject({ score: 7, updatedBy: 'chat-agent' });
+  });
+
+  it('logs a bulk research run into a chat session as an inline run reference', async () => {
+    const { project, items } = await createProjectFromFilm(
+      filmId,
+      { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] },
+      { baseUrl: backend.url },
+    );
+    expect(items[0].action).toBe('need-research');
+
+    const runEvents: ResearchRunStreamEvent[] = [];
+    await streamResearchRun(
+      project.id,
+      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' },
+      (e) => runEvents.push(e),
+      { baseUrl: backend.url },
+    );
+    const runId = (runEvents.find((e) => e.type === 'progress') as { runId: string }).runId;
+    expect(runId).toBeTruthy();
+
+    const session = await createChatSession(project.id, { passcode: TEST_PASSCODE }, { baseUrl: backend.url });
+    const updatedSession = await logResearchRun(project.id, session.id, { passcode: TEST_PASSCODE, runId }, { baseUrl: backend.url });
+
+    expect(updatedSession.turns).toEqual([{ role: 'system', parts: [{ run: { runId } }], ts: expect.any(String) }]);
   });
 
   it('rejects project creation with an error when the passcode is wrong', async () => {

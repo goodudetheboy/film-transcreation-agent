@@ -8,7 +8,6 @@ import {
   createRubric,
   updateRubric,
   deleteRubric,
-  streamResearchRun,
 } from '../api/projectsApiClient';
 import { listDetails } from '../api/filmsApiClient';
 import type { DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
@@ -16,9 +15,19 @@ import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/proje
 import { formatClock } from '../utils/timeFormat';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
-import { ResearchKickoffPanel } from './ResearchKickoffPanel';
+import { ResearchChatPanel } from './ResearchChatPanel';
 import { ProjectItemView } from './ProjectItemView';
 import { SparkleIcon } from './icons';
+
+const AGENTS_OPEN_STORAGE_KEY = 'projectPanel.agentsOpen';
+
+function readStoredAgentsOpen(): boolean {
+  try {
+    return window.localStorage.getItem(AGENTS_OPEN_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export interface ProjectPanelProps {
   projectId: string;
@@ -47,14 +56,13 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
   const [showAddDetails, setShowAddDetails] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
-  const [showKickoff, setShowKickoff] = useState(false);
+  const [agentsOpen, setAgentsOpen] = useState(readStoredAgentsOpen);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   const {
     project,
     rubrics,
     items,
-    runStatus,
     filter,
     sortBy,
     setProject,
@@ -65,12 +73,18 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
     setItems,
     addItems: addItemsToStore,
     patchItem,
-    startRun,
-    applyRunEvent,
     setFilter,
     setSort,
     reset,
   } = useProjectWorkspaceStore();
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AGENTS_OPEN_STORAGE_KEY, agentsOpen ? '1' : '0');
+    } catch {
+      // private mode / storage disabled — toggling still works, just won't persist
+    }
+  }, [agentsOpen]);
 
   useEffect(() => {
     reset();
@@ -134,17 +148,6 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
     setShowAddDetails(false);
   }
 
-  async function handleKickoff(input: { mode: 'need-research' | 'custom'; itemIds?: string[]; testMode: boolean }) {
-    startRun('pending');
-    await streamResearchRun(projectId, { passcode, testMode: input.testMode, mode: input.mode, itemIds: input.itemIds }, (event) => {
-      applyRunEvent(event);
-      if (event.type === 'done') {
-        // Re-fetch to pick up server-computed importanceScore, not carried on the SSE event.
-        listItems(projectId, passcode).then(setItems);
-      }
-    });
-  }
-
   async function handleAddRubric() {
     const rubric = await createRubric(projectId, { passcode, name: '', description: '', weight: 3 });
     addRubric(rubric);
@@ -191,113 +194,129 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
             <button type="button" className="btn" onClick={() => setShowAddDetails(true)}>
               + Manually add details
             </button>
-            <button type="button" className="btn btn--primary" onClick={() => setShowKickoff(true)} disabled={runStatus === 'streaming'}>
-              {runStatus === 'streaming' ? 'Researching…' : <><SparkleIcon /> Kick off agentic research</>}
+            <button
+              type="button"
+              className={`chat-toggle-btn${agentsOpen ? ' chat-toggle-btn--active' : ''}`}
+              title={agentsOpen ? 'Close research agent' : 'Open research agent'}
+              aria-label={agentsOpen ? 'Close research agent' : 'Open research agent'}
+              aria-pressed={agentsOpen}
+              onClick={() => setAgentsOpen((v) => !v)}
+            >
+              <SparkleIcon width={16} height={16} />
+              Agents
             </button>
           </div>
         </div>
       </div>
 
-      <nav className="workspace-tabs">
-        <button type="button" className={`workspace-tabs__tab${tab === 'items' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('items')}>
-          Items
-        </button>
-        <button type="button" className={`workspace-tabs__tab${tab === 'rubrics' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('rubrics')}>
-          Rubrics
-        </button>
-      </nav>
-
-      {tab === 'items' && (
-        <>
+      <div className="project-panel__body">
+        <div className="project-panel__main">
           <nav className="workspace-tabs">
-            {FILTERS.map((f) => (
-              <button key={f} type="button" className={`workspace-tabs__tab${filter === f ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setFilter(f)}>
-                {f}
-              </button>
-            ))}
+            <button type="button" className={`workspace-tabs__tab${tab === 'items' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('items')}>
+              Items
+            </button>
+            <button type="button" className={`workspace-tabs__tab${tab === 'rubrics' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('rubrics')}>
+              Rubrics
+            </button>
           </nav>
 
-          <div className="field" style={{ maxWidth: 220 }}>
-            <label htmlFor="sort-by">Sort by</label>
-            <select id="sort-by" value={sortBy} onChange={(e) => setSort(e.target.value as 'importanceScore' | 'startMs')}>
-              <option value="importanceScore">Importance (high → low)</option>
-              <option value="startMs">Time in film</option>
-            </select>
-          </div>
+          {tab === 'items' && (
+            <>
+              <nav className="workspace-tabs">
+                {FILTERS.map((f) => (
+                  <button key={f} type="button" className={`workspace-tabs__tab${filter === f ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setFilter(f)}>
+                    {f}
+                  </button>
+                ))}
+              </nav>
 
-          {sorted.length === 0 && <p className="results-placeholder">No items match this filter.</p>}
-
-          {sorted.length > 0 && (
-            <div className="details-table-wrap">
-              <div className="details-table-scroll">
-                <table className="details-table">
-                  <thead>
-                    <tr>
-                      <th>Start</th>
-                      <th>End</th>
-                      <th>Importance</th>
-                      <th>Subtitle</th>
-                      <th>Verdict</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sorted.map((item) => (
-                      <tr key={item.id} className={`details-table__row--clickable details-table__row--${item.action}`} onClick={() => setOpenItemId(item.id)}>
-                        <td className="details-table__cell--nowrap-exempt">{formatClock(item.startMs)}</td>
-                        <td className="details-table__cell--nowrap-exempt">{formatClock(item.endMs)}</td>
-                        <td>{item.importanceScore ?? <span className="results-placeholder">—</span>}</td>
-                        <td>{item.subtitleText || <em>Visual only</em>}</td>
-                        <td>
-                          {item.summary ? (
-                            <span className={`verdict-badge verdict-badge--${item.shouldTranscreate ? 'change' : 'no-change'}`}>
-                              {item.shouldTranscreate ? 'needs change' : 'fine as-is'}
-                            </span>
-                          ) : (
-                            <span className="results-placeholder">not researched</span>
-                          )}
-                        </td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <select
-                            className="action-picker"
-                            value={item.action}
-                            onChange={(e) => handleActionChange(item.id, e.target.value as ProjectItemAction)}
-                          >
-                            {ACTIONS.map((a) => (
-                              <option key={a} value={a}>
-                                {a}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="field" style={{ maxWidth: 220 }}>
+                <label htmlFor="sort-by">Sort by</label>
+                <select id="sort-by" value={sortBy} onChange={(e) => setSort(e.target.value as 'importanceScore' | 'startMs')}>
+                  <option value="importanceScore">Importance (high → low)</option>
+                  <option value="startMs">Time in film</option>
+                </select>
               </div>
-            </div>
-          )}
-        </>
-      )}
 
-      {tab === 'rubrics' && (
-        <RubricsEditor
-          rubrics={rubrics}
-          onAdd={handleAddRubric}
-          onChange={async (i, patch) => {
-            const rubric = rubrics[i];
-            if (!rubric.id) return;
-            const updated = await updateRubric(projectId, rubric.id, { passcode, ...patch });
-            updateRubricInPlace(updated);
-          }}
-          onRemove={async (i) => {
-            const rubric = rubrics[i];
-            if (!rubric.id) return;
-            await deleteRubric(projectId, rubric.id, passcode);
-            removeRubric(rubric.id);
-          }}
-        />
-      )}
+              {sorted.length === 0 && <p className="results-placeholder">No items match this filter.</p>}
+
+              {sorted.length > 0 && (
+                <div className="details-table-wrap">
+                  <div className="details-table-scroll">
+                    <table className="details-table">
+                      <thead>
+                        <tr>
+                          <th>Start</th>
+                          <th>End</th>
+                          <th>Importance</th>
+                          <th>Subtitle</th>
+                          <th>Verdict</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sorted.map((item) => (
+                          <tr key={item.id} className={`details-table__row--clickable details-table__row--${item.action}`} onClick={() => setOpenItemId(item.id)}>
+                            <td className="details-table__cell--nowrap-exempt">{formatClock(item.startMs)}</td>
+                            <td className="details-table__cell--nowrap-exempt">{formatClock(item.endMs)}</td>
+                            <td>{item.importanceScore ?? <span className="results-placeholder">—</span>}</td>
+                            <td>{item.subtitleText || <em>Visual only</em>}</td>
+                            <td>
+                              {item.summary ? (
+                                <span className={`verdict-badge verdict-badge--${item.shouldTranscreate ? 'change' : 'no-change'}`}>
+                                  {item.shouldTranscreate ? 'needs change' : 'fine as-is'}
+                                </span>
+                              ) : (
+                                <span className="results-placeholder">not researched</span>
+                              )}
+                            </td>
+                            <td onClick={(e) => e.stopPropagation()}>
+                              <select
+                                className="action-picker"
+                                value={item.action}
+                                onChange={(e) => handleActionChange(item.id, e.target.value as ProjectItemAction)}
+                              >
+                                {ACTIONS.map((a) => (
+                                  <option key={a} value={a}>
+                                    {a}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === 'rubrics' && (
+            <RubricsEditor
+              rubrics={rubrics}
+              onAdd={handleAddRubric}
+              onChange={async (i, patch) => {
+                const rubric = rubrics[i];
+                if (!rubric.id) return;
+                const updated = await updateRubric(projectId, rubric.id, { passcode, ...patch });
+                updateRubricInPlace(updated);
+              }}
+              onRemove={async (i) => {
+                const rubric = rubrics[i];
+                if (!rubric.id) return;
+                await deleteRubric(projectId, rubric.id, passcode);
+                removeRubric(rubric.id);
+              }}
+            />
+          )}
+        </div>
+
+        <div className={`project-panel__chat${agentsOpen ? ' project-panel__chat--open' : ''}`}>
+          <ResearchChatPanel projectId={project.id} passcode={passcode} testMode={testMode} items={allItems} />
+        </div>
+      </div>
 
       {showAddDetails && (
         <div className="modal-backdrop" onClick={() => setShowAddDetails(false)}>
@@ -326,10 +345,6 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
             </button>
           </div>
         </div>
-      )}
-
-      {showKickoff && (
-        <ResearchKickoffPanel items={allItems} testMode={testMode} onKickoff={handleKickoff} onClose={() => setShowKickoff(false)} />
       )}
     </>
   );

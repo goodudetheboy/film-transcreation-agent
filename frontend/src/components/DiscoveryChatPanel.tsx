@@ -93,8 +93,8 @@ function KickoffForm({
   }
 
   return (
-    <form className="discovery-kickoff-form" onSubmit={handleSubmit}>
-      <p className="discovery-kickoff-form__title">Kick off Discover agent to find new lines?</p>
+    <form className="agent-kickoff-form" onSubmit={handleSubmit}>
+      <p className="agent-kickoff-form__title">Kick off Discover agent to find new lines?</p>
 
       <div className="field">
         <label htmlFor="discovery-run-name">Label (optional)</label>
@@ -156,7 +156,7 @@ function DiscoveryRunCard({
 }) {
   const [busyTempId, setBusyTempId] = useState<string | null>(null);
 
-  if (!job) return <div className="discovery-run-card results-placeholder">Loading run…</div>;
+  if (!job) return <div className="agent-run-card results-placeholder">Loading run…</div>;
 
   const currentJob = job;
   const isRunning = currentJob.status === 'queued' || currentJob.status === 'running';
@@ -180,8 +180,8 @@ function DiscoveryRunCard({
   }
 
   return (
-    <div className="discovery-run-card">
-      <div className="discovery-run-card__header">
+    <div className="agent-run-card">
+      <div className="agent-run-card__header">
         <p className="content-card__primary">
           Run #{currentJob.passNumber} — {currentJob.status}
         </p>

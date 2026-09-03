@@ -53,6 +53,45 @@ describe('POST /api/projects/:id/chat-sessions and GET variants', () => {
   });
 });
 
+describe('POST /api/projects/:id/chat-sessions/:sessionId/research-runs', () => {
+  it('files a run marker turn for an existing research run belonging to this project', async () => {
+    const { app, project } = await seedAppAndProject();
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const runRes = await request(app)
+      .post(`/api/projects/${project.id}/research-runs`)
+      .send({ passcode: TEST_PASSCODE, testMode: true, mode: 'need-research' });
+    const events = parseEvents(runRes.text);
+    const runId = (events.find((e) => e.type === 'progress') as { runId: string }).runId;
+
+    const res = await request(app)
+      .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/research-runs`)
+      .send({ passcode: TEST_PASSCODE, runId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.turns).toEqual([{ role: 'system', parts: [{ run: { runId } }], ts: expect.any(String) }]);
+  });
+
+  it('returns 404 for an unknown run or an unknown session', async () => {
+    const { app, project } = await seedAppAndProject();
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+
+    expect(
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/research-runs`)
+          .send({ passcode: TEST_PASSCODE, runId: 'does-not-exist' })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/chat-sessions/does-not-exist/research-runs`)
+          .send({ passcode: TEST_PASSCODE, runId: 'does-not-exist' })
+      ).status,
+    ).toBe(404);
+  });
+});
+
 describe('POST /api/projects/:id/chat-sessions/:sessionId/messages', () => {
   it('streams a tool-calling turn from the mock agent by default (testMode), and item_patched reflects a real store write', async () => {
     const { app, project, items } = await seedAppAndProject();

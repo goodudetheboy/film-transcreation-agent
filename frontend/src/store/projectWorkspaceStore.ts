@@ -38,6 +38,7 @@ export interface ProjectWorkspaceState {
   applyRunEvent: (event: ResearchRunStreamEvent) => void;
   setChatSessions: (sessions: ChatSession[]) => void;
   addChatSession: (session: ChatSession) => void;
+  upsertChatSession: (session: ChatSession) => void;
   setActiveChatSessionId: (id: string | null) => void;
   applyChatEvent: (event: ChatStreamEvent) => void;
   setFilter: (filter: ProjectItemFilter) => void;
@@ -109,6 +110,16 @@ export const useProjectWorkspaceStore = create<ProjectWorkspaceState>((set, get)
 
   setChatSessions: (sessions) => set({ chatSessions: sessions }),
   addChatSession: (session) => set({ chatSessions: [...get().chatSessions, session], activeChatSessionId: session.id }),
+
+  upsertChatSession: (session) => {
+    const sessions = get().chatSessions;
+    const idx = sessions.findIndex((s) => s.id === session.id);
+    set({
+      chatSessions: idx === -1 ? [...sessions, session] : sessions.map((s, i) => (i === idx ? session : s)),
+      activeChatSessionId: session.id,
+    });
+  },
+
   setActiveChatSessionId: (id) => set({ activeChatSessionId: id }),
 
   applyChatEvent: (event) => {

@@ -132,7 +132,7 @@ export interface ResearchRun {
 }
 
 export type ResearchRunStreamEvent =
-  | { type: 'progress'; message: string }
+  | { type: 'progress'; message: string; runId: string }
   | {
       type: 'batch_done';
       batchIndex: number;
@@ -152,10 +152,13 @@ export interface ChatPart {
   text?: string;
   functionCall?: { name: string; args: Record<string, unknown> };
   functionResponse?: { name: string; response: Record<string, unknown> };
+  /** A reference to a bulk ResearchRun kicked off from this session's thread — mirrors
+   * DiscoveryChatPart's `run` variant. Rendered inline in the timeline as a run card. */
+  run?: { runId: string };
 }
 
 export interface ChatTurn {
-  role: 'user' | 'model';
+  role: 'user' | 'model' | 'system';
   parts: ChatPart[];
   ts: string;
 }

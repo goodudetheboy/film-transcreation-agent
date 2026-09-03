@@ -1,6 +1,7 @@
 import { Router, type Response } from 'express';
 import type { ProjectStore } from '../services/projectStore.js';
 import type { ChatSessionStore } from '../services/chatSessionStore.js';
+import type { ResearchRunStore } from '../services/researchRunStore.js';
 import type { ChatStreamEvent, ResearchChatAgent } from '../services/researchChatAgent.js';
 
 function writeSSE(res: Response, event: ChatStreamEvent): void {
@@ -10,6 +11,7 @@ function writeSSE(res: Response, event: ChatStreamEvent): void {
 export interface ProjectChatRouteDeps {
   projectStore: ProjectStore;
   chatSessionStore: ChatSessionStore;
+  researchRunStore: ResearchRunStore;
   researchChatAgent: ResearchChatAgent;
   mockResearchChatAgent: ResearchChatAgent;
 }
@@ -42,6 +44,34 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
       return;
     }
     res.status(200).json(session);
+  });
+
+  // Records that a bulk research run was kicked off from this chat session's
+  // thread — the run itself is created via the existing POST
+  // .../research-runs (unchanged, see routes/projects.ts); this just files a
+  // `run` reference turn so it renders inline in the conversation, same
+  // pattern as routes/discoveryChat.ts's .../runs endpoint.
+  router.post('/api/projects/:id/chat-sessions/:sessionId/research-runs', async (req, res) => {
+    const session = await deps.chatSessionStore.getSession(req.params.id, req.params.sessionId);
+    if (!session) {
+      res.status(404).json({ error: 'chat session not found' });
+      return;
+    }
+    const { runId } = req.body ?? {};
+    if (typeof runId !== 'string' || runId.trim() === '') {
+      res.status(400).json({ error: 'runId is required' });
+      return;
+    }
+    const run = await deps.researchRunStore.getRun(req.params.id, runId);
+    if (!run) {
+      res.status(404).json({ error: 'research run not found' });
+      return;
+    }
+
+    const updated = await deps.chatSessionStore.updateSession(req.params.id, session.id, {
+      turns: [...session.turns, { role: 'system', parts: [{ run: { runId } }], ts: new Date().toISOString() }],
+    });
+    res.status(200).json(updated);
   });
 
   // The live tool-calling turn — SSE. Persistence of turns happens inside the
