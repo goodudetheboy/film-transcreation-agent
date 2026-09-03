@@ -4,6 +4,7 @@ import { healthRoute } from './routes/health.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { projectChatRoute } from './routes/projectChat.js';
+import { discoveryChatRoute } from './routes/discoveryChat.js';
 import { filmsRoute } from './routes/films.js';
 import { passcodeMiddleware } from './middleware/passcode.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
@@ -29,6 +30,9 @@ import { DEFAULT_RUBRICS } from './config/defaultRubrics.js';
 import type { VideoBucketUploader } from './services/videoBucketUploader.js';
 import type { ResearchChatAgent } from './services/researchChatAgent.js';
 import { createMockResearchChatAgent } from './services/mockResearchChatAgent.js';
+import { createInMemoryDiscoveryChatSessionStore, type DiscoveryChatSessionStore } from './services/discoveryChatSessionStore.js';
+import type { DiscoveryChatAgent } from './services/discoveryChatAgent.js';
+import { createMockDiscoveryChatAgent } from './services/mockDiscoveryChatAgent.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
@@ -49,6 +53,9 @@ export interface AppDeps {
   discoveryJobStore?: DiscoveryJobStore;
   discoveryAgent?: DiscoveryAgent;
   mockDiscoveryAgent?: DiscoveryAgent;
+  discoveryChatSessionStore?: DiscoveryChatSessionStore;
+  discoveryChatAgent?: DiscoveryChatAgent;
+  mockDiscoveryChatAgent?: DiscoveryChatAgent;
   eventBus?: DiscoveryEventBus;
   videoBucketUploader?: VideoBucketUploader;
 }
@@ -75,6 +82,13 @@ const notConfiguredResearchChatAgent: ResearchChatAgent = {
 const notConfiguredDiscoveryAgent: DiscoveryAgent = {
   async runPass() {
     throw new Error('discoveryAgent not provided to createApp()');
+  },
+};
+
+const notConfiguredDiscoveryChatAgent: DiscoveryChatAgent = {
+  // eslint-disable-next-line require-yield
+  async *runTurn() {
+    throw new Error('discoveryChatAgent not provided to createApp()');
   },
 };
 
@@ -123,6 +137,10 @@ export function createApp(deps: AppDeps = {}): Express {
   const discoveryAgent = deps.discoveryAgent ?? notConfiguredDiscoveryAgent;
   const mockDiscoveryAgent = deps.mockDiscoveryAgent ?? createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
   const eventBus = deps.eventBus ?? createDiscoveryEventBus();
+  const discoveryChatSessionStore = deps.discoveryChatSessionStore ?? createInMemoryDiscoveryChatSessionStore();
+  const discoveryChatAgent = deps.discoveryChatAgent ?? notConfiguredDiscoveryChatAgent;
+  const mockDiscoveryChatAgent =
+    deps.mockDiscoveryChatAgent ?? createMockDiscoveryChatAgent({ detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
   const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
 
   const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({
@@ -167,6 +185,15 @@ export function createApp(deps: AppDeps = {}): Express {
       chatSessionStore,
       researchChatAgent,
       mockResearchChatAgent,
+    }),
+  );
+  guarded.use(
+    discoveryChatRoute({
+      filmStore,
+      discoveryJobStore,
+      discoveryChatSessionStore,
+      discoveryChatAgent,
+      mockDiscoveryChatAgent,
     }),
   );
   // Serves mock-mode uploaded video bytes back over HTTP. Sits behind the same

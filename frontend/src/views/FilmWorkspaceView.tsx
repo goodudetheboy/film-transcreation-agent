@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { deleteFilm, getFilm, listDetails, listDiscoveryJobs } from '../api/filmsApiClient';
+import { deleteFilm, getFilm, listDetails } from '../api/filmsApiClient';
 import { listProjects } from '../api/projectsApiClient';
 import type { EnrichedProject, ProjectItemAction } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
@@ -9,9 +9,7 @@ import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber } from '../components/VideoScrubber';
 import { DetailsTable } from '../components/DetailsTable';
-import { AgentKickoffPanel } from '../components/AgentKickoffPanel';
-import { AgentRunningList } from '../components/AgentRunningList';
-import { AgentStatusPanel } from '../components/AgentStatusPanel';
+import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
 import { SparkleIcon } from '../components/icons';
@@ -21,7 +19,8 @@ export interface FilmWorkspaceViewProps {
   testMode: boolean;
 }
 
-type Tab = 'details' | 'progress' | 'project';
+type Tab = 'details' | 'project';
+type DetailsView = 'table' | 'agent';
 
 const LEFT_WIDTH_STORAGE_KEY = 'workspace.leftPanelWidth';
 const MIN_LEFT = 360;
@@ -51,8 +50,9 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const tab: Tab = tabParam === 'progress' ? 'progress' : tabParam === 'project' ? 'project' : 'details';
+  const tab: Tab = tabParam === 'project' ? 'project' : 'details';
   const projectId = searchParams.get('projectId');
+  const [detailsView, setDetailsView] = useState<DetailsView>('table');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -63,7 +63,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [muted, setMuted] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [showKickoff, setShowKickoff] = useState(false);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [itemStatusByRow, setItemStatusByRow] = useState<Record<string, ProjectItemAction>>({});
@@ -77,37 +76,20 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const scrubberDragStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
-  const {
-    film,
-    rows,
-    columns,
-    jobs,
-    jobDetails,
-    activeJobId,
-    setFilm,
-    setDetails,
-    setJobs,
-    setActiveJobId,
-    applyJobEvent,
-    addRow,
-    updateRow,
-    removeRow,
-    addColumn,
-    reset,
-  } = useFilmWorkspaceStore();
+  const { film, rows, columns, setFilm, setDetails, addRow, updateRow, removeRow, addColumn, reset } = useFilmWorkspaceStore();
 
   useEffect(() => {
     reset();
     setLoadError(null);
+    setDetailsView('table');
     if (!id) return;
     let cancelled = false;
 
-    Promise.all([getFilm(id, passcode), listDetails(id, passcode), listDiscoveryJobs(id, passcode)])
-      .then(([f, details, jobsList]) => {
+    Promise.all([getFilm(id, passcode), listDetails(id, passcode)])
+      .then(([f, details]) => {
         if (cancelled) return;
         setFilm(f);
         setDetails(details.rows, details.columns);
-        setJobs(jobsList);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'failed to load film');
@@ -331,9 +313,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
   if (!film) return <p className="results-placeholder">Loading…</p>;
 
-  const activeJob = activeJobId ? jobDetails[activeJobId] : undefined;
-  const agentNumbers = [...new Set(jobs.map((j) => j.agentNumber))].sort((a, b) => a - b);
-
   return (
     <div className="workspace">
       <div className="workspace__header">
@@ -352,9 +331,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         <button type="button" className={`workspace-tabs__tab${tab === 'details' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('details')}>
           Details
         </button>
-        <button type="button" className={`workspace-tabs__tab${tab === 'progress' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('progress')}>
-          Progress
-        </button>
         <button type="button" className={`workspace-tabs__tab${tab === 'project' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('project')}>
           Project
         </button>
@@ -368,23 +344,39 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         <div className="workspace__panel workspace__panel--left">
           {tab === 'details' && (
             <>
-              <DetailsTable
-                film={film}
-                passcode={passcode}
-                rows={rows}
-                columns={columns}
-                currentTimeMs={currentTimeMs}
-                durationMs={durationMs}
-                onSeek={handleSeek}
-                onRowAdded={addRow}
-                onRowUpdated={updateRow}
-                onRowDeleted={removeRow}
-                onColumnAdded={addColumn}
-              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => setDetailsView((v) => (v === 'table' ? 'agent' : 'table'))}
+                >
+                  {detailsView === 'table' ? (
+                    <>
+                      <SparkleIcon /> Kick off agentic discovery
+                    </>
+                  ) : (
+                    '← Back to table'
+                  )}
+                </button>
+              </div>
 
-              <button type="button" className="btn btn--primary" style={{ width: 'fit-content' }} onClick={() => setShowKickoff(true)}>
-                <SparkleIcon /> Kick off agentic discovery
-              </button>
+              {detailsView === 'table' ? (
+                <DetailsTable
+                  film={film}
+                  passcode={passcode}
+                  rows={rows}
+                  columns={columns}
+                  currentTimeMs={currentTimeMs}
+                  durationMs={durationMs}
+                  onSeek={handleSeek}
+                  onRowAdded={addRow}
+                  onRowUpdated={updateRow}
+                  onRowDeleted={removeRow}
+                  onColumnAdded={addColumn}
+                />
+              ) : (
+                <DiscoveryChatPanel filmId={film.id} passcode={passcode} testMode={testMode} columns={columns} />
+              )}
             </>
           )}
 
@@ -452,28 +444,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               )}
             </>
           )}
-
-          {tab === 'progress' && (
-            <>
-              <p className="section-heading">Agent running</p>
-              <AgentRunningList jobs={jobs} activeJobId={activeJobId} onSelect={setActiveJobId} />
-              <div style={{ marginTop: 20 }}>
-                {activeJobId ? (
-                  <AgentStatusPanel
-                    filmId={film.id}
-                    passcode={passcode}
-                    jobId={activeJobId}
-                    job={activeJob}
-                    columns={columns}
-                    onJobEvent={applyJobEvent}
-                    onRowMerged={addRow}
-                  />
-                ) : (
-                  <p className="results-placeholder">Select a pass from the list to see its status.</p>
-                )}
-              </div>
-            </>
-          )}
         </div>
 
         <div
@@ -537,22 +507,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           rowStatus={itemStatusByRow}
         />
       </div>
-
-      {showKickoff && (
-        <AgentKickoffPanel
-          filmId={film.id}
-          passcode={passcode}
-          testMode={testMode}
-          existingAgentNumbers={agentNumbers}
-          columns={columns}
-          onCreated={(job) => {
-            applyJobEvent({ type: 'job_update', job });
-            setActiveJobId(job.id);
-            setTab('progress');
-          }}
-          onClose={() => setShowKickoff(false)}
-        />
-      )}
 
       {showNewProjectModal && (
         <NewProjectModal

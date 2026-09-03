@@ -18,11 +18,12 @@ class StageDwellController {
   private queue: FilmPrepStage[] = [];
   private lastSeen: FilmPrepStage | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly minDwellMs: number;
+  private readonly onChange: (stage: DisplayPrepStage) => void;
 
-  constructor(
-    private readonly minDwellMs: number,
-    private readonly onChange: (stage: DisplayPrepStage) => void,
-  ) {
+  constructor(minDwellMs: number, onChange: (stage: DisplayPrepStage) => void) {
+    this.minDwellMs = minDwellMs;
+    this.onChange = onChange;
     this.armTimer();
   }
 

@@ -7,6 +7,7 @@ import type { DetailRowsStore } from '../services/detailRowsStore.js';
 import type { DiscoveryEventBus } from '../services/discoveryEventBus.js';
 import type { DiscoveryJob, DiscoveryJobStore } from '../services/discoveryJobStore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
+import { mergeDiscoveryResult, discardDiscoveryResult } from '../services/discoveryResultActions.js';
 import type { FilmPrep, FilmStore } from '../services/filmStore.js';
 import type { FilmPrepPipeline } from '../services/filmPrepPipeline.js';
 import type { ProjectStore } from '../services/projectStore.js';
@@ -591,49 +592,30 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
   });
 
   router.post('/api/films/:id/discovery-jobs/:jobId/results/:resultRowId/add', async (req, res) => {
-    const job = await deps.discoveryJobStore.getJob(req.params.id, req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'discovery job not found' });
+    const result = await mergeDiscoveryResult(
+      { discoveryJobStore: deps.discoveryJobStore, detailRowsStore: deps.detailRowsStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.jobId,
+      req.params.resultRowId,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
       return;
     }
-    const result = job.resultRows.find((r) => r.tempId === req.params.resultRowId);
-    if (!result) {
-      res.status(404).json({ error: 'result row not found' });
-      return;
-    }
-
-    const row = await deps.detailRowsStore.addRow(job.filmId, {
-      startMs: result.startMs,
-      endMs: result.endMs,
-      subtitleText: result.subtitleText,
-      values: {
-        segmentDescription: result.values.segmentDescription,
-        gesture: result.values.gesture,
-        notes: result.values.notes,
-        custom: result.values.custom,
-      },
-      provenance: { type: 'agent-discovered', jobId: job.id, agentNumber: job.agentNumber, passNumber: job.passNumber },
-    });
-
-    await deps.discoveryJobStore.updateJob(job.filmId, job.id, {
-      resultRows: job.resultRows.filter((r) => r.tempId !== result.tempId),
-    });
-    res.status(201).json(row);
+    res.status(201).json(result.value);
   });
 
   router.delete('/api/films/:id/discovery-jobs/:jobId/results/:resultRowId', async (req, res) => {
-    const job = await deps.discoveryJobStore.getJob(req.params.id, req.params.jobId);
-    if (!job) {
-      res.status(404).json({ error: 'discovery job not found' });
+    const result = await discardDiscoveryResult(
+      { discoveryJobStore: deps.discoveryJobStore, detailRowsStore: deps.detailRowsStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.jobId,
+      req.params.resultRowId,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
       return;
     }
-    if (!job.resultRows.some((r) => r.tempId === req.params.resultRowId)) {
-      res.status(404).json({ error: 'result row not found' });
-      return;
-    }
-    await deps.discoveryJobStore.updateJob(job.filmId, job.id, {
-      resultRows: job.resultRows.filter((r) => r.tempId !== req.params.resultRowId),
-    });
     res.status(204).end();
   });
 

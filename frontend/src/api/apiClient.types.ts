@@ -337,3 +337,43 @@ export type DiscoveryJobSummary = Pick<
 >;
 
 export type DiscoveryJobStreamEvent = { type: 'job_update'; job: DiscoveryJob };
+
+// ---- Discovery agent chat (the sidebar conversation "wrapping" DiscoveryJob passes) ----
+
+export type DiscoveryChatSessionStatus = 'idle' | 'streaming' | 'error';
+
+export interface DiscoveryChatPart {
+  text?: string;
+  functionCall?: { name: string; args: Record<string, unknown> };
+  functionResponse?: { name: string; response: Record<string, unknown> };
+  run?: { jobId: string };
+}
+
+export interface DiscoveryChatTurn {
+  role: 'user' | 'model' | 'system';
+  parts: DiscoveryChatPart[];
+  ts: string;
+}
+
+/** One Agent = one persistent thread; `agentNumber` matches DiscoveryJob's field of the same name. */
+export interface DiscoveryAgentSession {
+  id: string;
+  filmId: string;
+  name: string | null;
+  agentNumber: number;
+  status: DiscoveryChatSessionStatus;
+  turns: DiscoveryChatTurn[];
+  createdAt: string;
+  updatedAt: string;
+  errorMessage?: string;
+}
+
+export type DiscoveryChatStreamEvent =
+  | { type: 'text_delta'; text: string }
+  | { type: 'tool_call'; callId: string; name: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; callId: string; name: string; result: Record<string, unknown> }
+  | { type: 'row_patched'; row: DetailRow }
+  | { type: 'row_added'; row: DetailRow; jobId: string; tempId: string }
+  | { type: 'row_discarded'; jobId: string; tempId: string }
+  | { type: 'turn_done' }
+  | { type: 'error'; message: string };

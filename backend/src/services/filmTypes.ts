@@ -151,3 +151,41 @@ export interface DiscoveryJob {
   commentHistory: Array<{ ts: string; comment: string }>;
   errorMessage?: string;
 }
+
+// ---- Discovery agent chat (the sidebar conversation "wrapping" DiscoveryJob
+// passes — see docs/progress) ------------------------------------------------
+
+export type DiscoveryChatSessionStatus = 'idle' | 'streaming' | 'error';
+
+/**
+ * Mirrors projectTypes.ts's ChatPart, plus a `run` variant with no
+ * counterpart there: a reference to a DiscoveryJob pass, rendered inline in
+ * the thread as a rich card alongside plain chat turns.
+ */
+export interface DiscoveryChatPart {
+  text?: string;
+  functionCall?: { name: string; args: Record<string, unknown> };
+  functionResponse?: { name: string; response: Record<string, unknown> };
+  run?: { jobId: string };
+}
+
+export interface DiscoveryChatTurn {
+  role: 'user' | 'model' | 'system';
+  parts: DiscoveryChatPart[];
+  ts: string;
+}
+
+/** One Agent = one persistent thread; `agentNumber` matches DiscoveryJob's
+ * field of the same name (a session's agentNumber is the number every job
+ * kicked off from it is filed under). */
+export interface DiscoveryAgentSession {
+  id: string;
+  filmId: string;
+  name: string | null;
+  agentNumber: number;
+  status: DiscoveryChatSessionStatus;
+  turns: DiscoveryChatTurn[];
+  createdAt: string;
+  updatedAt: string;
+  errorMessage?: string;
+}

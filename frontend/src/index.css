@@ -3221,6 +3221,19 @@ textarea {
   width: 100%;
 }
 
+/* Used when a chat panel IS the page content (Details tab's Discovery agent
+   view) rather than a fixed-size docked drawer — fills the bounding
+   .workspace__panel--left the same way .project-item-view does, instead of
+   the drawer-tuned .chat-panel__thread max-height. */
+.chat-panel--workspace {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.chat-panel--workspace .chat-panel__thread {
+  max-height: none;
+}
+
 .chat-panel__library {
   flex: 1;
   min-height: 200px;
@@ -3393,4 +3406,41 @@ textarea {
   border-radius: var(--radius-sm);
   color: var(--text);
   padding: 8px 12px;
+}
+
+/* ---------- Discovery agent chat — run cards + inline kickoff form ---------- */
+
+.discovery-run-card {
+  align-self: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+}
+
+.discovery-run-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.discovery-kickoff-form {
+  align-self: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-default);
+}
+
+.discovery-kickoff-form__title {
+  margin: 0;
+  font-size: var(--text-item-size);
+  font-weight: var(--text-item-weight);
+  color: var(--text);
 }
