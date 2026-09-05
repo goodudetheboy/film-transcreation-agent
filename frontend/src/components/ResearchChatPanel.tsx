@@ -400,27 +400,50 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
         )}
         {activeSession?.turns.map((turn, i) => {
           if (turn.role === 'user' && turn.parts[0]?.functionResponse) return null;
-          return turn.parts.map((part, pi) => {
-            if (part.run) {
-              return <ResearchRunCard key={`${i}-${pi}`} run={runDetails[part.run.runId]} />;
+          // Consecutive text parts within one turn are chunks of the same logical
+          // message (streamed deltas persisted as separate parts) — merge them into
+          // a single bubble instead of rendering one bubble per chunk.
+          const groups: Array<{ text?: string; run?: NonNullable<(typeof turn.parts)[number]['run']>; functionCall?: NonNullable<(typeof turn.parts)[number]['functionCall']> }> = [];
+          for (const part of turn.parts) {
+            if (part.text !== undefined) {
+              const last = groups[groups.length - 1];
+              if (last && last.text !== undefined) last.text += part.text;
+              else groups.push({ text: part.text });
+            } else if (part.run) {
+              groups.push({ run: part.run });
+            } else if (part.functionCall) {
+              groups.push({ functionCall: part.functionCall });
             }
-            if (part.text) {
+          }
+          return groups.map((g, gi) => {
+            if (g.run) {
+              return <ResearchRunCard key={`${i}-${gi}`} run={runDetails[g.run.runId]} />;
+            }
+            if (g.text !== undefined) {
               return (
-                <div key={`${i}-${pi}`} className={`chat-bubble chat-bubble--${turn.role === 'system' ? 'model' : turn.role}`}>
-                  {part.text}
+                <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${turn.role === 'system' ? 'model' : turn.role}`}>
+                  {g.text}
                 </div>
               );
             }
-            if (part.functionCall) {
+            if (g.functionCall) {
               const nextTurn = activeSession.turns[i + 1];
-              const response = nextTurn?.parts.find((p) => p.functionResponse?.name === part.functionCall!.name)?.functionResponse?.response;
-              return <ToolCallCard key={`${i}-${pi}`} name={part.functionCall.name} args={part.functionCall.args} result={response} />;
+              const response = nextTurn?.parts.find((p) => p.functionResponse?.name === g.functionCall!.name)?.functionResponse?.response;
+              return <ToolCallCard key={`${i}-${gi}`} name={g.functionCall.name} args={g.functionCall.args} result={response} />;
             }
             return null;
           });
         })}
         {liveEvents.map((event, i) => {
-          if (event.type === 'text_delta') return <div key={i} className="chat-bubble chat-bubble--model">{event.text}</div>;
+          // Skip a text_delta that's immediately continuing the previous one — it's
+          // merged into that bubble below — but keep rendering once a non-delta
+          // event has broken the run, so a later reply still starts its own bubble.
+          if (event.type === 'text_delta' && liveEvents[i - 1]?.type === 'text_delta') return null;
+          if (event.type === 'text_delta') {
+            let text = event.text;
+            for (let j = i + 1; liveEvents[j]?.type === 'text_delta'; j++) text += (liveEvents[j] as { text: string }).text;
+            return <div key={i} className="chat-bubble chat-bubble--model">{text}</div>;
+          }
           if (event.type === 'tool_call') {
             const result = liveEvents.find((e) => e.type === 'tool_result' && e.callId === event.callId);
             return (

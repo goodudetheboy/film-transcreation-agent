@@ -2626,6 +2626,7 @@ textarea {
 .workspace-details__main {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-snug);
@@ -2653,15 +2654,36 @@ textarea {
 
 .workspace-details__chat--open {
   flex-basis: 420px;
+  display: flex;
+  flex-direction: column;
+  /* Safety net: the base rule's overflow:hidden exists to hide the collapsed
+     (width:0) state cleanly, but once open, if the flex-height chain above
+     this ever comes out shorter than the panel's real content (a narrower
+     breakpoint, an unusual ancestor), clip the vertical axis is what turns
+     that into content silently disappearing. Let it spill visibly instead —
+     .chat-panel__thread/.chat-panel__library still scroll internally on
+     their own via their own overflow-y, this only guards the outer box. */
+  overflow-y: visible;
   border-left-color: var(--border);
   padding-left: var(--space-loose);
 }
 
 .workspace-details__chat > .chat-panel {
   width: 420px;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 860px) {
+  /* Stacked mobile layout: the panel no longer stretches .workspace-details__main
+     to a bounded row height (there's no row to stretch against once this is a
+     column), so its flex:1/min-height:0 pair — which needs that bounded ancestor,
+     see .details-table-wrap's comment above — would collapse it to 0 instead.
+     Let it size to its content and have the whole page scroll instead. */
+  .workspace-details__main {
+    flex: none;
+    min-height: auto;
+  }
   .workspace-details__body {
     flex-direction: column;
   }
@@ -2680,6 +2702,7 @@ textarea {
     padding-top: var(--space-loose);
   }
   .workspace-details__chat > .chat-panel {
+    flex: none;
     width: 100%;
   }
 }
@@ -3205,6 +3228,7 @@ textarea {
 .project-item-view__detail {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-default);
@@ -3232,15 +3256,27 @@ textarea {
 
 .project-item-view__chat--open {
   flex-basis: 420px;
+  display: flex;
+  flex-direction: column;
+  /* Safety net — see .workspace-details__chat--open's comment. */
+  overflow-y: visible;
   border-left-color: var(--border);
   padding-left: var(--space-loose);
 }
 
 .project-item-view__chat > .chat-panel {
   width: 420px;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 860px) {
+  /* Same collapse risk as .workspace-details__main once this stacks into a
+     column — see that media query's comment. */
+  .project-item-view__detail {
+    flex: none;
+    min-height: auto;
+  }
   .project-item-view__body {
     flex-direction: column;
   }
@@ -3259,6 +3295,7 @@ textarea {
     padding-top: var(--space-loose);
   }
   .project-item-view__chat > .chat-panel {
+    flex: none;
     width: 100%;
   }
 }
@@ -3344,6 +3381,7 @@ textarea {
 .project-panel__main {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: var(--space-snug);
@@ -3361,15 +3399,27 @@ textarea {
 
 .project-panel__chat--open {
   flex-basis: 420px;
+  display: flex;
+  flex-direction: column;
+  /* Safety net — see .workspace-details__chat--open's comment. */
+  overflow-y: visible;
   border-left-color: var(--border);
   padding-left: var(--space-loose);
 }
 
 .project-panel__chat > .chat-panel {
   width: 420px;
+  flex: 1;
+  min-height: 0;
 }
 
 @media (max-width: 860px) {
+  /* Same collapse risk as .workspace-details__main once this stacks into a
+     column — see that media query's comment. */
+  .project-panel__main {
+    flex: none;
+    min-height: auto;
+  }
   .project-panel__body {
     flex-direction: column;
   }
@@ -3388,6 +3438,7 @@ textarea {
     padding-top: var(--space-loose);
   }
   .project-panel__chat > .chat-panel {
+    flex: none;
     width: 100%;
   }
 }
@@ -3413,6 +3464,7 @@ textarea {
      below it; flex: 1 still lets it grow to fill real extra space when
      there are enough sessions to need it. */
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -3465,8 +3517,7 @@ textarea {
 
 .chat-panel__thread {
   flex: 1;
-  min-height: 200px;
-  max-height: 420px;
+  min-height: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -3620,4 +3671,231 @@ textarea {
   font-size: var(--text-item-size);
   font-weight: var(--text-item-weight);
   color: var(--text);
+}
+
+/* ---------- Project cards (Projects Library + per-film project list) ----------
+   A card-grid replacement for the old details-table row, styled like the chat
+   session library's cards (bordered panel, accent border on hover) but richer:
+   country flag, both status pills, and a row of item-count stats. */
+
+.project-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-snug);
+  margin-bottom: var(--space-loose);
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-tight);
+  align-items: stretch;
+  text-align: left;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-default);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: border-color, box-shadow, transform;
+}
+
+.project-card:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+.project-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.project-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-tight);
+}
+
+.project-card__country {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-item-size);
+  font-weight: var(--text-item-weight);
+  color: var(--text);
+}
+
+.project-card__flag {
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.project-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.project-card__name {
+  margin: 0;
+  font-size: var(--text-caption-size);
+  color: var(--text-dim);
+}
+
+.project-card__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.project-card__stat {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+
+.project-card__stat--total {
+  color: var(--text-dim);
+}
+
+.project-card__stat--accepted {
+  color: var(--success);
+  border-color: var(--success-dim);
+}
+
+.project-card__stat--rejected {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+}
+
+.project-card__stat--research {
+  color: var(--warning);
+  border-color: var(--warning-dim);
+}
+
+/* ---------- Country select (searchable dropdown with flags) ---------- */
+
+.country-select {
+  position: relative;
+}
+
+.country-select__button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: border-color;
+  font-size: var(--text-body-size);
+}
+
+.country-select__button:hover,
+.country-select__button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.country-select__placeholder {
+  color: var(--text-faint);
+}
+
+.country-select__chevron {
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.country-select__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card-hover);
+  overflow: hidden;
+}
+
+.country-select__search {
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: var(--text-body-size);
+}
+
+.country-select__search:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+
+.country-select__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.country-select__empty {
+  padding: 10px 12px;
+  font-size: var(--text-caption-size);
+  color: var(--text-faint);
+}
+
+.country-select__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--text-body-size);
+}
+
+.country-select__option--highlight {
+  background: var(--accent-dim);
+}
+
+.country-select__option--selected {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.country-select__flag {
+  font-size: 18px;
+  line-height: 1;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--border-strong);
 }

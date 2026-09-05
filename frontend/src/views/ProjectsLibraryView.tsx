@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listProjects } from '../api/projectsApiClient';
 import type { EnrichedProject } from '../api/apiClient.types';
+import { ProjectCard } from '../components/ProjectCard';
+import { countryCode } from '../data/countries';
+import { Flag } from '../components/Flag';
 
 export interface ProjectsLibraryViewProps {
   passcode: string;
@@ -61,55 +64,13 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
       {projects !== null &&
         groupByCountry(projects).map(([country, group]) => (
           <div key={country}>
-            <p className="section-heading">{country}</p>
-            <div className="details-table-wrap details-table-wrap--standalone">
-              <div className="details-table-scroll">
-                <table className="details-table">
-                  <thead>
-                    <tr>
-                      <th>Project</th>
-                      <th>Agent Status</th>
-                      <th>Project Status</th>
-                      <th>Pending</th>
-                      <th>Accepted</th>
-                      <th>Rejected</th>
-                      <th>Need research</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.map((p) => (
-                      <tr
-                        key={p.id}
-                        className="details-table__row--clickable"
-                        onClick={() => navigate(`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`)}
-                      >
-                        <td>
-                          <Link
-                            to={`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {p.name}
-                          </Link>
-                        </td>
-                        <td>
-                          {p.agentStatus ? (
-                            <span className={`status-badge status-badge--${p.agentStatus}`}>{p.agentStatus}</span>
-                          ) : (
-                            <span className="results-placeholder">—</span>
-                          )}
-                        </td>
-                        <td>
-                          <span className={`status-badge status-badge--${p.status}`}>{p.status}</span>
-                        </td>
-                        <td>{p.pendingCount}</td>
-                        <td>{p.acceptedCount}</td>
-                        <td>{p.rejectedCount}</td>
-                        <td>{p.needResearchCount}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <p className="section-heading">
+              <Flag code={countryCode(country)} /> {country}
+            </p>
+            <div className="project-card-grid">
+              {group.map((p) => (
+                <ProjectCard key={p.id} project={p} onOpen={() => navigate(`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`)} />
+              ))}
             </div>
           </div>
         ))}

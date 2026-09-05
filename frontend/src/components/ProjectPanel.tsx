@@ -18,6 +18,8 @@ import { RubricsEditor } from './RubricsEditor';
 import { ResearchChatPanel } from './ResearchChatPanel';
 import { ProjectItemView } from './ProjectItemView';
 import { SparkleIcon } from './icons';
+import { Flag } from './Flag';
+import { countryCode } from '../data/countries';
 
 const AGENTS_OPEN_STORAGE_KEY = 'projectPanel.agentsOpen';
 
@@ -184,9 +186,10 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
         </button>
         <div className="project-panel__toprow">
           <div className="project-panel__heading">
-            <p className="section-heading">{project.name}</p>
+            <p className="section-heading">
+              Project: <Flag code={countryCode(project.country)} /> {project.country}
+            </p>
             <div className="project-panel__badges">
-              <span className="status-badge status-badge--pending">{project.country}</span>
               <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
             </div>
           </div>

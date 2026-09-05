@@ -4,6 +4,9 @@ import { streamResearchRun } from '../api/projectsApiClient';
 import type { DetailRow, Film, Project } from '../api/apiClient.types';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor, type DraftRubric } from './RubricsEditor';
+import { CountrySelect } from './CountrySelect';
+import { countryCode } from '../data/countries';
+import { Flag } from './Flag';
 
 export interface NewProjectModalProps {
   filmId: string;
@@ -155,7 +158,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
               <div className="new-project-form">
                 <div className="field">
                   <label htmlFor="country">Target country</label>
-                  <input id="country" type="text" value={country} onChange={(e) => setCountry(e.target.value)} />
+                  <CountrySelect id="country" value={country} onChange={setCountry} />
                 </div>
                 <div className="field">
                   <label htmlFor="note">Note (optional)</label>
@@ -214,7 +217,15 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
               <div className="new-project-form">
                 <ul className="content-list">
                   <li className="content-card">
-                    <p className="content-card__primary">{country || <em>No country set</em>}</p>
+                    <p className="content-card__primary">
+                      {country ? (
+                        <>
+                          <Flag code={countryCode(country)} /> {country}
+                        </>
+                      ) : (
+                        <em>No country set</em>
+                      )}
+                    </p>
                     <p className="content-card__secondary">{film.title}</p>
                     <p className="content-card__caption">
                       {selectedRowIds.size} detail{selectedRowIds.size === 1 ? '' : 's'} ·{' '}

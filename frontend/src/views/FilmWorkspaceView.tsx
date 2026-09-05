@@ -12,6 +12,7 @@ import { DetailsTable } from '../components/DetailsTable';
 import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
+import { ProjectCard } from '../components/ProjectCard';
 import { SparkleIcon } from '../components/icons';
 
 export interface FilmWorkspaceViewProps {
@@ -404,35 +405,10 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   {filmProjects.length === 0 ? (
                     <p className="results-placeholder">No projects yet for this film.</p>
                   ) : (
-                    <div className="details-table-wrap details-table-wrap--standalone">
-                      <div className="details-table-scroll">
-                        <table className="details-table">
-                          <thead>
-                            <tr>
-                              <th>Country</th>
-                              <th>Agent Status</th>
-                              <th>Project Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filmProjects.map((p) => (
-                              <tr key={p.id} className="details-table__row--clickable" onClick={() => selectProject(p.id)}>
-                                <td>{p.country}</td>
-                                <td>
-                                  {p.agentStatus ? (
-                                    <span className={`status-badge status-badge--${p.agentStatus}`}>{p.agentStatus}</span>
-                                  ) : (
-                                    <span className="results-placeholder">—</span>
-                                  )}
-                                </td>
-                                <td>
-                                  <span className={`status-badge status-badge--${p.status}`}>{p.status}</span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    <div className="project-card-grid">
+                      {filmProjects.map((p) => (
+                        <ProjectCard key={p.id} project={p} onOpen={() => selectProject(p.id)} showName={false} />
+                      ))}
                     </div>
                   )}
                   {rows.length > 0 ? (
