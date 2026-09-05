@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { createDiscoveryAgentSession, listDiscoveryAgentSessions, logDiscoveryRun, sendDiscoveryChatMessage } from '../api/discoveryChatApiClient';
+import {
+  createDiscoveryAgentSession,
+  deleteDiscoveryAgentSession,
+  listDiscoveryAgentSessions,
+  logDiscoveryRun,
+  sendDiscoveryChatMessage,
+} from '../api/discoveryChatApiClient';
 import { createDiscoveryJob, discardDiscoveryResult, mergeDiscoveryResult, streamDiscoveryJob } from '../api/filmsApiClient';
 import { BUILTIN_COLUMN_LABELS } from '../api/apiClient.types';
 import type {
@@ -11,7 +17,8 @@ import type {
 } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
-import { CheckIcon, SparkleIcon } from './icons';
+import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
+import { ConfirmModal } from './ConfirmModal';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
@@ -103,9 +110,10 @@ function KickoffForm({
 
       <div className="field">
         <label htmlFor="discovery-run-instruction">Special instruction</label>
-        <input
+        <textarea
           id="discovery-run-instruction"
-          type="text"
+          className="field__textarea--compact"
+          rows={3}
           placeholder="Focus on the first half, second half, …"
           value={specialInstruction}
           onChange={(e) => setSpecialInstruction(e.target.value)}
@@ -155,6 +163,7 @@ function DiscoveryRunCard({
   onDiscard: (jobId: string, tempId: string) => Promise<void>;
 }) {
   const [busyTempId, setBusyTempId] = useState<string | null>(null);
+  const [discardTarget, setDiscardTarget] = useState<{ tempId: string; subtitleText: string } | null>(null);
 
   if (!job) return <div className="agent-run-card results-placeholder">Loading run…</div>;
 
@@ -170,10 +179,12 @@ function DiscoveryRunCard({
     }
   }
 
-  async function handleDiscard(tempId: string) {
-    setBusyTempId(tempId);
+  async function handleDiscardConfirmed() {
+    if (!discardTarget) return;
+    setBusyTempId(discardTarget.tempId);
     try {
-      await onDiscard(currentJob.id, tempId);
+      await onDiscard(currentJob.id, discardTarget.tempId);
+      setDiscardTarget(null);
     } finally {
       setBusyTempId(null);
     }
@@ -217,8 +228,15 @@ function DiscoveryRunCard({
                     <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
                       Add
                     </button>
-                    <button type="button" className="btn btn--ghost" disabled={busyTempId === r.tempId} onClick={() => handleDiscard(r.tempId)}>
-                      Delete
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      disabled={busyTempId === r.tempId}
+                      onClick={() => setDiscardTarget({ tempId: r.tempId, subtitleText: r.subtitleText })}
+                      aria-label="Discard candidate"
+                      title="Discard candidate"
+                    >
+                      <TrashIcon />
                     </button>
                   </div>
                 </li>
@@ -226,6 +244,17 @@ function DiscoveryRunCard({
             </ul>
           )}
         </>
+      )}
+
+      {discardTarget && (
+        <ConfirmModal
+          title="Discard this candidate?"
+          body={`"${discardTarget.subtitleText}" will be dropped from this run's suggestions. This can't be undone.`}
+          confirmLabel="Discard"
+          busy={busyTempId === discardTarget.tempId}
+          onConfirm={handleDiscardConfirmed}
+          onCancel={() => setDiscardTarget(null)}
+        />
       )}
     </div>
   );
@@ -265,6 +294,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     activeDiscoveryChatSessionId,
     setDiscoveryChatSessions,
     upsertDiscoveryChatSession,
+    removeDiscoveryChatSession,
     setActiveDiscoveryChatSessionId,
     applyDiscoveryChatEvent,
     addRow,
@@ -276,6 +306,8 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [jobDetails, setJobDetails] = useState<Record<string, DiscoveryJob>>({});
+  const [deleteTarget, setDeleteTarget] = useState<DiscoveryAgentSession | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -332,6 +364,20 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     removeCandidateFromJob(jobId, tempId);
   }
 
+  async function handleDeleteConfirmed() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteDiscoveryAgentSession(filmId, deleteTarget.id, passcode);
+      removeDiscoveryChatSession(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to delete agent');
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function handleNewAgent() {
     const session = await createDiscoveryAgentSession(filmId, { passcode });
     upsertDiscoveryChatSession(session);
@@ -385,17 +431,45 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           {[...discoveryChatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
             return (
-              <button key={s.id} type="button" className="chat-panel__library-item" onClick={() => openSession(s.id)}>
+              <div
+                key={s.id}
+                role="button"
+                tabIndex={0}
+                className="chat-panel__library-item"
+                onClick={() => openSession(s.id)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openSession(s.id)}
+              >
+                <button
+                  type="button"
+                  className="chat-panel__library-item-delete"
+                  aria-label="Delete agent"
+                  title="Delete agent"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(s);
+                  }}
+                >
+                  <TrashIcon />
+                </button>
                 <span className="chat-panel__library-item-name">{s.name ?? `Agent #${s.agentNumber}`}</span>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
                 <span className="chat-panel__library-item-meta">{new Date(s.updatedAt).toLocaleString()}</span>
-              </button>
+              </div>
             );
           })}
         </div>
         <button type="button" className="btn btn--primary" onClick={handleNewAgent}>
           <SparkleIcon /> Kick off agentic discovery
         </button>
+        {deleteTarget && (
+          <ConfirmModal
+            title="Delete this agent?"
+            body={`"${deleteTarget.name ?? `Agent #${deleteTarget.agentNumber}`}" and its whole run history will be permanently removed. This can't be undone.`}
+            busy={deleting}
+            onConfirm={handleDeleteConfirmed}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
       </div>
     );
   }

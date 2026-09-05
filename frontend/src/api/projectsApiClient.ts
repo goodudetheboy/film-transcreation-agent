@@ -340,6 +340,22 @@ export async function logResearchRun(
   return (await res.json()) as ChatSession;
 }
 
+export async function deleteChatSession(
+  projectId: string,
+  sessionId: string,
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<void> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/projects/${projectId}/chat-sessions/${sessionId}?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'DELETE' },
+  );
+  await throwOnError(res);
+}
+
 export async function getChatSession(
   projectId: string,
   sessionId: string,

@@ -46,6 +46,15 @@ export function discoveryChatRoute(deps: DiscoveryChatRouteDeps): Router {
     res.status(200).json(session);
   });
 
+  router.delete('/api/films/:id/discovery-agents/:agentId', async (req, res) => {
+    const deleted = await deps.discoveryChatSessionStore.deleteSession(req.params.id, req.params.agentId);
+    if (!deleted) {
+      res.status(404).json({ error: 'discovery agent not found' });
+      return;
+    }
+    res.status(204).end();
+  });
+
   // Records that a pass was kicked off from this agent's thread — the pass
   // itself is created via the existing POST /api/films/:id/discovery-jobs
   // (unchanged); this just files a `run` reference turn into the

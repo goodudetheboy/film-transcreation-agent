@@ -8,7 +8,8 @@ import {
 } from '../api/apiClient.types';
 import { addColumn, addDetailRow, deleteDetailRow, updateDetailRow } from '../api/filmsApiClient';
 import { formatClock, parseClockToMs } from '../utils/timeFormat';
-import { ClockIcon, InfoIcon } from './icons';
+import { ClockIcon, InfoIcon, TrashIcon } from './icons';
+import { ConfirmModal } from './ConfirmModal';
 
 export interface DetailsTableProps {
   film: Film;
@@ -130,6 +131,7 @@ export function DetailsTable({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
@@ -276,12 +278,15 @@ export function DetailsTable({
     }
   }
 
-  async function handleDelete(rowId: string) {
+  async function handleDeleteConfirmed() {
+    if (!deleteTargetId) return;
+    const rowId = deleteTargetId;
     setBusy(true);
     try {
       await deleteDetailRow(film.id, rowId, passcode);
       onRowDeleted(rowId);
       if (editingRowId === rowId) cancelEdit();
+      setDeleteTargetId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to delete row');
     } finally {
@@ -426,8 +431,15 @@ export function DetailsTable({
                     <span className={`status-badge status-badge--${provenanceModifier(row)}`}>{provenanceLabel(row)}</span>
                   </td>
                   <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(row.id)}>
-                      Delete
+                    <button
+                      type="button"
+                      className="btn btn--ghost"
+                      disabled={busy}
+                      onClick={() => setDeleteTargetId(row.id)}
+                      aria-label="Delete row"
+                      title="Delete row"
+                    >
+                      <TrashIcon />
                     </button>
                   </td>
                 </tr>
@@ -516,8 +528,15 @@ export function DetailsTable({
             {error && <p className="passcode-gate__error">{error}</p>}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-              <button type="button" className="btn btn--ghost" disabled={busy} onClick={() => handleDelete(editingRowId)}>
-                Delete
+              <button
+                type="button"
+                className="btn btn--ghost"
+                disabled={busy}
+                onClick={() => setDeleteTargetId(editingRowId)}
+                aria-label="Delete row"
+                title="Delete row"
+              >
+                <TrashIcon />
               </button>
               <span style={{ display: 'flex', gap: 8 }}>
                 <button type="button" className="btn" disabled={busy} onClick={cancelEdit}>
@@ -587,6 +606,24 @@ export function DetailsTable({
           </form>
         </div>
       )}
+
+      {deleteTargetId &&
+        (() => {
+          const target = rows.find((r) => r.id === deleteTargetId);
+          return (
+            <ConfirmModal
+              title="Delete this row?"
+              body={
+                target?.subtitleText
+                  ? `"${target.subtitleText}" will be permanently removed from the details table. This can't be undone.`
+                  : "This row will be permanently removed from the details table. This can't be undone."
+              }
+              busy={busy}
+              onConfirm={handleDeleteConfirmed}
+              onCancel={() => setDeleteTargetId(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

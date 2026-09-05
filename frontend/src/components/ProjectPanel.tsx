@@ -21,16 +21,6 @@ import { SparkleIcon } from './icons';
 import { Flag } from './Flag';
 import { countryCode } from '../data/countries';
 
-const AGENTS_OPEN_STORAGE_KEY = 'projectPanel.agentsOpen';
-
-function readStoredAgentsOpen(): boolean {
-  try {
-    return window.localStorage.getItem(AGENTS_OPEN_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 export interface ProjectPanelProps {
   projectId: string;
   passcode: string;
@@ -58,7 +48,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
   const [showAddDetails, setShowAddDetails] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
-  const [agentsOpen, setAgentsOpen] = useState(readStoredAgentsOpen);
+  const [agentsOpen, setAgentsOpen] = useState(false);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   const {
@@ -79,14 +69,6 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
     setSort,
     reset,
   } = useProjectWorkspaceStore();
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(AGENTS_OPEN_STORAGE_KEY, agentsOpen ? '1' : '0');
-    } catch {
-      // private mode / storage disabled — toggling still works, just won't persist
-    }
-  }, [agentsOpen]);
 
   useEffect(() => {
     reset();

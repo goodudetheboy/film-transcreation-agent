@@ -39,6 +39,7 @@ export interface ProjectWorkspaceState {
   setChatSessions: (sessions: ChatSession[]) => void;
   addChatSession: (session: ChatSession) => void;
   upsertChatSession: (session: ChatSession) => void;
+  removeChatSession: (sessionId: string) => void;
   setActiveChatSessionId: (id: string | null) => void;
   applyChatEvent: (event: ChatStreamEvent) => void;
   setFilter: (filter: ProjectItemFilter) => void;
@@ -119,6 +120,12 @@ export const useProjectWorkspaceStore = create<ProjectWorkspaceState>((set, get)
       activeChatSessionId: session.id,
     });
   },
+
+  removeChatSession: (sessionId) =>
+    set({
+      chatSessions: get().chatSessions.filter((s) => s.id !== sessionId),
+      activeChatSessionId: get().activeChatSessionId === sessionId ? null : get().activeChatSessionId,
+    }),
 
   setActiveChatSessionId: (id) => set({ activeChatSessionId: id }),
 

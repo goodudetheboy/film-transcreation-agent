@@ -1,9 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { createChatSession, listChatSessions, listItems, logResearchRun, streamResearchRun, streamResearchRunUpdates } from '../api/projectsApiClient';
+import {
+  createChatSession,
+  deleteChatSession,
+  listChatSessions,
+  listItems,
+  logResearchRun,
+  streamResearchRun,
+  streamResearchRunUpdates,
+} from '../api/projectsApiClient';
 import { sendChatMessage } from '../api/projectChatApiClient';
 import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchRun } from '../api/apiClient.types';
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
-import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon } from './icons';
+import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
+import { ConfirmModal } from './ConfirmModal';
 
 export interface ResearchChatPanelProps {
   projectId: string;
@@ -249,8 +258,17 @@ function KickoffForm({
 }
 
 export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items = [] }: ResearchChatPanelProps) {
-  const { chatSessions, activeChatSessionId, setChatSessions, addChatSession, upsertChatSession, setActiveChatSessionId, applyChatEvent, setItems } =
-    useProjectWorkspaceStore();
+  const {
+    chatSessions,
+    activeChatSessionId,
+    setChatSessions,
+    addChatSession,
+    upsertChatSession,
+    removeChatSession,
+    setActiveChatSessionId,
+    applyChatEvent,
+    setItems,
+  } = useProjectWorkspaceStore();
   const [panelView, setPanelView] = useState<'library' | 'chat'>('library');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -258,6 +276,8 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [runDetails, setRunDetails] = useState<Record<string, ResearchRun>>({});
+  const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -308,6 +328,20 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id, activeSession?.turns.length]);
+
+  async function handleDeleteConfirmed() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteChatSession(projectId, deleteTarget.id, passcode);
+      removeChatSession(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'failed to delete session');
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   async function handleNewSession() {
     const session = await createChatSession(projectId, { passcode });
@@ -368,22 +402,45 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           {[...chatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
             return (
-              <button
+              <div
                 key={s.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 className="chat-panel__library-item"
                 onClick={() => openSession(s.id)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openSession(s.id)}
               >
+                <button
+                  type="button"
+                  className="chat-panel__library-item-delete"
+                  aria-label="Delete session"
+                  title="Delete session"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(s);
+                  }}
+                >
+                  <TrashIcon />
+                </button>
                 <span className="chat-panel__library-item-name">{s.name ?? `Session ${s.sessionNumber}`}</span>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
                 <span className="chat-panel__library-item-meta">{new Date(s.updatedAt).toLocaleString()}</span>
-              </button>
+              </div>
             );
           })}
         </div>
         <button type="button" className="btn btn--primary" onClick={handleNewSession}>
           + New session
         </button>
+        {deleteTarget && (
+          <ConfirmModal
+            title="Delete this session?"
+            body={`"${deleteTarget.name ?? `Session ${deleteTarget.sessionNumber}`}" and its whole conversation will be permanently removed. This can't be undone.`}
+            busy={deleting}
+            onConfirm={handleDeleteConfirmed}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
       </div>
     );
   }

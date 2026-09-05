@@ -86,10 +86,9 @@ describe('StartScreen', () => {
     expect(screen.getByText('Import a new film').closest('a')).toHaveAttribute('href', '/films/new');
   });
 
-  it('deletes a film after confirming, and removes it from the library list', async () => {
+  it('deletes a film after confirming in the modal, and removes it from the library list', async () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
     vi.mocked(filmsApiClient.deleteFilm).mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     render(
       <MemoryRouter>
         <StartScreen passcode="secret" />
@@ -97,15 +96,16 @@ describe('StartScreen', () => {
     );
     await screen.findByText('Inside Out');
 
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await userEvent.click(screen.getByRole('button', { name: /delete film/i }));
+    expect(await screen.findByText(/delete this film/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
     expect(filmsApiClient.deleteFilm).toHaveBeenCalledWith('f1', 'secret');
     expect(await screen.findByText(/no films yet/i)).toBeInTheDocument();
   });
 
-  it('does not delete when the confirm prompt is declined', async () => {
+  it('does not delete when the confirmation modal is cancelled', async () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
     render(
       <MemoryRouter>
         <StartScreen passcode="secret" />
@@ -113,7 +113,9 @@ describe('StartScreen', () => {
     );
     await screen.findByText('Inside Out');
 
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await userEvent.click(screen.getByRole('button', { name: /delete film/i }));
+    expect(await screen.findByText(/delete this film/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
     expect(filmsApiClient.deleteFilm).not.toHaveBeenCalled();
     expect(screen.getByText('Inside Out')).toBeInTheDocument();

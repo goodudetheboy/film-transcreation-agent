@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, Link, useLocation } from 'react-router-dom';
 import { PasscodeGate } from './components/PasscodeGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
@@ -9,6 +9,8 @@ import { StartScreen } from './views/StartScreen';
 import { ImportFilmPage } from './views/ImportFilmPage';
 import { FilmPreparingView } from './views/FilmPreparingView';
 import { FilmWorkspaceView } from './views/FilmWorkspaceView';
+import logo from './assets/logo.png';
+import { getLastWorkspacePath } from './utils/lastWorkspace';
 
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   return `app-nav__link${isActive ? ' app-nav__link--active' : ''}`;
@@ -18,10 +20,16 @@ function App() {
   const [passcode, setPasscode] = useState<string | null>(null);
   const [testMode, setTestMode] = useState(true);
   const [theme, setTheme] = useTheme();
+  // Re-renders on every navigation so the "Current Workspace" tab's target
+  // (read fresh from localStorage below) stays up to date as the user moves
+  // between films — the value itself isn't used, only the subscription.
+  useLocation();
 
   if (passcode === null) {
     return <PasscodeGate onUnlock={setPasscode} />;
   }
+
+  const lastWorkspacePath = getLastWorkspacePath();
 
   return (
     <>
@@ -30,17 +38,9 @@ function App() {
           no per-item dropdown behavior yet, the real actions still live in
           each panel. See docs/progress for the reasoning. */}
       <div className="menu-bar">
-        <span className="menu-bar__brand">
-          <svg className="menu-bar__brand-mark" aria-hidden="true" viewBox="0 0 34 34" fill="none">
-            <rect width="34" height="34" rx="9" fill="var(--accent)" />
-            <path d="M9 13.5h16l-1.4-3.4a1.5 1.5 0 0 0-1.4-.9H11.8a1.5 1.5 0 0 0-1.4.9L9 13.5Z" fill="#8b5cf6" />
-            <rect x="9" y="13.5" width="16" height="11" rx="1.5" fill="#f0f1f5" />
-            <path d="M15.5 16.8v5l4.3-2.5-4.3-2.5Z" fill="var(--accent)" />
-          </svg>
-          <span className="menu-bar__brand-word">
-            Film <span className="menu-bar__brand-word--accent">Transcreation</span> Agent
-          </span>
-        </span>
+        <Link to="/" className="menu-bar__brand">
+          <img className="menu-bar__logo" src={logo} alt="TranscreAI" />
+        </Link>
         <nav className="menu-bar__nav">
           <NavLink to="/" end className={navLinkClass}>
             Films
@@ -48,6 +48,11 @@ function App() {
           <NavLink to="/projects" className={navLinkClass}>
             Projects
           </NavLink>
+          {lastWorkspacePath && (
+            <NavLink to={lastWorkspacePath} end className={navLinkClass}>
+              Current Workspace
+            </NavLink>
+          )}
         </nav>
         <div className="menu-bar__spacer" />
         <HeaderSettings

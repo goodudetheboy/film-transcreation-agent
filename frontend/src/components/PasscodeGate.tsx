@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { verifyPasscode } from '../api/apiClient';
+import logo from '../assets/logo.png';
 
 export const PASSCODE_STORAGE_KEY = 'film-transcreation-agent:passcode';
 
@@ -54,31 +55,34 @@ export function PasscodeGate({ onUnlock }: PasscodeGateProps) {
 
   return (
     <div className="passcode-gate">
-      <form className="passcode-gate__card" onSubmit={handleSubmit}>
-        <p className="passcode-gate__title">Login</p>
-        <div className="field">
-          <label htmlFor="user">User</label>
-          <input id="user" type="text" value="Shared workspace" disabled />
-        </div>
-        <div className="field">
-          <label htmlFor="passcode">Password</label>
-          <input
-            id="passcode"
-            type="password"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-          />
-        </div>
-        {error && (
-          <p role="alert" className="passcode-gate__error">
-            {error}
-          </p>
-        )}
-        <button type="submit" className="btn btn--primary" disabled={checking}>
-          {checking ? 'Checking…' : 'Log in'}
-        </button>
-      </form>
+      <div className="passcode-gate__stack">
+        <img className="passcode-gate__logo" src={logo} alt="TranscreAI" />
+        <form className="passcode-gate__card" onSubmit={handleSubmit}>
+          <p className="passcode-gate__title">Login</p>
+          <div className="field">
+            <label htmlFor="user">User</label>
+            <input id="user" type="text" value="Shared workspace" disabled />
+          </div>
+          <div className="field">
+            <label htmlFor="passcode">Password</label>
+            <input
+              id="passcode"
+              type="password"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+            />
+          </div>
+          {error && (
+            <p role="alert" className="passcode-gate__error">
+              {error}
+            </p>
+          )}
+          <button type="submit" className="btn btn--primary" disabled={checking}>
+            {checking ? 'Checking…' : 'Log in'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

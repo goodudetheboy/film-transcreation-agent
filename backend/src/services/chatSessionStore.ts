@@ -25,6 +25,8 @@ export interface ChatSessionStore {
     sessionId: string,
     patch: Partial<Pick<ChatSession, 'name' | 'status' | 'turns' | 'errorMessage'>>,
   ): Promise<ChatSession | undefined>;
+  /** Returns false if the session didn't exist (already gone / wrong project). */
+  deleteSession(projectId: string, sessionId: string): Promise<boolean>;
 }
 
 function sessionsCollection(firestore: Firestore, projectId: string) {
@@ -74,6 +76,14 @@ export function createFirestoreChatSessionStore(firestore: Firestore): ChatSessi
       await ref.set(updated);
       return updated;
     },
+
+    async deleteSession(projectId, sessionId) {
+      const ref = sessionsCollection(firestore, projectId).doc(sessionId);
+      const doc = await ref.get();
+      if (!doc.exists) return false;
+      await ref.delete();
+      return true;
+    },
   };
 }
 
@@ -107,6 +117,13 @@ export function createInMemoryChatSessionStore(): ChatSessionStore {
       const updated: ChatSession = { ...current, ...patch, updatedAt: new Date().toISOString() };
       sessions.set(sessionId, updated);
       return updated;
+    },
+
+    async deleteSession(projectId, sessionId) {
+      const current = sessions.get(sessionId);
+      if (!current || current.projectId !== projectId) return false;
+      sessions.delete(sessionId);
+      return true;
     },
   };
 }

@@ -5,6 +5,7 @@ import { listProjects } from '../api/projectsApiClient';
 import type { EnrichedProject, ProjectItemAction } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
+import { setLastWorkspacePath } from '../utils/lastWorkspace';
 import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber } from '../components/VideoScrubber';
@@ -13,7 +14,8 @@ import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
 import { ProjectCard } from '../components/ProjectCard';
-import { SparkleIcon } from '../components/icons';
+import { ConfirmModal } from '../components/ConfirmModal';
+import { SparkleIcon, TrashIcon } from '../components/icons';
 
 export interface FilmWorkspaceViewProps {
   passcode: string;
@@ -21,16 +23,6 @@ export interface FilmWorkspaceViewProps {
 }
 
 type Tab = 'details' | 'project';
-
-const DISCOVERY_OPEN_STORAGE_KEY = 'workspace.discoveryOpen';
-
-function readStoredDiscoveryOpen(): boolean {
-  try {
-    return window.localStorage.getItem(DISCOVERY_OPEN_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
 
 const LEFT_WIDTH_STORAGE_KEY = 'workspace.leftPanelWidth';
 const MIN_LEFT = 360;
@@ -62,7 +54,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const tabParam = searchParams.get('tab');
   const tab: Tab = tabParam === 'project' ? 'project' : 'details';
   const projectId = searchParams.get('projectId');
-  const [discoveryOpen, setDiscoveryOpen] = useState(readStoredDiscoveryOpen);
+  const [discoveryOpen, setDiscoveryOpen] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -72,6 +64,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -88,13 +81,12 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
 
   const { film, rows, columns, setFilm, setDetails, addRow, updateRow, removeRow, addColumn, reset } = useFilmWorkspaceStore();
 
+  // Remembers exactly where in this film's workspace the user was (tab,
+  // project) so the header's "Current Workspace" tab can jump straight back.
   useEffect(() => {
-    try {
-      window.localStorage.setItem(DISCOVERY_OPEN_STORAGE_KEY, discoveryOpen ? '1' : '0');
-    } catch {
-      // private mode / storage disabled — toggling still works, just won't persist
-    }
-  }, [discoveryOpen]);
+    if (!id) return;
+    setLastWorkspacePath(`/films/${id}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`);
+  }, [id, searchParams]);
 
   useEffect(() => {
     reset();
@@ -314,9 +306,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     setMuted((m) => !m);
   }
 
-  async function handleDelete() {
+  async function handleDeleteConfirmed() {
     if (!film) return;
-    if (!window.confirm(`Delete "${film.title}"? This cannot be undone.`)) return;
     setDeleting(true);
     try {
       await deleteFilm(film.id, passcode);
@@ -324,6 +315,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'failed to delete film');
       setDeleting(false);
+      setShowDeleteConfirm(false);
     }
   }
 
@@ -338,11 +330,28 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         </div>
         <div className="page-header__actions">
           <span className={`status-badge status-badge--${film.status === 'processed' ? 'done' : 'running'}`}>{film.status}</span>
-          <button type="button" className="btn" onClick={handleDelete} disabled={deleting}>
-            {deleting ? 'Deleting…' : 'Delete Film'}
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={deleting}
+            aria-label={deleting ? 'Deleting film…' : 'Delete film'}
+            title={deleting ? 'Deleting film…' : 'Delete film'}
+          >
+            <TrashIcon />
           </button>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <ConfirmModal
+          title="Delete this film?"
+          body={`"${film.title}" and every project, detail, and agent session built on it will be permanently removed. This can't be undone.`}
+          busy={deleting}
+          onConfirm={handleDeleteConfirmed}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
 
       <nav className="workspace-tabs">
         <button type="button" className={`workspace-tabs__tab${tab === 'details' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('details')}>

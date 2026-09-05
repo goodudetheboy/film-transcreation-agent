@@ -240,28 +240,16 @@ textarea {
   align-items: center;
   gap: 10px;
   white-space: nowrap;
+  text-decoration: none;
+  color: inherit;
 }
 
-.menu-bar__brand-mark {
+.menu-bar__logo {
   flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
+  height: 52px;
+  width: auto;
+  border-radius: var(--radius-sm);
   box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
-}
-
-.menu-bar__brand-word {
-  font-size: 17px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  color: var(--text);
-}
-
-.menu-bar__brand-word--accent {
-  background: linear-gradient(90deg, var(--accent) 0%, #8b5cf6 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 
 .menu-bar__nav {
@@ -553,6 +541,10 @@ textarea {
   resize: vertical;
 }
 
+.field textarea.field__textarea--compact {
+  min-height: 0;
+}
+
 /* ---------- Drop zone ---------- */
 
 .drop-zone {
@@ -826,6 +818,21 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.passcode-gate__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-loose);
+}
+
+.passcode-gate__logo {
+  width: 340px;
+  max-width: 80vw;
+  height: auto;
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.35);
 }
 
 .passcode-gate__card {
@@ -2653,7 +2660,11 @@ textarea {
 }
 
 .workspace-details__chat--open {
-  flex-basis: 420px;
+  /* flex-shrink:1 (not the base rule's 0) — when the split genuinely doesn't
+     have 420px + the main panel's minimum to give, the drawer needs to be
+     able to give up some of its own width too, or the excess overflows
+     into the video column instead of clipping/shrinking cleanly. */
+  flex: 0 1 420px;
   display: flex;
   flex-direction: column;
   /* Safety net: the base rule's overflow:hidden exists to hide the collapsed
@@ -2669,7 +2680,11 @@ textarea {
 }
 
 .workspace-details__chat > .chat-panel {
-  width: 420px;
+  /* 100%, not a hardcoded 420px — the wrapper's flex-basis:420px is what
+     reserves the width; if the split ever has to shrink that wrapper below
+     420 (a narrow window), a hardcoded child width would overflow it
+     horizontally and get silently clipped by the wrapper's overflow-x. */
+  width: 100%;
   flex: 1;
   min-height: 0;
 }
@@ -2740,7 +2755,10 @@ textarea {
 }
 
 .video-stage .subtitle-display {
-  color: var(--text);
+  /* Always overlaid on the black video frame, regardless of app theme — tying
+     this to var(--text) made it near-black-on-black (unreadable) in light
+     mode, since --text flips dark there. */
+  color: #f5f6fa;
 }
 
 /* ---- Transport bar (horizontal row under the video frame) ---- */
@@ -3255,7 +3273,8 @@ textarea {
 }
 
 .project-item-view__chat--open {
-  flex-basis: 420px;
+  /* flex-shrink:1 — see .workspace-details__chat--open's comment. */
+  flex: 0 1 420px;
   display: flex;
   flex-direction: column;
   /* Safety net — see .workspace-details__chat--open's comment. */
@@ -3265,7 +3284,8 @@ textarea {
 }
 
 .project-item-view__chat > .chat-panel {
-  width: 420px;
+  /* See .workspace-details__chat > .chat-panel's comment. */
+  width: 100%;
   flex: 1;
   min-height: 0;
 }
@@ -3398,7 +3418,8 @@ textarea {
 }
 
 .project-panel__chat--open {
-  flex-basis: 420px;
+  /* flex-shrink:1 — see .workspace-details__chat--open's comment. */
+  flex: 0 1 420px;
   display: flex;
   flex-direction: column;
   /* Safety net — see .workspace-details__chat--open's comment. */
@@ -3408,7 +3429,8 @@ textarea {
 }
 
 .project-panel__chat > .chat-panel {
-  width: 420px;
+  /* See .workspace-details__chat > .chat-panel's comment. */
+  width: 100%;
   flex: 1;
   min-height: 0;
 }
@@ -3472,6 +3494,7 @@ textarea {
 }
 
 .chat-panel__library-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -3481,6 +3504,7 @@ textarea {
   border-radius: var(--radius-md);
   background: var(--panel);
   padding: var(--space-snug) var(--space-default);
+  padding-right: 40px;
   cursor: pointer;
   transition: var(--transition-fast);
   transition-property: border-color;
@@ -3493,6 +3517,30 @@ textarea {
 .chat-panel__library-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+.chat-panel__library-item-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.chat-panel__library-item-delete:hover {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+  background: var(--danger-dim);
 }
 
 .chat-panel__library-item-name {

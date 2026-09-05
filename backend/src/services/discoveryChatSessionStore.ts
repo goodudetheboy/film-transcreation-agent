@@ -25,6 +25,8 @@ export interface DiscoveryChatSessionStore {
     agentId: string,
     patch: Partial<Pick<DiscoveryAgentSession, 'name' | 'status' | 'turns' | 'errorMessage'>>,
   ): Promise<DiscoveryAgentSession | undefined>;
+  /** Returns false if the agent didn't exist (already gone / wrong film). */
+  deleteSession(filmId: string, agentId: string): Promise<boolean>;
 }
 
 function sessionsCollection(firestore: Firestore, filmId: string) {
@@ -74,6 +76,14 @@ export function createFirestoreDiscoveryChatSessionStore(firestore: Firestore): 
       await ref.set(updated);
       return updated;
     },
+
+    async deleteSession(filmId, agentId) {
+      const ref = sessionsCollection(firestore, filmId).doc(agentId);
+      const doc = await ref.get();
+      if (!doc.exists) return false;
+      await ref.delete();
+      return true;
+    },
   };
 }
 
@@ -107,6 +117,13 @@ export function createInMemoryDiscoveryChatSessionStore(): DiscoveryChatSessionS
       const updated: DiscoveryAgentSession = { ...current, ...patch, updatedAt: new Date().toISOString() };
       sessions.set(agentId, updated);
       return updated;
+    },
+
+    async deleteSession(filmId, agentId) {
+      const current = sessions.get(agentId);
+      if (!current || current.filmId !== filmId) return false;
+      sessions.delete(agentId);
+      return true;
     },
   };
 }

@@ -46,6 +46,15 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
     res.status(200).json(session);
   });
 
+  router.delete('/api/projects/:id/chat-sessions/:sessionId', async (req, res) => {
+    const deleted = await deps.chatSessionStore.deleteSession(req.params.id, req.params.sessionId);
+    if (!deleted) {
+      res.status(404).json({ error: 'chat session not found' });
+      return;
+    }
+    res.status(204).end();
+  });
+
   // Records that a bulk research run was kicked off from this chat session's
   // thread — the run itself is created via the existing POST
   // .../research-runs (unchanged, see routes/projects.ts); this just files a

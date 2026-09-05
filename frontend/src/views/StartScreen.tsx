@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteFilm, listFilms } from '../api/filmsApiClient';
 import type { Film } from '../api/apiClient.types';
+import { TrashIcon } from '../components/icons';
+import { ConfirmModal } from '../components/ConfirmModal';
 
 export interface StartScreenProps {
   passcode: string;
@@ -16,6 +18,7 @@ export function StartScreen({ passcode }: StartScreenProps) {
   const [films, setFilms] = useState<Film[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Film | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,13 +34,14 @@ export function StartScreen({ passcode }: StartScreenProps) {
     };
   }, [passcode]);
 
-  async function handleDelete(film: Film) {
-    if (!window.confirm(`Delete "${film.title}"? This cannot be undone.`)) return;
-
+  async function handleDeleteConfirmed() {
+    if (!deleteTarget) return;
+    const film = deleteTarget;
     setDeletingId(film.id);
     try {
       await deleteFilm(film.id, passcode);
       setFilms((prev) => prev?.filter((f) => f.id !== film.id) ?? prev);
+      setDeleteTarget(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to delete film');
     } finally {
@@ -82,8 +86,15 @@ export function StartScreen({ passcode }: StartScreenProps) {
                       <span className={`status-badge status-badge--${f.status === 'processed' ? 'done' : 'running'}`}>{f.status}</span>
                     </div>
                   </Link>
-                  <button type="button" className="btn" onClick={() => handleDelete(f)} disabled={deletingId === f.id}>
-                    {deletingId === f.id ? 'Deleting…' : 'Delete'}
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    onClick={() => setDeleteTarget(f)}
+                    disabled={deletingId === f.id}
+                    aria-label={deletingId === f.id ? 'Deleting film…' : 'Delete film'}
+                    title={deletingId === f.id ? 'Deleting film…' : 'Delete film'}
+                  >
+                    <TrashIcon />
                   </button>
                 </div>
               </li>
@@ -91,6 +102,16 @@ export function StartScreen({ passcode }: StartScreenProps) {
           </ul>
         )}
       </div>
+
+      {deleteTarget && (
+        <ConfirmModal
+          title="Delete this film?"
+          body={`"${deleteTarget.title}" and every project, detail, and agent session built on it will be permanently removed. This can't be undone.`}
+          busy={deletingId === deleteTarget.id}
+          onConfirm={handleDeleteConfirmed}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

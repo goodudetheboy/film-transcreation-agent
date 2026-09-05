@@ -39,16 +39,6 @@ function SearchIcon() {
   );
 }
 
-const CHAT_OPEN_STORAGE_KEY = 'projectItemView.chatOpen';
-
-function readStoredChatOpen(): boolean {
-  try {
-    return window.localStorage.getItem(CHAT_OPEN_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 function ScoreBlock({
   index,
   rubric,
@@ -261,15 +251,7 @@ export function ProjectItemView({
   const prev = index > 0 ? allItems[index - 1] : undefined;
   const next = index >= 0 && index < allItems.length - 1 ? allItems[index + 1] : undefined;
 
-  const [chatOpen, setChatOpen] = useState(readStoredChatOpen);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(CHAT_OPEN_STORAGE_KEY, chatOpen ? '1' : '0');
-    } catch {
-      // ignore
-    }
-  }, [chatOpen]);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Keep the video scrubbed to whichever item is open, same as DetailsTable's
   // row-click behavior — parity with the rest of the Film workspace.

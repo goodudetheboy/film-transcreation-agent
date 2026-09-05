@@ -50,6 +50,22 @@ export async function getDiscoveryAgentSession(
   return (await res.json()) as DiscoveryAgentSession;
 }
 
+export async function deleteDiscoveryAgentSession(
+  filmId: string,
+  agentId: string,
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<void> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'DELETE' },
+  );
+  await throwOnError(res);
+}
+
 /** Records that a pass (DiscoveryJob) was kicked off from this agent's
  * thread — the job itself is created via filmsApiClient's createDiscoveryJob
  * (unchanged); this just files a `run` reference turn so it renders inline

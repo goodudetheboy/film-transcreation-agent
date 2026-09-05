@@ -17,6 +17,7 @@ export interface FilmWorkspaceState {
 
   setDiscoveryChatSessions: (sessions: DiscoveryAgentSession[]) => void;
   upsertDiscoveryChatSession: (session: DiscoveryAgentSession) => void;
+  removeDiscoveryChatSession: (agentId: string) => void;
   setActiveDiscoveryChatSessionId: (id: string | null) => void;
   applyDiscoveryChatEvent: (event: DiscoveryChatStreamEvent) => void;
 
@@ -57,6 +58,12 @@ export const useFilmWorkspaceStore = create<FilmWorkspaceState>((set, get) => ({
       activeDiscoveryChatSessionId: session.id,
     });
   },
+
+  removeDiscoveryChatSession: (agentId) =>
+    set({
+      discoveryChatSessions: get().discoveryChatSessions.filter((s) => s.id !== agentId),
+      activeDiscoveryChatSessionId: get().activeDiscoveryChatSessionId === agentId ? null : get().activeDiscoveryChatSessionId,
+    }),
 
   setActiveDiscoveryChatSessionId: (id) => set({ activeDiscoveryChatSessionId: id }),
 
