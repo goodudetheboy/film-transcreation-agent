@@ -117,6 +117,41 @@ describe('createDiscoveryChatAgent runTurn', () => {
     expect(events.some((e) => e.type === 'row_patched')).toBe(false);
   });
 
+  it('includes each row\'s mm:ss timestamp range in the context sent to Gemini, so time-based references can be resolved', async () => {
+    const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    await collect(agent.runTurn({ session, userText: 'what rows exist?' }));
+
+    const systemInstruction = generateContentStream.mock.calls[0][0].config.systemInstruction as string;
+    expect(systemInstruction).toContain('00:00-00:01');
+  });
+
+  it('edit_detail_row can set a custom column value without wiping sibling custom values', async () => {
+    const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session } = await buildDeps();
+    const column = await detailRowsStore.addColumn('film-a', 'Food', 'Food visible in the scene.');
+    await detailRowsStore.updateRow('film-a', row.id, { values: { custom: { drink: 'water' } } });
+
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([
+          { candidates: [{ content: { parts: [{ functionCall: { name: 'edit_detail_row', args: { rowId: row.id, field: column.key, value: 'chicken' } } }] } }] },
+        ]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Set the food.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const events = await collect(agent.runTurn({ session, userText: 'set the food to chicken' }));
+
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_patched', 'text_delta', 'turn_done']);
+    const rowPatched = events.find((e) => e.type === 'row_patched') as Extract<DiscoveryChatStreamEvent, { type: 'row_patched' }>;
+    expect(rowPatched.row.values.custom).toEqual({ drink: 'water', food: 'chicken' });
+  });
+
   it('merge_candidate_row adds the candidate to the Details table and emits row_added', async () => {
     const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session, job } = await buildDeps();
     const generateContentStream = vi

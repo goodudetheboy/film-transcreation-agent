@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getFilm, listDetails, createProjectFromFilm } from '../api/filmsApiClient';
-import { streamResearchRun } from '../api/projectsApiClient';
+import { streamResearchRun, createChatSession, logResearchRun } from '../api/projectsApiClient';
 import type { DetailRow, Film, Project } from '../api/apiClient.types';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor, type DraftRubric } from './RubricsEditor';
@@ -110,13 +110,23 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
       });
 
       if (kickOffFirstPass && items.length > 0) {
-        // Fire-and-forget: the workspace panel picks up live progress via the
-        // resumable research-runs stream once it mounts for this project.
-        void streamResearchRun(
-          project.id,
-          { passcode, testMode, mode: 'custom', itemIds: items.map((i) => i.id) },
-          () => {},
-        );
+        // Log the run into a real chat session (same as ResearchChatPanel's
+        // KickoffForm) so it actually shows up in the project's session panel
+        // instead of running invisibly. Fire-and-forget relative to
+        // onCreated: the workspace panel's own listChatSessions on mount
+        // picks up the session, and the resumable research-runs stream picks
+        // up live progress for the run card inside it.
+        createChatSession(project.id, { passcode }).then((session) => {
+          void streamResearchRun(
+            project.id,
+            { passcode, testMode, mode: 'custom', itemIds: items.map((i) => i.id) },
+            (event) => {
+              if (event.type === 'progress') {
+                void logResearchRun(project.id, session.id, { passcode, runId: event.runId });
+              }
+            },
+          );
+        });
       }
 
       onCreated(project);

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Firestore } from '@google-cloud/firestore';
-import type { ProjectItem, ProjectItemAction, RubricScore, SuggestedReplacement, TrendSuggestion } from './projectTypes.js';
+import type { ProjectItem, ProjectItemAction, Rubric, RubricScore, SuggestedReplacement, TrendSuggestion } from './projectTypes.js';
+import { computeImportanceScore } from './importanceScore.js';
 
 export type { ProjectItem } from './projectTypes.js';
 
@@ -105,6 +106,11 @@ export interface ProjectItemStore {
   /** Used by the Trend Agent chaining step in the research-run route — additive
    * alongside suggestedReplacement, never flips shouldTranscreate on its own. */
   setTrendSuggestions(projectId: string, itemId: string, suggestions: TrendSuggestion[]): Promise<ProjectItem | undefined>;
+  /** Called after a rubric is deleted — strips that rubricId's score out of every
+   * item in the project and recomputes importanceScore against the rubrics that
+   * remain, so a deleted rubric's score can never linger as stale data (e.g. the
+   * chat agent's CURRENT ITEM context insisting a deleted rubric still exists). */
+  removeRubricScore(projectId: string, rubricId: string, remainingRubrics: Rubric[]): Promise<void>;
 }
 
 function itemsCollection(firestore: Firestore, projectId: string) {
@@ -224,6 +230,21 @@ export function createFirestoreProjectItemStore(firestore: Firestore): ProjectIt
       await ref.set(updated);
       return updated;
     },
+
+    async removeRubricScore(projectId, rubricId, remainingRubrics) {
+      const snapshot = await itemsCollection(firestore, projectId).get();
+      const now = new Date().toISOString();
+      const batch = firestore.batch();
+      let touched = false;
+      for (const doc of snapshot.docs) {
+        const current = doc.data() as ProjectItem;
+        if (!current.scores.some((s) => s.rubricId === rubricId)) continue;
+        touched = true;
+        const scores = current.scores.filter((s) => s.rubricId !== rubricId);
+        batch.set(doc.ref, { ...current, scores, importanceScore: computeImportanceScore(scores, remainingRubrics), updatedAt: now });
+      }
+      if (touched) await batch.commit();
+    },
   };
 }
 
@@ -328,6 +349,15 @@ export function createInMemoryProjectItemStore(): ProjectItemStore {
       };
       items.set(itemId, updated);
       return updated;
+    },
+
+    async removeRubricScore(projectId, rubricId, remainingRubrics) {
+      const now = new Date().toISOString();
+      for (const [itemId, current] of items) {
+        if (current.projectId !== projectId || !current.scores.some((s) => s.rubricId === rubricId)) continue;
+        const scores = current.scores.filter((s) => s.rubricId !== rubricId);
+        items.set(itemId, { ...current, scores, importanceScore: computeImportanceScore(scores, remainingRubrics), updatedAt: now });
+      }
     },
   };
 }

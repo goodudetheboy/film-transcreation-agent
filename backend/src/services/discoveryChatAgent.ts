@@ -52,8 +52,15 @@ const EDIT_DETAIL_ROW_DECL = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      rowId: { type: Type.STRING, description: 'The id of the Detail row to edit (from the FILM DETAILS context).' },
-      field: { type: Type.STRING, description: 'Which field to change: subtitleText, segmentDescription, gesture, or notes.' },
+      rowId: {
+        type: Type.STRING,
+        description: 'The id of the Detail row to edit (from the FILM DETAILS context) — match it by rowId, or by the timestamp range shown next to it if the user refers to a row by time.',
+      },
+      field: {
+        type: Type.STRING,
+        description:
+          'Which field to change: subtitleText, segmentDescription, gesture, notes, or the key of any custom column listed in the CUSTOM COLUMNS context (e.g. "food").',
+      },
       value: { type: Type.STRING, description: 'The new value for that field.' },
     },
     required: ['rowId', 'field', 'value'],
@@ -123,10 +130,20 @@ export async function executeTool(
 ): Promise<ExecuteToolResult> {
   if (call.name === 'edit_detail_row') {
     const args = call.args as { rowId: string; field: string; value: string };
-    if (!EDITABLE_FIELDS.includes(args.field as (typeof EDITABLE_FIELDS)[number])) {
-      return { response: { error: `field must be one of ${EDITABLE_FIELDS.join(', ')}` } };
+    const isFixedField = EDITABLE_FIELDS.includes(args.field as (typeof EDITABLE_FIELDS)[number]);
+    let isCustomField = false;
+    if (!isFixedField) {
+      const columns = await deps.detailRowsStore.listColumns(ctx.filmId);
+      isCustomField = columns.some((c) => c.key === args.field);
+      if (!isCustomField) {
+        return { response: { error: `field must be one of ${EDITABLE_FIELDS.join(', ')}, or an existing custom column key` } };
+      }
     }
-    const patch = args.field === 'subtitleText' ? { subtitleText: args.value } : { values: { [args.field]: args.value } };
+    const patch = isCustomField
+      ? { values: { custom: { [args.field]: args.value } } }
+      : args.field === 'subtitleText'
+        ? { subtitleText: args.value }
+        : { values: { [args.field]: args.value } };
     const updated = await deps.detailRowsStore.updateRow(ctx.filmId, args.rowId, patch as Parameters<DetailRowsStore['updateRow']>[2]);
     if (!updated) return { response: { error: 'row not found' } };
     return { response: { ok: true, rowId: updated.id, field: args.field, value: args.value }, rowEvent: { type: 'row_patched', row: updated } };
@@ -161,14 +178,22 @@ export async function executeTool(
 
 // ---- Real agent ---------------------------------------------------------
 
+function formatClock(ms: number): string {
+  return new Date(ms).toISOString().substring(14, 19); // "mm:ss"
+}
+
 async function buildDetailsContext(detailRowsStore: DetailRowsStore, filmId: string): Promise<string> {
-  const rows = await detailRowsStore.listRows(filmId);
+  const [rows, columns] = await Promise.all([detailRowsStore.listRows(filmId), detailRowsStore.listColumns(filmId)]);
   if (rows.length === 0) return '';
-  const lines = rows.map(
-    (r) =>
-      `rowId: ${r.id} | subtitleText: "${r.subtitleText}" | segmentDescription: "${r.values.segmentDescription}" | gesture: "${r.values.gesture}" | notes: "${r.values.notes}"`,
-  );
-  return `\n\nFILM DETAILS (existing rows you can edit with edit_detail_row):\n${lines.join('\n')}`;
+  const lines = rows.map((r) => {
+    const customPairs = columns.map((c) => `${c.key}: "${r.values.custom[c.key] ?? ''}"`).join(' | ');
+    return `rowId: ${r.id} | ${formatClock(r.startMs)}-${formatClock(r.endMs)} | subtitleText: "${r.subtitleText}" | segmentDescription: "${r.values.segmentDescription}" | gesture: "${r.values.gesture}" | notes: "${r.values.notes}"${customPairs ? ` | ${customPairs}` : ''}`;
+  });
+  const columnsBlock =
+    columns.length > 0
+      ? `\n\nCUSTOM COLUMNS (editable via edit_detail_row's field, using the key shown):\n${columns.map((c) => `key: ${c.key} | name: "${c.name}" | description: "${c.description}"`).join('\n')}`
+      : '';
+  return `\n\nFILM DETAILS (existing rows you can edit with edit_detail_row — match by rowId, or by the mm:ss timestamp range if the user refers to a row by time):\n${lines.join('\n')}${columnsBlock}`;
 }
 
 async function buildRunsContext(discoveryJobStore: DiscoveryJobStore, filmId: string, agentNumber: number): Promise<string> {

@@ -186,6 +186,11 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       res.status(404).json({ error: 'rubric not found' });
       return;
     }
+    // Strip the deleted rubric's score out of every item so it can never
+    // linger as stale data (e.g. the chat agent's CURRENT ITEM context
+    // insisting a deleted rubric still exists).
+    const remainingRubrics = await deps.projectRubricStore.listRubrics(req.params.id);
+    await deps.projectItemStore.removeRubricScore(req.params.id, req.params.rubricId, remainingRubrics);
     res.status(204).end();
   });
 

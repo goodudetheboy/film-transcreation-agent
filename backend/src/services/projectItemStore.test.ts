@@ -157,6 +157,30 @@ describe('createInMemoryProjectItemStore', () => {
     expect(await store.setTrendSuggestions('proj-b', item.id, [trendSuggestion])).toBeUndefined();
   });
 
+  it('removeRubricScore strips only the targeted rubric\'s score and recomputes importanceScore against what remains', async () => {
+    const store = createInMemoryProjectItemStore();
+    const [itemA] = await store.createItems('proj-a', [baseInput]);
+    const [itemB] = await store.createItems('proj-b', [baseInput]);
+
+    const rubricKept: import('./projectTypes.js').Rubric = {
+      id: 'rubric-kept', projectId: 'proj-a', name: 'Kept', description: '', weight: 2, trendEligible: false,
+      createdAt: '', updatedAt: '',
+    };
+    await store.patchScore('proj-a', itemA.id, 'rubric-deleted', { score: 10, updatedBy: 'user' });
+    await store.patchScore('proj-a', itemA.id, 'rubric-kept', { score: 4, updatedBy: 'user' });
+    await store.patchScore('proj-b', itemB.id, 'rubric-deleted', { score: 10, updatedBy: 'user' });
+
+    await store.removeRubricScore('proj-a', 'rubric-deleted', [rubricKept]);
+
+    const updatedA = await store.getItem('proj-a', itemA.id);
+    expect(updatedA?.scores.map((s) => s.rubricId)).toEqual(['rubric-kept']);
+    expect(updatedA?.importanceScore).toBe(4);
+
+    // A different project's item with the same rubricId is untouched.
+    const updatedB = await store.getItem('proj-b', itemB.id);
+    expect(updatedB?.scores.map((s) => s.rubricId)).toEqual(['rubric-deleted']);
+  });
+
   it('deleteItem removes only the targeted item for the right project', async () => {
     const store = createInMemoryProjectItemStore();
     const [item] = await store.createItems('proj-a', [baseInput]);

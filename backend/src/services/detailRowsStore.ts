@@ -21,6 +21,18 @@ function fillValues(values: Partial<DetailRowValues>): DetailRowValues {
   };
 }
 
+/** Merges a values patch onto the current values, deep-merging `custom`
+ * specifically — a plain `{...current, ...patch}` would let a patch that
+ * only touches one custom column (e.g. via the chat agent's edit_detail_row
+ * tool) silently wipe every other custom column on the row. */
+function mergeValues(current: DetailRowValues, patch: Partial<DetailRowValues>): DetailRowValues {
+  return fillValues({
+    ...current,
+    ...patch,
+    custom: { ...current.custom, ...(patch.custom ?? {}) },
+  });
+}
+
 /**
  * Owns the two per-film Firestore subcollections that make up the Details
  * table: `films/{filmId}/detailRows` (the rows themselves) and
@@ -87,7 +99,7 @@ export function createFirestoreDetailRowsStore(firestore: Firestore): DetailRows
       const updated: DetailRow = {
         ...current,
         ...patch,
-        values: patch.values ? fillValues({ ...current.values, ...patch.values }) : current.values,
+        values: patch.values ? mergeValues(current.values, patch.values) : current.values,
         updatedAt: new Date().toISOString(),
       };
       await ref.set(updated);
@@ -157,7 +169,7 @@ export function createInMemoryDetailRowsStore(): DetailRowsStore {
       const updated: DetailRow = {
         ...current,
         ...patch,
-        values: patch.values ? fillValues({ ...current.values, ...patch.values }) : current.values,
+        values: patch.values ? mergeValues(current.values, patch.values) : current.values,
         updatedAt: new Date().toISOString(),
       };
       rows.set(rowId, updated);

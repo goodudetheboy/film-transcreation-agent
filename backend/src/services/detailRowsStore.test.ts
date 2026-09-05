@@ -44,6 +44,20 @@ describe('createInMemoryDetailRowsStore rows', () => {
     expect(await store.updateRow('film-b', row.id, { values: { notes: 'x' } })).toBeUndefined();
   });
 
+  it('updateRow deep-merges values.custom instead of replacing it wholesale', async () => {
+    const store = createInMemoryDetailRowsStore();
+    const row = await store.addRow('film-a', {
+      startMs: 1000,
+      endMs: 2000,
+      subtitleText: 'Hello',
+      values: { custom: { food: 'salad', drink: 'water' } },
+      provenance: { type: 'user-marked' },
+    });
+
+    const updated = await store.updateRow('film-a', row.id, { values: { custom: { food: 'chicken' } } });
+    expect(updated?.values.custom).toEqual({ food: 'chicken', drink: 'water' });
+  });
+
   it('deleteRow removes only the targeted row for the right film', async () => {
     const store = createInMemoryDetailRowsStore();
     const row = await store.addRow('film-a', {

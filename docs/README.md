@@ -12,3 +12,6 @@
   logging mechanism.
 - **`runbook.md`** — operational checklist, currently just the pre-judging safety
   checklist for the deployed demo.
+- **`backlog.md`** — living checklist of triaged feedback/work, grouped into phases.
+  Check items off as they land; the "what changed and why" narrative still goes in
+  `progress/`.

@@ -309,6 +309,11 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   const [deleteTarget, setDeleteTarget] = useState<DiscoveryAgentSession | null>(null);
   const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const subscribedJobIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    subscribedJobIdsRef.current = new Set();
+  }, [filmId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -330,22 +335,23 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   // Populate jobDetails for every `run` part in the active session's turns —
   // one-shot per job (streamDiscoveryJob replays the current snapshot then
   // closes for an already-terminal job, or keeps following if still running).
+  // Subscriptions are tracked in a ref, not torn down on every re-run of this
+  // effect: an unrelated turns.length change (e.g. a chat message sent while
+  // a job is still running) must never cancel a still-live subscription, or
+  // its eventual terminal event gets dropped into a cancelled closure and the
+  // "Working" status sticks until a full reload.
   useEffect(() => {
     if (!activeSession) return;
     const jobIds = activeSession.turns.flatMap((t) => t.parts.filter((p) => p.run).map((p) => p.run!.jobId));
-    const missing = [...new Set(jobIds)].filter((jobId) => !(jobId in jobDetails));
-    if (missing.length === 0) return;
-    let cancelled = false;
-    for (const jobId of missing) {
+    const toSubscribe = [...new Set(jobIds)].filter((jobId) => !subscribedJobIdsRef.current.has(jobId));
+    for (const jobId of toSubscribe) {
+      subscribedJobIdsRef.current.add(jobId);
       streamDiscoveryJob(filmId, jobId, passcode, (event) => {
-        if (!cancelled) setJobDetails((prev) => ({ ...prev, [jobId]: event.job }));
+        setJobDetails((prev) => ({ ...prev, [jobId]: event.job }));
       });
     }
-    return () => {
-      cancelled = true;
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession?.id, activeSession?.turns.length]);
+  }, [activeSession, filmId, passcode]);
 
   function removeCandidateFromJob(jobId: string, tempId: string) {
     setJobDetails((prev) =>
