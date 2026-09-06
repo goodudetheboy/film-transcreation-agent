@@ -18,6 +18,7 @@ export type DiscoveryChatStreamEvent =
   | { type: 'row_added'; row: DetailRow; jobId: string; tempId: string }
   | { type: 'row_discarded'; jobId: string; tempId: string }
   | { type: 'turn_done' }
+  | { type: 'stopped' }
   | { type: 'error'; message: string };
 
 export interface DiscoveryChatAgentConfig {
@@ -37,6 +38,10 @@ export interface DiscoveryChatAgentDeps {
 export interface RunTurnInput {
   session: DiscoveryAgentSession;
   userText: string;
+  /** Aborted when the client disconnects (e.g. the user hits Stop) — wired through
+   * to generateContentStream's own abortSignal so a stop actually halts the
+   * in-flight Gemini call/tool loop server-side, same as researchChatAgent.ts. */
+  signal?: AbortSignal;
 }
 
 export interface DiscoveryChatAgent {
@@ -216,7 +221,7 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
     deps.genAI ?? new GoogleGenAI({ vertexai: true, project: config.googleCloudProject, location: config.geminiLocation });
 
   return {
-    async *runTurn({ session, userText }) {
+    async *runTurn({ session, userText, signal }) {
       const now = () => new Date().toISOString();
       // Persisted history keeps `run` marker turns (role: 'system') so the
       // frontend timeline sees them — but those never go to Gemini as
@@ -231,14 +236,19 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
         const systemInstruction = SYSTEM_INSTRUCTION + detailsContext + runsContext;
 
         let done = false;
+        let stopped = false;
         let round = 0;
         while (!done && round < MAX_ROUNDS) {
+          if (signal?.aborted) {
+            stopped = true;
+            break;
+          }
           round++;
           const apiContents = persistedTurns.filter((t) => t.role !== 'system');
           const stream = await ai.models.generateContentStream({
             model: config.geminiModel,
             contents: apiContents,
-            config: { tools: CHAT_TOOLS, systemInstruction },
+            config: { tools: CHAT_TOOLS, systemInstruction, abortSignal: signal },
           });
 
           const modelParts: DiscoveryChatPart[] = [];
@@ -265,6 +275,10 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
 
           for (const part of modelParts) {
             if (!part.functionCall) continue;
+            if (signal?.aborted) {
+              stopped = true;
+              break;
+            }
             const callId = randomUUID();
             const fc = part.functionCall;
             yield { type: 'tool_call', callId, name: fc.name, args: fc.args };
@@ -280,10 +294,16 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
             persistedTurns.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
             await deps.discoveryChatSessionStore.updateSession(session.filmId, session.id, { turns: persistedTurns });
           }
+          if (stopped) break;
         }
-        yield { type: 'turn_done' };
+        yield stopped ? { type: 'stopped' } : { type: 'turn_done' };
       } catch (err) {
-        yield { type: 'error', message: err instanceof Error ? err.message : 'unknown error' };
+        const isAbort = signal?.aborted || (err instanceof Error && err.name === 'AbortError');
+        if (isAbort) {
+          yield { type: 'stopped' };
+        } else {
+          yield { type: 'error', message: err instanceof Error ? err.message : 'unknown error' };
+        }
       }
     },
   };

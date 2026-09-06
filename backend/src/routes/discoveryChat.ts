@@ -5,6 +5,7 @@ import type { DiscoveryChatSessionStore } from '../services/discoveryChatSession
 import type { DiscoveryChatAgent, DiscoveryChatStreamEvent } from '../services/discoveryChatAgent.js';
 
 function writeSSE(res: Response, event: DiscoveryChatStreamEvent): void {
+  if (res.writableEnded) return;
   res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
@@ -121,10 +122,15 @@ export function discoveryChatRoute(deps: DiscoveryChatRouteDeps): Router {
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
 
+    // Stop generation server-side (not just client rendering) when the user hits
+    // Stop — the client aborts its fetch, which Node surfaces here as req 'close'.
+    const controller = new AbortController();
+    req.on('close', () => controller.abort());
+
     try {
       await deps.discoveryChatSessionStore.updateSession(req.params.id, session.id, { status: 'streaming' });
       let sawError = false;
-      for await (const event of agent.runTurn({ session, userText: text })) {
+      for await (const event of agent.runTurn({ session, userText: text, signal: controller.signal })) {
         writeSSE(res, event);
         if (event.type === 'error') {
           sawError = true;

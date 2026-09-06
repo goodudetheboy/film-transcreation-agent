@@ -126,6 +126,33 @@ describe('createResearchChatAgent runTurn', () => {
     expect(updatedItem?.shouldTranscreate).toBe(true);
   });
 
+  it('yields only a stopped event and never calls the model when the signal is already aborted', async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const controller = new AbortController();
+    controller.abort();
+    const generateContentStream = vi.fn();
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const events = await collect(agent.runTurn({ session, userText: 'hi', signal: controller.signal }));
+
+    expect(events).toEqual([{ type: 'stopped' }]);
+    expect(generateContentStream).not.toHaveBeenCalled();
+  });
+
+  it('yields a stopped event (not error) when the stream call itself rejects with an AbortError', async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const abortError = new Error('aborted');
+    abortError.name = 'AbortError';
+    const generateContentStream = vi.fn().mockRejectedValue(abortError);
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const events = await collect(agent.runTurn({ session, userText: 'hi' }));
+
+    expect(events).toEqual([{ type: 'stopped' }]);
+  });
+
   it('yields an error event and does not throw when the underlying stream call rejects', async () => {
     const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
     const generateContentStream = vi.fn().mockRejectedValue(new Error('vertex boom'));

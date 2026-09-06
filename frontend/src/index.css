@@ -3470,6 +3470,12 @@ textarea {
   max-width: 95vw;
 }
 
+.kickoff-modal {
+  width: 480px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
 /* ---------- Research chat panel ---------- */
 
 .chat-panel {
@@ -3643,6 +3649,53 @@ textarea {
   color: var(--text);
 }
 
+/* Markdown-rendered model text (ChatMarkdown) — the bubble's own white-space:
+   pre-wrap is for plain typed text; markdown output uses real <p>/<ul> elements, so
+   reset to normal wrapping and collapse the default block margins that would
+   otherwise add awkward gaps inside a small bubble. */
+.chat-bubble--model,
+.chat-bubble--system {
+  white-space: normal;
+}
+
+.chat-bubble--model p,
+.chat-bubble--system p,
+.chat-bubble--model ul,
+.chat-bubble--system ul,
+.chat-bubble--model ol,
+.chat-bubble--system ol,
+.chat-bubble--model pre,
+.chat-bubble--system pre {
+  margin: 0 0 8px;
+}
+
+.chat-bubble--model > :last-child,
+.chat-bubble--system > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble--model ul,
+.chat-bubble--system ul,
+.chat-bubble--model ol,
+.chat-bubble--system ol {
+  padding-left: 20px;
+}
+
+.chat-bubble--model code,
+.chat-bubble--system code {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+  font-size: 0.9em;
+}
+
+.chat-bubble--model pre code,
+.chat-bubble--system pre code {
+  display: block;
+  padding: 8px;
+  overflow-x: auto;
+}
+
 .chat-step-card {
   align-self: flex-start;
   max-width: 90%;
@@ -3751,12 +3804,9 @@ textarea {
   gap: 2px;
 }
 
+/* Now rendered inside a Modal (.kickoff-modal), which already supplies the card
+   chrome/padding/title — this only needs its own flex-column layout. */
 .agent-kickoff-form {
-  align-self: stretch;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--panel);
-  padding: var(--space-default);
   display: flex;
   flex-direction: column;
   gap: var(--space-default);

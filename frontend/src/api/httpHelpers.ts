@@ -4,6 +4,10 @@
 export interface ApiClientOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
+  /** Lets a caller (e.g. a chat panel's Stop button) cancel an in-flight streaming
+   * request client-side; the backend also detects the resulting disconnect and
+   * stops its own generation (see backend routes/projectChat.ts's req.on('close')). */
+  signal?: AbortSignal;
 }
 
 export function resolveBaseUrl(options: ApiClientOptions): string {

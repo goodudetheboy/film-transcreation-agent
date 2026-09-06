@@ -47,13 +47,14 @@ Triaged 2026-09-05 from a single batch of user feedback (see
   design to follow later
 - [x] Rename "Verdict"/"Action" → "AI assessment"/"Your Verdict"
 
-## Phase 3 — chat UX
+## Phase 3 — chat UX — done 2026-09-05
 
-- [ ] Markdown rendering in chat bubbles
-- [ ] User's own bubble appears immediately on send, not after the response
+- [x] Markdown rendering in chat bubbles
+- [x] User's own bubble appears immediately on send, not after the response
   completes
-- [ ] Stop-generation button
-- [ ] New-agent-run kickoff moves to a modal instead of cluttering the chat
+- [x] Stop-generation button (true backend cancellation, not just client
+  rendering — see [docs/progress/20260905.md](progress/20260905.md))
+- [x] New-agent-run kickoff moves to a modal instead of cluttering the chat
   thread
 
 ## Phase 4 — Run/Details UI overhaul

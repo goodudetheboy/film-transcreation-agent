@@ -125,11 +125,20 @@ export async function sendDiscoveryChatMessage(
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}/messages`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: options.signal,
+    });
+  } catch (err) {
+    // A user-initiated Stop click aborts this fetch — that's not a failure, so stay
+    // quiet rather than surfacing an error banner. Anything else really did fail.
+    if (err instanceof Error && err.name === 'AbortError') return;
+    throw err;
+  }
 
   if (!res.ok) {
     const detail = await describeError(res);
@@ -141,5 +150,16 @@ export async function sendDiscoveryChatMessage(
     return;
   }
 
-  await parseSSEStream<DiscoveryChatStreamEvent>(res, onEvent, (event) => event.type === 'turn_done' || event.type === 'error');
+  try {
+    await parseSSEStream<DiscoveryChatStreamEvent>(
+      res,
+      onEvent,
+      (event) => event.type === 'turn_done' || event.type === 'stopped' || event.type === 'error',
+    );
+  } catch (err) {
+    // The Stop button aborting mid-stream tears down the read here too — same
+    // quiet handling as the initial fetch above.
+    if (err instanceof Error && err.name === 'AbortError') return;
+    throw err;
+  }
 }

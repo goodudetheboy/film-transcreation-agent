@@ -181,6 +181,7 @@ export type ChatStreamEvent =
   | { type: 'tool_result'; callId: string; name: string; result: Record<string, unknown> }
   | { type: 'item_patched'; itemId: string; rubricId?: string; patch: Record<string, unknown> }
   | { type: 'turn_done' }
+  | { type: 'stopped' }
   | { type: 'error'; message: string };
 
 // ---- Films / subtitle / details / discovery jobs (docs/adr/0018-0022) --------------
@@ -379,4 +380,5 @@ export type DiscoveryChatStreamEvent =
   | { type: 'row_added'; row: DetailRow; jobId: string; tempId: string }
   | { type: 'row_discarded'; jobId: string; tempId: string }
   | { type: 'turn_done' }
+  | { type: 'stopped' }
   | { type: 'error'; message: string };

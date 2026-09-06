@@ -15,6 +15,8 @@ import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { EditableTitle } from './EditableTitle';
+import { ChatMarkdown } from './ChatMarkdown';
+import { Modal } from './Modal';
 
 export interface ResearchChatPanelProps {
   projectId: string;
@@ -193,8 +195,6 @@ function KickoffForm({
 
   return (
     <form className="agent-kickoff-form" onSubmit={handleSubmit}>
-      <p className="agent-kickoff-form__title">Kick off agentic research?</p>
-
       <div className="field">
         <label>Which items?</label>
         <div className="column-checklist">
@@ -275,12 +275,14 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState<ChatStreamEvent[]>([]);
+  const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [runDetails, setRunDetails] = useState<Record<string, ResearchRun>>({});
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -379,6 +381,9 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     setSending(true);
     setError(null);
     setLiveEvents([]);
+    setPendingUserText(text);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     try {
       await sendChatMessage(
         projectId,
@@ -389,6 +394,7 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           applyChatEvent(event);
           if (event.type === 'error') setError(event.message);
         },
+        { signal: controller.signal },
       );
     } finally {
       // Re-fetch the session so the persisted turns (source of truth) replace
@@ -396,8 +402,14 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
       const sessions = await listChatSessions(projectId, passcode);
       setChatSessions(sessions);
       setLiveEvents([]);
+      setPendingUserText(null);
       setSending(false);
+      abortControllerRef.current = null;
     }
+  }
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
   }
 
   if (panelView === 'library') {
@@ -492,9 +504,10 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
               return <ResearchRunCard key={`${i}-${gi}`} run={runDetails[g.run.runId]} />;
             }
             if (g.text !== undefined) {
+              const isModel = turn.role !== 'user';
               return (
-                <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${turn.role === 'system' ? 'model' : turn.role}`}>
-                  {g.text}
+                <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${isModel ? 'model' : 'user'}`}>
+                  {isModel ? <ChatMarkdown text={g.text} /> : g.text}
                 </div>
               );
             }
@@ -506,6 +519,7 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
             return null;
           });
         })}
+        {pendingUserText && <div className="chat-bubble chat-bubble--user">{pendingUserText}</div>}
         {liveEvents.map((event, i) => {
           // Skip a text_delta that's immediately continuing the previous one — it's
           // merged into that bubble below — but keep rendering once a non-delta
@@ -514,7 +528,7 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           if (event.type === 'text_delta') {
             let text = event.text;
             for (let j = i + 1; liveEvents[j]?.type === 'text_delta'; j++) text += (liveEvents[j] as { text: string }).text;
-            return <div key={i} className="chat-bubble chat-bubble--model">{text}</div>;
+            return <div key={i} className="chat-bubble chat-bubble--model"><ChatMarkdown text={text} /></div>;
           }
           if (event.type === 'tool_call') {
             const result = liveEvents.find((e) => e.type === 'tool_result' && e.callId === event.callId);
@@ -531,38 +545,35 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
         })}
         {sending && <p className="results-status" role="status">Thinking…</p>}
 
+        {activeSession && !sending && !itemId && activeSession.turns.length === 0 && (
+          <p className="results-placeholder">
+            No runs yet. Kick off a research run to get started, or just send a message below.
+          </p>
+        )}
+
         {activeSession && !sending && (
-          <>
-            {!itemId && activeSession.turns.length === 0 ? (
-              <KickoffForm
-                projectId={projectId}
-                passcode={passcode}
-                testMode={testMode}
-                sessionId={activeSession.id}
-                items={items}
-                onCreated={(s) => upsertChatSession(s)}
-              />
-            ) : showKickoffForm ? (
-              <KickoffForm
-                projectId={projectId}
-                passcode={passcode}
-                testMode={testMode}
-                sessionId={activeSession.id}
-                items={items}
-                onCreated={(s) => {
-                  upsertChatSession(s);
-                  setShowKickoffForm(false);
-                }}
-                onCancel={() => setShowKickoffForm(false)}
-              />
-            ) : (
-              <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
-                <SparkleIcon /> Kick off a research run
-              </button>
-            )}
-          </>
+          <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
+            <SparkleIcon /> {activeSession.turns.length === 0 ? 'Kick off a research run' : 'Kick off another research run'}
+          </button>
         )}
       </div>
+
+      {showKickoffForm && activeSession && (
+        <Modal title="Kick off agentic research?" onClose={() => setShowKickoffForm(false)} className="kickoff-modal">
+          <KickoffForm
+            projectId={projectId}
+            passcode={passcode}
+            testMode={testMode}
+            sessionId={activeSession.id}
+            items={items}
+            onCreated={(s) => {
+              upsertChatSession(s);
+              setShowKickoffForm(false);
+            }}
+            onCancel={() => setShowKickoffForm(false)}
+          />
+        </Modal>
+      )}
 
       {error && <p className="passcode-gate__error">{error}</p>}
 
@@ -582,9 +593,15 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           placeholder={itemId ? 'Ask about this line…' : 'Open a detail row to discuss a specific item…'}
           disabled={sending}
         />
-        <button type="submit" className="btn btn--primary" disabled={sending || draft.trim() === ''}>
-          Send
-        </button>
+        {sending ? (
+          <button type="button" className="btn" onClick={handleStop}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit" className="btn btn--primary" disabled={draft.trim() === ''}>
+            Send
+          </button>
+        )}
       </form>
     </div>
   );

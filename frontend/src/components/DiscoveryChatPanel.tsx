@@ -21,6 +21,8 @@ import { formatClock } from '../utils/timeFormat';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { EditableTitle } from './EditableTitle';
+import { ChatMarkdown } from './ChatMarkdown';
+import { Modal } from './Modal';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
@@ -103,8 +105,6 @@ function KickoffForm({
 
   return (
     <form className="agent-kickoff-form" onSubmit={handleSubmit}>
-      <p className="agent-kickoff-form__title">Kick off Discover agent to find new lines?</p>
-
       <div className="field">
         <label htmlFor="discovery-run-name">Label (optional)</label>
         <input id="discovery-run-name" type="text" value={name} onChange={(e) => setName(e.target.value)} disabled={submitting} />
@@ -305,6 +305,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState<DiscoveryChatStreamEvent[]>([]);
+  const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [jobDetails, setJobDetails] = useState<Record<string, DiscoveryJob>>({});
@@ -312,6 +313,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const subscribedJobIdsRef = useRef<Set<string>>(new Set());
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     subscribedJobIdsRef.current = new Set();
@@ -420,19 +422,34 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     setSending(true);
     setError(null);
     setLiveEvents([]);
+    setPendingUserText(text);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     try {
-      await sendDiscoveryChatMessage(filmId, session.id, { passcode, text, testMode }, (event) => {
-        setLiveEvents((prev) => [...prev, event]);
-        applyDiscoveryChatEvent(event);
-        if (event.type === 'row_added' || event.type === 'row_discarded') removeCandidateFromJob(event.jobId, event.tempId);
-        if (event.type === 'error') setError(event.message);
-      });
+      await sendDiscoveryChatMessage(
+        filmId,
+        session.id,
+        { passcode, text, testMode },
+        (event) => {
+          setLiveEvents((prev) => [...prev, event]);
+          applyDiscoveryChatEvent(event);
+          if (event.type === 'row_added' || event.type === 'row_discarded') removeCandidateFromJob(event.jobId, event.tempId);
+          if (event.type === 'error') setError(event.message);
+        },
+        { signal: controller.signal },
+      );
     } finally {
       const sessions = await listDiscoveryAgentSessions(filmId, passcode);
       setDiscoveryChatSessions(sessions);
       setLiveEvents([]);
+      setPendingUserText(null);
       setSending(false);
+      abortControllerRef.current = null;
     }
+  }
+
+  function handleStop() {
+    abortControllerRef.current?.abort();
   }
 
   if (panelView === 'library') {
@@ -532,9 +549,10 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
               );
             }
             if (g.text !== undefined) {
+              const isModel = turn.role !== 'user';
               return (
-                <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${turn.role === 'system' ? 'model' : turn.role}`}>
-                  {g.text}
+                <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${isModel ? 'model' : 'user'}`}>
+                  {isModel ? <ChatMarkdown text={g.text} /> : g.text}
                 </div>
               );
             }
@@ -546,6 +564,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
             return null;
           });
         })}
+        {pendingUserText && <div className="chat-bubble chat-bubble--user">{pendingUserText}</div>}
 
         {liveEvents.map((event, i) => {
           // Skip a text_delta that's immediately continuing the previous one — it's
@@ -555,7 +574,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           if (event.type === 'text_delta') {
             let text = event.text;
             for (let j = i + 1; liveEvents[j]?.type === 'text_delta'; j++) text += (liveEvents[j] as { text: string }).text;
-            return <div key={i} className="chat-bubble chat-bubble--model">{text}</div>;
+            return <div key={i} className="chat-bubble chat-bubble--model"><ChatMarkdown text={text} /></div>;
           }
           if (event.type === 'tool_call') {
             const result = liveEvents.find((e) => e.type === 'tool_result' && e.callId === event.callId);
@@ -576,38 +595,35 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           </p>
         )}
 
+        {activeSession && !sending && activeSession.turns.length === 0 && (
+          <p className="results-placeholder">
+            No passes yet. Kick off agentic discovery to get started, or just send a message below.
+          </p>
+        )}
+
         {activeSession && !sending && (
-          <>
-            {activeSession.turns.length === 0 ? (
-              <KickoffForm
-                filmId={filmId}
-                passcode={passcode}
-                testMode={testMode}
-                agentNumber={activeSession.agentNumber}
-                columns={columns}
-                onCreated={(s) => upsertDiscoveryChatSession(s)}
-              />
-            ) : showKickoffForm ? (
-              <KickoffForm
-                filmId={filmId}
-                passcode={passcode}
-                testMode={testMode}
-                agentNumber={activeSession.agentNumber}
-                columns={columns}
-                onCreated={(s) => {
-                  upsertDiscoveryChatSession(s);
-                  setShowKickoffForm(false);
-                }}
-                onCancel={() => setShowKickoffForm(false)}
-              />
-            ) : (
-              <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
-                <SparkleIcon /> Kick off another pass
-              </button>
-            )}
-          </>
+          <button type="button" className="btn" style={{ alignSelf: 'flex-start' }} onClick={() => setShowKickoffForm(true)}>
+            <SparkleIcon /> {activeSession.turns.length === 0 ? 'Kick off agentic discovery' : 'Kick off another pass'}
+          </button>
         )}
       </div>
+
+      {showKickoffForm && activeSession && (
+        <Modal title="Kick off Discover agent to find new lines?" onClose={() => setShowKickoffForm(false)} className="kickoff-modal">
+          <KickoffForm
+            filmId={filmId}
+            passcode={passcode}
+            testMode={testMode}
+            agentNumber={activeSession.agentNumber}
+            columns={columns}
+            onCreated={(s) => {
+              upsertDiscoveryChatSession(s);
+              setShowKickoffForm(false);
+            }}
+            onCancel={() => setShowKickoffForm(false)}
+          />
+        </Modal>
+      )}
 
       {error && <p className="passcode-gate__error">{error}</p>}
 
@@ -627,9 +643,15 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
           placeholder="Ask about this agent's runs, or ask it to edit a row…"
           disabled={sending}
         />
-        <button type="submit" className="btn btn--primary" disabled={sending || draft.trim() === ''}>
-          Send
-        </button>
+        {sending ? (
+          <button type="button" className="btn" onClick={handleStop}>
+            Stop
+          </button>
+        ) : (
+          <button type="submit" className="btn btn--primary" disabled={draft.trim() === ''}>
+            Send
+          </button>
+        )}
       </form>
     </div>
   );

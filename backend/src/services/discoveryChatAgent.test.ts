@@ -223,6 +223,33 @@ describe('createDiscoveryChatAgent runTurn', () => {
     expect(persisted?.turns.map((t) => t.role)).toEqual(['system', 'user', 'model']);
   });
 
+  it('yields only a stopped event and never calls the model when the signal is already aborted', async () => {
+    const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const controller = new AbortController();
+    controller.abort();
+    const generateContentStream = vi.fn();
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const events = await collect(agent.runTurn({ session, userText: 'hi', signal: controller.signal }));
+
+    expect(events).toEqual([{ type: 'stopped' }]);
+    expect(generateContentStream).not.toHaveBeenCalled();
+  });
+
+  it('yields a stopped event (not error) when the stream call itself rejects with an AbortError', async () => {
+    const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const abortError = new Error('aborted');
+    abortError.name = 'AbortError';
+    const generateContentStream = vi.fn().mockRejectedValue(abortError);
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const events = await collect(agent.runTurn({ session, userText: 'hi' }));
+
+    expect(events).toEqual([{ type: 'stopped' }]);
+  });
+
   it('yields an error event and does not throw when the underlying stream call rejects', async () => {
     const { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
     const generateContentStream = vi.fn().mockRejectedValue(new Error('vertex boom'));

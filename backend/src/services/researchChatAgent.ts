@@ -13,6 +13,7 @@ export type ChatStreamEvent =
   | { type: 'tool_result'; callId: string; name: string; result: Record<string, unknown> }
   | { type: 'item_patched'; itemId: string; rubricId?: string; patch: Record<string, unknown> }
   | { type: 'turn_done' }
+  | { type: 'stopped' }
   | { type: 'error'; message: string };
 
 /** Narrow slice of the GoogleGenAI client this service actually calls — lets tests
@@ -61,6 +62,11 @@ export interface RunTurnInput {
    * (update_rubric_score(rubricId, ...), no itemId param) only make sense with an
    * implicit "currently open item" carried alongside the message. See docs/adr/0025. */
   itemId?: string;
+  /** Aborted when the client disconnects (e.g. the user hits Stop) — wired through
+   * to generateContentStream's own abortSignal and to the search_web tool's fetch,
+   * so a stop actually halts the in-flight Gemini call/tool loop server-side, not
+   * just the client's rendering. See routes/projectChat.ts's req.on('close'). */
+  signal?: AbortSignal;
 }
 
 export interface ResearchChatAgent {
@@ -132,6 +138,7 @@ interface ExecuteToolDeps {
   projectRubricStore: ProjectRubricStore;
   fetchImpl: typeof fetch;
   parallelApiKey?: string;
+  signal?: AbortSignal;
 }
 
 interface ExecuteToolResult {
@@ -228,6 +235,7 @@ export async function executeTool(
         method: 'POST',
         headers: { 'x-api-key': deps.parallelApiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ objective: args.objective, search_queries: args.search_queries }),
+        signal: deps.signal,
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
@@ -278,7 +286,7 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
   const fetchImpl = deps.fetchImpl ?? fetch;
 
   return {
-    async *runTurn({ session, userText, itemId }) {
+    async *runTurn({ session, userText, itemId, signal }) {
       const now = () => new Date().toISOString();
       // Persisted history keeps `run` marker turns (role: 'system') so the frontend
       // timeline sees them — but those never go to Gemini as `contents`; the model
@@ -294,14 +302,19 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
         const systemInstruction = SYSTEM_INSTRUCTION + buildItemContext(item) + runsContext;
 
         let done = false;
+        let stopped = false;
         let round = 0;
         while (!done && round < MAX_ROUNDS) {
+          if (signal?.aborted) {
+            stopped = true;
+            break;
+          }
           round++;
           const apiContents = persistedTurns.filter((t) => t.role !== 'system');
           const stream = await ai.models.generateContentStream({
             model: config.geminiModel,
             contents: apiContents,
-            config: { tools: CHAT_TOOLS, systemInstruction },
+            config: { tools: CHAT_TOOLS, systemInstruction, abortSignal: signal },
           });
 
           const modelParts: ChatPart[] = [];
@@ -328,6 +341,10 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
 
           for (const part of modelParts) {
             if (!part.functionCall) continue;
+            if (signal?.aborted) {
+              stopped = true;
+              break;
+            }
             const callId = randomUUID();
             const fc = part.functionCall;
             yield { type: 'tool_call', callId, name: fc.name, args: fc.args };
@@ -337,6 +354,7 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
               projectRubricStore: deps.projectRubricStore,
               fetchImpl,
               parallelApiKey: config.parallelApiKey,
+              signal,
             });
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (itemPatch) yield { type: 'item_patched', itemId: itemPatch.itemId, rubricId: itemPatch.rubricId, patch: itemPatch.patch };
@@ -344,10 +362,16 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
             persistedTurns.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
             await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: persistedTurns });
           }
+          if (stopped) break;
         }
-        yield { type: 'turn_done' };
+        yield stopped ? { type: 'stopped' } : { type: 'turn_done' };
       } catch (err) {
-        yield { type: 'error', message: err instanceof Error ? err.message : 'unknown error' };
+        const isAbort = signal?.aborted || (err instanceof Error && err.name === 'AbortError');
+        if (isAbort) {
+          yield { type: 'stopped' };
+        } else {
+          yield { type: 'error', message: err instanceof Error ? err.message : 'unknown error' };
+        }
       }
     },
   };
