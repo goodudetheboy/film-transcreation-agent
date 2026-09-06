@@ -61,7 +61,7 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
         <p className="page-header__subtitle">Hang tight — we're uploading and processing everything.</p>
       </div>
 
-      <PrepAnimation stage={isError ? 'finalizing' : displayStage} />
+      <PrepAnimation stage={displayStage} />
 
       <p className="prep-stage-label">{isError ? prep?.errorMessage ?? STAGE_LABELS.error : STAGE_LABELS[displayStage]}</p>
 

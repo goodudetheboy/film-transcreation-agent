@@ -2,10 +2,10 @@ import type { DisplayPrepStage } from '../utils/useStageDwell';
 import { LottiePlayer } from './LottiePlayer';
 import preparingAnimation from '../assets/animations/prep-preparing.json';
 import videoUploadingAnimation from '../assets/animations/prep-video-uploading.json';
-import subtitleUploadingAnimation from '../assets/animations/prep-subtitle-uploading.json';
 import discoveryRunningAnimation from '../assets/animations/prep-discovery-running.json';
 import finalizingAnimation from '../assets/animations/prep-finalizing.json';
 import readyAnimation from '../assets/animations/prep-ready.json';
+import errorAnimation from '../assets/animations/prep-error.json';
 
 export interface PrepAnimationProps {
   stage: DisplayPrepStage;
@@ -20,15 +20,12 @@ function PreparingScene() {
   );
 }
 
-/** A cloud with icons beaming up into it — used for both upload stages. */
-function UploadScene({ icon }: { icon: 'video' | 'script' }) {
+/** Shared scene for both upload stages (video and subtitle) — a single
+ * uploading animation covers both since the visual beat is the same. */
+function UploadScene() {
   return (
-    <div className={`prep-scene prep-scene--${icon === 'video' ? 'video-uploading' : 'subtitle-uploading'}`}>
-      <LottiePlayer
-        animationData={icon === 'video' ? videoUploadingAnimation : subtitleUploadingAnimation}
-        loop
-        className="prep-scene__lottie"
-      />
+    <div className="prep-scene prep-scene--uploading">
+      <LottiePlayer animationData={videoUploadingAnimation} loop className="prep-scene__lottie" />
     </div>
   );
 }
@@ -57,20 +54,27 @@ function ReadyScene() {
   );
 }
 
+function ErrorScene() {
+  return (
+    <div className="prep-scene prep-scene--error">
+      <LottiePlayer animationData={errorAnimation} className="prep-scene__lottie" />
+    </div>
+  );
+}
+
 /**
- * One Lottie scene per prep stage: an idle "getting ready" beat, video/script
- * icons beaming up into a cloud, a sparkly magnifying glass sweeping the
- * video while discovery runs, the film being "packed" into a gift box while
- * finalizing, and the gift box bursting open once the film is ready.
- * FilmPreparingView pairs this with a slim step-dot indicator for the
- * at-a-glance status.
+ * One Lottie scene per prep stage: an idle "getting ready" beat, a shared
+ * uploading animation for both the video and subtitle stages, a discovery
+ * scene while the video is analyzed, a finalizing scene, a ready scene, and
+ * an error scene for a failed run. FilmPreparingView pairs this with a slim
+ * step-dot indicator for the at-a-glance status.
  */
 export function PrepAnimation({ stage }: PrepAnimationProps) {
   if (stage === 'preparing') return <PreparingScene />;
-  if (stage === 'video_uploading') return <UploadScene icon="video" />;
-  if (stage === 'subtitle_uploading') return <UploadScene icon="script" />;
+  if (stage === 'video_uploading' || stage === 'subtitle_uploading') return <UploadScene />;
   if (stage === 'discovery_running') return <DiscoveryScene />;
   if (stage === 'finalizing') return <PackingScene />;
   if (stage === 'ready') return <ReadyScene />;
+  if (stage === 'error') return <ErrorScene />;
   return <PackingScene />;
 }
