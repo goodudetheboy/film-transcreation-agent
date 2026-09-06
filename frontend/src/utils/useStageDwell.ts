@@ -10,6 +10,18 @@ export type DisplayPrepStage = FilmPrepStage | 'preparing';
  * constant across the whole flow. */
 export const MIN_STAGE_DWELL_MS = 3000;
 
+/** User-facing copy for each display stage — shared between `FilmPreparingView`
+ * and the dev-only `PrepAnimationLab`. */
+export const STAGE_LABELS: Record<DisplayPrepStage, string> = {
+  preparing: 'Your film is being prepared…',
+  video_uploading: 'Uploading your video…',
+  subtitle_uploading: 'Uploading your script…',
+  discovery_running: 'Searching the video for details…',
+  finalizing: 'Wrapping up the last few details…',
+  ready: 'Your film is up and ready!',
+  error: 'Something went wrong.',
+};
+
 /**
  * Decouples the *displayed* prep stage from the raw SSE-driven one so bursts
  * of fast backend events (the whole pipeline can resolve almost instantly in

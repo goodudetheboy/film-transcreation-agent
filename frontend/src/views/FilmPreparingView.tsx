@@ -3,22 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getFilm, streamFilmPrep } from '../api/filmsApiClient';
 import { useFilmPrepStore } from '../store/filmPrepStore';
 import { PrepAnimation } from '../components/PrepAnimation';
-import { useStageDwell, type DisplayPrepStage } from '../utils/useStageDwell';
+import { useStageDwell, STAGE_LABELS } from '../utils/useStageDwell';
 import type { Film, FilmPrepStage } from '../api/apiClient.types';
 
 export interface FilmPreparingViewProps {
   passcode: string;
 }
-
-const STAGE_LABELS: Record<DisplayPrepStage, string> = {
-  preparing: 'Your film is being prepared…',
-  video_uploading: 'Uploading your video…',
-  subtitle_uploading: 'Uploading your script…',
-  discovery_running: 'Searching the video for details…',
-  finalizing: 'Wrapping up the last few details…',
-  ready: 'Your film is up and ready!',
-  error: 'Something went wrong.',
-};
 
 export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
   const { id } = useParams<{ id: string }>();

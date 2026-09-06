@@ -9,6 +9,7 @@ import { StartScreen } from './views/StartScreen';
 import { ImportFilmPage } from './views/ImportFilmPage';
 import { FilmPreparingView } from './views/FilmPreparingView';
 import { FilmWorkspaceView } from './views/FilmWorkspaceView';
+import { PrepAnimationLab } from './views/PrepAnimationLab';
 import logo from './assets/logo.png';
 import { getLastWorkspacePath } from './utils/lastWorkspace';
 
@@ -72,6 +73,7 @@ function App() {
             element={<FilmWorkspaceView passcode={passcode} testMode={testMode} />}
           />
           <Route path="/projects" element={<ProjectsLibraryView passcode={passcode} />} />
+          {import.meta.env.DEV && <Route path="/dev/prep-animation" element={<PrepAnimationLab />} />}
         </Routes>
       </main>
     </>

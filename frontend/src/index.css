@@ -2489,6 +2489,16 @@ textarea {
   text-align: center;
 }
 
+/* ---- Prep Animation Lab (dev-only, see PrepAnimationLab.tsx) ---- */
+
+.prep-lab__stage-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
 /* ==========================================================================
    Film workspace — split editor layout (video-editor-style panels)
    ========================================================================== */
