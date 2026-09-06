@@ -197,6 +197,8 @@ function DiscoveryResultsModal({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [discardTarget, setDiscardTarget] = useState<{ tempId: string; subtitleText: string } | null>(null);
   const [confirmBulkDiscard, setConfirmBulkDiscard] = useState(false);
+  const [viewingTempId, setViewingTempId] = useState<string | null>(null);
+  const viewingCandidate = viewingTempId ? job.resultRows.find((r) => r.tempId === viewingTempId) : undefined;
   const { colWidth, resizerHandlers } = useResizableColumns(
     RESULT_COL_WIDTHS,
     RESULT_DEFAULT_CUSTOM_WIDTH,
@@ -232,6 +234,7 @@ function DiscoveryResultsModal({
     setBusyTempId(tempId);
     try {
       await onMergeOne(tempId);
+      setViewingTempId((prev) => (prev === tempId ? null : prev));
     } finally {
       setBusyTempId(null);
     }
@@ -239,10 +242,12 @@ function DiscoveryResultsModal({
 
   async function handleDiscardConfirmed() {
     if (!discardTarget) return;
-    setBusyTempId(discardTarget.tempId);
+    const { tempId } = discardTarget;
+    setBusyTempId(tempId);
     try {
-      await onDiscardOne(discardTarget.tempId);
+      await onDiscardOne(tempId);
       setDiscardTarget(null);
+      setViewingTempId((prev) => (prev === tempId ? null : prev));
     } finally {
       setBusyTempId(null);
     }
@@ -333,8 +338,8 @@ function DiscoveryResultsModal({
                 </thead>
                 <tbody>
                   {job.resultRows.map((r) => (
-                    <tr key={r.tempId}>
-                      <td>
+                    <tr key={r.tempId} onClick={() => setViewingTempId(r.tempId)}>
+                      <td onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selected.has(r.tempId)}
@@ -353,7 +358,7 @@ function DiscoveryResultsModal({
                           {r.values.custom?.[c.key] ?? ''}
                         </td>
                       ))}
-                      <td className="details-table__cell--nowrap-exempt">
+                      <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
                             Add
@@ -377,6 +382,53 @@ function DiscoveryResultsModal({
             </div>
           </div>
         </>
+      )}
+
+      {/* Clicking a candidate row opens its full detail here — same Add/Discard
+          actions as the row itself, just easier to read at a glance. */}
+      {viewingCandidate && (
+        <Modal
+          title={`${formatClock(viewingCandidate.startMs)}–${formatClock(viewingCandidate.endMs)}`}
+          onClose={() => setViewingTempId(null)}
+        >
+          <p className="content-card__primary">&ldquo;{viewingCandidate.subtitleText || 'Visual only'}&rdquo;</p>
+          <div className="field">
+            <label>Segment Description</label>
+            <p>{viewingCandidate.values.segmentDescription || '—'}</p>
+          </div>
+          <div className="field">
+            <label>Gesture</label>
+            <p>{viewingCandidate.values.gesture || '—'}</p>
+          </div>
+          <div className="field">
+            <label>Notes</label>
+            <p>{viewingCandidate.values.notes || '—'}</p>
+          </div>
+          {columns.map((c) => (
+            <div className="field" key={c.id}>
+              <label>{c.name}</label>
+              <p>{viewingCandidate.values.custom?.[c.key] || '—'}</p>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={busyTempId === viewingCandidate.tempId}
+              onClick={() => handleMerge(viewingCandidate.tempId)}
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={busyTempId === viewingCandidate.tempId}
+              onClick={() => setDiscardTarget({ tempId: viewingCandidate.tempId, subtitleText: viewingCandidate.subtitleText })}
+            >
+              <TrashIcon /> Discard
+            </button>
+          </div>
+        </Modal>
       )}
 
       {discardTarget && (
