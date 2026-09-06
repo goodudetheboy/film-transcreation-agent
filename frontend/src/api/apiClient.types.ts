@@ -379,6 +379,8 @@ export type DiscoveryChatStreamEvent =
   | { type: 'row_patched'; row: DetailRow }
   | { type: 'row_added'; row: DetailRow; jobId: string; tempId: string }
   | { type: 'row_discarded'; jobId: string; tempId: string }
+  | { type: 'row_created'; row: DetailRow }
+  | { type: 'row_deleted'; rowId: string }
   | { type: 'turn_done' }
   | { type: 'stopped' }
   | { type: 'error'; message: string };

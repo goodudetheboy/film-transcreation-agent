@@ -3,10 +3,12 @@ import type { DetailRowsStore } from './detailRowsStore.js';
 import type { DiscoveryJobStore } from './discoveryJobStore.js';
 import type { DiscoveryChatSessionStore } from './discoveryChatSessionStore.js';
 import type { DiscoveryEventBus } from './discoveryEventBus.js';
+import type { FilmStore } from './filmStore.js';
 import type { DiscoveryChatPart, DiscoveryChatTurn } from './filmTypes.js';
 import { executeTool, type DiscoveryChatAgent } from './discoveryChatAgent.js';
 
 export interface MockDiscoveryChatAgentDeps {
+  filmStore: FilmStore;
   detailRowsStore: DetailRowsStore;
   discoveryJobStore: DiscoveryJobStore;
   discoveryChatSessionStore: DiscoveryChatSessionStore;
@@ -41,6 +43,7 @@ export function createMockDiscoveryChatAgent(deps: MockDiscoveryChatAgentDeps): 
         yield { type: 'tool_call', callId, name: 'merge_candidate_row', args };
 
         const { response, rowEvent } = await executeTool({ name: 'merge_candidate_row', args }, { filmId: session.filmId }, {
+          filmStore: deps.filmStore,
           detailRowsStore: deps.detailRowsStore,
           discoveryJobStore: deps.discoveryJobStore,
           eventBus: deps.eventBus,
@@ -82,6 +85,7 @@ export function createMockDiscoveryChatAgent(deps: MockDiscoveryChatAgentDeps): 
       yield { type: 'tool_call', callId, name: 'edit_detail_row', args };
 
       const { response, rowEvent } = await executeTool({ name: 'edit_detail_row', args }, { filmId: session.filmId }, {
+        filmStore: deps.filmStore,
         detailRowsStore: deps.detailRowsStore,
         discoveryJobStore: deps.discoveryJobStore,
         eventBus: deps.eventBus,

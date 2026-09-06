@@ -44,7 +44,7 @@ const trendAgent = createTrendAgent(config, { parallelSearchClient });
 const researchChatAgent = createResearchChatAgent(config, { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
 const discoveryAgent = createDiscoveryAgent(config);
 const mockDiscoveryAgent = createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
-const discoveryChatAgent = createDiscoveryChatAgent(config, { detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+const discoveryChatAgent = createDiscoveryChatAgent(config, { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
 
 const videoBucketUploader = createVideoBucketUploader({
   bucketName: config.videoClipsBucket,

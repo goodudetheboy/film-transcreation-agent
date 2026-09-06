@@ -69,7 +69,8 @@ export const useFilmWorkspaceStore = create<FilmWorkspaceState>((set, get) => ({
 
   applyDiscoveryChatEvent: (event) => {
     if (event.type === 'row_patched') get().updateRow(event.row);
-    else if (event.type === 'row_added') get().addRow(event.row);
+    else if (event.type === 'row_added' || event.type === 'row_created') get().addRow(event.row);
+    else if (event.type === 'row_deleted') get().removeRow(event.rowId);
     // row_discarded never touches the Details table — nothing to apply here.
   },
 

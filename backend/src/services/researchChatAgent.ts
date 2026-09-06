@@ -339,12 +339,15 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
             break;
           }
 
+          // Gemini requires exactly one functionResponse part per functionCall part
+          // from the preceding model turn, all bundled into a single turn — so every
+          // call in this round must get a response before we persist, even if the
+          // client disconnects partway through. Checking `signal.aborted` here would
+          // leave later calls unanswered and permanently corrupt this session's
+          // history (every future turn would resend the mismatched counts and 400).
+          const responseParts: ChatPart[] = [];
           for (const part of modelParts) {
             if (!part.functionCall) continue;
-            if (signal?.aborted) {
-              stopped = true;
-              break;
-            }
             const callId = randomUUID();
             const fc = part.functionCall;
             yield { type: 'tool_call', callId, name: fc.name, args: fc.args };
@@ -359,10 +362,15 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (itemPatch) yield { type: 'item_patched', itemId: itemPatch.itemId, rubricId: itemPatch.rubricId, patch: itemPatch.patch };
 
-            persistedTurns.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
-            await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: persistedTurns });
+            responseParts.push({ functionResponse: { name: fc.name, response } });
           }
-          if (stopped) break;
+          persistedTurns.push({ role: 'user', parts: responseParts, ts: now() });
+          await deps.chatSessionStore.updateSession(session.projectId, session.id, { turns: persistedTurns });
+
+          if (signal?.aborted) {
+            stopped = true;
+            break;
+          }
         }
         yield stopped ? { type: 'stopped' } : { type: 'turn_done' };
       } catch (err) {

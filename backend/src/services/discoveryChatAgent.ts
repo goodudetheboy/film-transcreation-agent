@@ -6,7 +6,9 @@ import type { DetailRowsStore } from './detailRowsStore.js';
 import type { DiscoveryJobStore } from './discoveryJobStore.js';
 import type { DiscoveryChatSessionStore } from './discoveryChatSessionStore.js';
 import type { DiscoveryEventBus } from './discoveryEventBus.js';
+import type { FilmStore } from './filmStore.js';
 import { mergeDiscoveryResult, discardDiscoveryResult } from './discoveryResultActions.js';
+import { subtitleTextForRange } from './subtitleOverlap.js';
 
 export type { ChatGenAIClient } from './researchChatAgent.js';
 
@@ -17,6 +19,8 @@ export type DiscoveryChatStreamEvent =
   | { type: 'row_patched'; row: DetailRow }
   | { type: 'row_added'; row: DetailRow; jobId: string; tempId: string }
   | { type: 'row_discarded'; jobId: string; tempId: string }
+  | { type: 'row_created'; row: DetailRow }
+  | { type: 'row_deleted'; rowId: string }
   | { type: 'turn_done' }
   | { type: 'stopped' }
   | { type: 'error'; message: string };
@@ -29,6 +33,7 @@ export interface DiscoveryChatAgentConfig {
 
 export interface DiscoveryChatAgentDeps {
   genAI?: ChatGenAIClient;
+  filmStore: FilmStore;
   detailRowsStore: DetailRowsStore;
   discoveryJobStore: DiscoveryJobStore;
   discoveryChatSessionStore: DiscoveryChatSessionStore;
@@ -100,22 +105,67 @@ const DISCARD_CANDIDATE_ROW_DECL = {
   },
 };
 
-const CHAT_TOOLS = [{ functionDeclarations: [EDIT_DETAIL_ROW_DECL, MERGE_CANDIDATE_ROW_DECL, DISCARD_CANDIDATE_ROW_DECL] }];
+const ADD_DETAIL_ROW_DECL = {
+  name: 'add_detail_row',
+  description:
+    "Add a brand-new row to this film's Details table for a time range, same as clicking the + button and typing a range in by hand. Its subtitle text is derived automatically from the film's subtitle for that range. Applies immediately and visibly. Never ask for confirmation first, just do it and say what you added.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      startMs: { type: Type.NUMBER, description: 'Start of the range in milliseconds, >= 0.' },
+      endMs: { type: Type.NUMBER, description: 'End of the range in milliseconds, must be greater than startMs.' },
+      segmentDescription: { type: Type.STRING, description: 'Optional initial value for the segmentDescription field.' },
+      gesture: { type: Type.STRING, description: 'Optional initial value for the gesture field.' },
+      notes: { type: Type.STRING, description: 'Optional initial value for the notes field.' },
+    },
+    required: ['startMs', 'endMs'],
+  },
+};
+
+const DELETE_DETAIL_ROW_DECL = {
+  name: 'delete_detail_row',
+  description:
+    "Permanently delete an existing row from this film's Details table — any row, not just ones this agent found. This cannot be undone. Never ask for confirmation first, just do it and say what you removed.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      rowId: {
+        type: Type.STRING,
+        description: 'The id of the Detail row to delete (from the FILM DETAILS context) — match it by rowId, or by the timestamp range shown next to it if the user refers to a row by time.',
+      },
+    },
+    required: ['rowId'],
+  },
+};
+
+const CHAT_TOOLS = [
+  {
+    functionDeclarations: [
+      EDIT_DETAIL_ROW_DECL,
+      ADD_DETAIL_ROW_DECL,
+      DELETE_DETAIL_ROW_DECL,
+      MERGE_CANDIDATE_ROW_DECL,
+      DISCARD_CANDIDATE_ROW_DECL,
+    ],
+  },
+];
 
 const SYSTEM_INSTRUCTION = `You are a Discovery Agent's interactive assistant in a film localization
 triage tool. You're chatting with a human localizer inside one Agent's thread,
 scoped to one film. Answer questions about this agent's runs (passes) and
-their candidate rows. You can also use your tools to edit any existing Detail
-row's content, or accept/discard one of THIS agent's pending candidate rows.
-Kicking off a brand-new pass is a button the human clicks, never something you
-decide to do yourself — if asked to find more lines, tell them to use the
-"Kick off another pass" button. Keep replies concise and conversational.`;
+their candidate rows. You can also use your tools to add a new Detail row,
+edit or delete any existing Detail row, or accept/discard one of THIS agent's
+pending candidate rows. Kicking off a brand-new pass is a button the human
+clicks, never something you decide to do yourself — if asked to find more
+lines, tell them to use the "Kick off another pass" button. Keep replies
+concise and conversational.`;
 
 const EDITABLE_FIELDS = ['subtitleText', 'segmentDescription', 'gesture', 'notes'] as const;
 
 // ---- Tool execution ---------------------------------------------------
 
 interface ExecuteToolDeps {
+  filmStore: FilmStore;
   detailRowsStore: DetailRowsStore;
   discoveryJobStore: DiscoveryJobStore;
   eventBus: DiscoveryEventBus;
@@ -123,7 +173,7 @@ interface ExecuteToolDeps {
 
 interface ExecuteToolResult {
   response: Record<string, unknown>;
-  rowEvent?: Extract<DiscoveryChatStreamEvent, { type: 'row_patched' | 'row_added' | 'row_discarded' }>;
+  rowEvent?: Extract<DiscoveryChatStreamEvent, { type: 'row_patched' | 'row_added' | 'row_discarded' | 'row_created' | 'row_deleted' }>;
 }
 
 /** Shared by both the real and mock chat agents so a testMode demo genuinely
@@ -152,6 +202,29 @@ export async function executeTool(
     const updated = await deps.detailRowsStore.updateRow(ctx.filmId, args.rowId, patch as Parameters<DetailRowsStore['updateRow']>[2]);
     if (!updated) return { response: { error: 'row not found' } };
     return { response: { ok: true, rowId: updated.id, field: args.field, value: args.value }, rowEvent: { type: 'row_patched', row: updated } };
+  }
+
+  if (call.name === 'add_detail_row') {
+    const args = call.args as { startMs: number; endMs: number; segmentDescription?: string; gesture?: string; notes?: string };
+    if (typeof args.startMs !== 'number' || typeof args.endMs !== 'number' || args.startMs < 0 || args.endMs <= args.startMs) {
+      return { response: { error: 'startMs/endMs must be numbers with endMs > startMs >= 0' } };
+    }
+    const film = await deps.filmStore.getFilm(ctx.filmId);
+    const row = await deps.detailRowsStore.addRow(ctx.filmId, {
+      startMs: args.startMs,
+      endMs: args.endMs,
+      subtitleText: subtitleTextForRange(film?.subtitle?.entries ?? [], args.startMs, args.endMs),
+      values: { segmentDescription: args.segmentDescription, gesture: args.gesture, notes: args.notes },
+      provenance: { type: 'user-marked' },
+    });
+    return { response: { ok: true, row }, rowEvent: { type: 'row_created', row } };
+  }
+
+  if (call.name === 'delete_detail_row') {
+    const args = call.args as { rowId: string };
+    const deleted = await deps.detailRowsStore.deleteRow(ctx.filmId, args.rowId);
+    if (!deleted) return { response: { error: 'row not found' } };
+    return { response: { ok: true }, rowEvent: { type: 'row_deleted', rowId: args.rowId } };
   }
 
   if (call.name === 'merge_candidate_row') {
@@ -273,17 +346,21 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
             break;
           }
 
+          // Gemini requires exactly one functionResponse part per functionCall part
+          // from the preceding model turn, all bundled into a single turn — so every
+          // call in this round must get a response before we persist, even if the
+          // client disconnects partway through. Checking `signal.aborted` here would
+          // leave later calls unanswered and permanently corrupt this session's
+          // history (every future turn would resend the mismatched counts and 400).
+          const responseParts: DiscoveryChatPart[] = [];
           for (const part of modelParts) {
             if (!part.functionCall) continue;
-            if (signal?.aborted) {
-              stopped = true;
-              break;
-            }
             const callId = randomUUID();
             const fc = part.functionCall;
             yield { type: 'tool_call', callId, name: fc.name, args: fc.args };
 
             const { response, rowEvent } = await executeTool(fc, { filmId: session.filmId }, {
+              filmStore: deps.filmStore,
               detailRowsStore: deps.detailRowsStore,
               discoveryJobStore: deps.discoveryJobStore,
               eventBus: deps.eventBus,
@@ -291,10 +368,15 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (rowEvent) yield rowEvent;
 
-            persistedTurns.push({ role: 'user', parts: [{ functionResponse: { name: fc.name, response } }], ts: now() });
-            await deps.discoveryChatSessionStore.updateSession(session.filmId, session.id, { turns: persistedTurns });
+            responseParts.push({ functionResponse: { name: fc.name, response } });
           }
-          if (stopped) break;
+          persistedTurns.push({ role: 'user', parts: responseParts, ts: now() });
+          await deps.discoveryChatSessionStore.updateSession(session.filmId, session.id, { turns: persistedTurns });
+
+          if (signal?.aborted) {
+            stopped = true;
+            break;
+          }
         }
         yield stopped ? { type: 'stopped' } : { type: 'turn_done' };
       } catch (err) {

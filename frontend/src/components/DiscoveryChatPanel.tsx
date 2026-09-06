@@ -529,11 +529,15 @@ function DiscoveryToolCallCard({ name, result }: { name: string; args: Record<st
   const label =
     name === 'edit_detail_row'
       ? 'Edited a Detail row'
-      : name === 'merge_candidate_row'
-        ? 'Added a candidate to the Details table'
-        : name === 'discard_candidate_row'
-          ? 'Discarded a candidate'
-          : `Called ${name}`;
+      : name === 'add_detail_row'
+        ? 'Added a new Detail row'
+        : name === 'delete_detail_row'
+          ? 'Deleted a Detail row'
+          : name === 'merge_candidate_row'
+            ? 'Added a candidate to the Details table'
+            : name === 'discard_candidate_row'
+              ? 'Discarded a candidate'
+              : `Called ${name}`;
 
   return (
     <div className="chat-step-card">

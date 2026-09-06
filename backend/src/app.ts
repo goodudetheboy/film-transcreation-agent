@@ -141,7 +141,7 @@ export function createApp(deps: AppDeps = {}): Express {
   const discoveryChatSessionStore = deps.discoveryChatSessionStore ?? createInMemoryDiscoveryChatSessionStore();
   const discoveryChatAgent = deps.discoveryChatAgent ?? notConfiguredDiscoveryChatAgent;
   const mockDiscoveryChatAgent =
-    deps.mockDiscoveryChatAgent ?? createMockDiscoveryChatAgent({ detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    deps.mockDiscoveryChatAgent ?? createMockDiscoveryChatAgent({ filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
   const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
 
   const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({
