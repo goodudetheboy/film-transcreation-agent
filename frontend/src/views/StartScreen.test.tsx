@@ -75,7 +75,7 @@ describe('StartScreen', () => {
     expect(await screen.findByText(/401/)).toBeInTheDocument();
   });
 
-  it('the import half links to /films/new', async () => {
+  it('the import half links to /films/new/preparing', async () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([]);
     render(
       <MemoryRouter>
@@ -83,7 +83,7 @@ describe('StartScreen', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByText('Import a new film')).toBeInTheDocument();
-    expect(screen.getByText('Import a new film').closest('a')).toHaveAttribute('href', '/films/new');
+    expect(screen.getByText('Import a new film').closest('a')).toHaveAttribute('href', '/films/new/preparing');
   });
 
   it('deletes a film after confirming in the modal, and removes it from the library list', async () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { ImportFilmPage } from './ImportFilmPage';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { FilmPreparingView } from './FilmPreparingView';
 import * as filmsApiClient from '../api/filmsApiClient';
 import type { Film } from '../api/apiClient.types';
 
@@ -39,10 +39,12 @@ function fakeFilm(overrides: Partial<Film> = {}): Film {
   };
 }
 
-function renderPage() {
+function renderAtNew() {
   render(
-    <MemoryRouter>
-      <ImportFilmPage passcode="secret" testMode={true} />
+    <MemoryRouter initialEntries={['/films/new/preparing']}>
+      <Routes>
+        <Route path="/films/:id/preparing" element={<FilmPreparingView passcode="secret" testMode={true} />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -55,25 +57,27 @@ function fillForm() {
   });
 }
 
-describe('ImportFilmPage', () => {
+describe('FilmPreparingView — importing a new film', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockNavigate.mockReset();
     vi.mocked(filmsApiClient.uploadVideoFile).mockReset();
     vi.mocked(filmsApiClient.uploadSubtitleFile).mockReset();
     vi.mocked(filmsApiClient.createFilm).mockReset();
+    vi.mocked(filmsApiClient.getFilm).mockReset().mockResolvedValue(fakeFilm());
+    vi.mocked(filmsApiClient.streamFilmPrep).mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it('sequences video-upload then subtitle-upload then film-creation, each held for the 3s floor, before navigating', async () => {
+  it('sequences video-upload then subtitle-upload then film-creation, each held for the 3s floor, staying on one screen throughout', async () => {
     vi.mocked(filmsApiClient.uploadVideoFile).mockResolvedValue({ videoUrl: 'gs://bucket/video.mp4' });
     vi.mocked(filmsApiClient.uploadSubtitleFile).mockResolvedValue({ subtitleUrl: 'gs://bucket/subs.srt', format: 'srt', entries: [] });
     vi.mocked(filmsApiClient.createFilm).mockResolvedValue(fakeFilm());
 
-    renderPage();
+    renderAtNew();
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 
@@ -92,13 +96,15 @@ describe('ImportFilmPage', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000);
     });
-    expect(mockNavigate).toHaveBeenCalledWith('/films/film-123/preparing');
+    // No page navigation away from /preparing — just the URL swapping from
+    // the 'new' placeholder to the real film id, in place.
+    expect(mockNavigate).toHaveBeenCalledWith('/films/film-123/preparing', { replace: true });
   });
 
-  it('surfaces an upload error immediately, without waiting out the 3s floor', async () => {
+  it('surfaces an upload error immediately, without waiting out the 3s floor, and returns to the editable form', async () => {
     vi.mocked(filmsApiClient.uploadVideoFile).mockRejectedValue(new Error('upload failed'));
 
-    renderPage();
+    renderAtNew();
     fillForm();
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
 

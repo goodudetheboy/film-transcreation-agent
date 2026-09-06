@@ -51,7 +51,7 @@ export function StartScreen({ passcode }: StartScreenProps) {
 
   return (
     <div className="start-screen">
-      <Link to="/films/new" className="start-screen__half start-screen__half--import">
+      <Link to="/films/new/preparing" className="start-screen__half start-screen__half--import">
         <span className="start-screen__icon">+</span>
         <p className="start-screen__label">Import a new film</p>
         <p className="start-screen__hint">Bring in a video and its script to start a new triage.</p>

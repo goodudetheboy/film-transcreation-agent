@@ -38,10 +38,12 @@ function DiscoveryScene() {
   );
 }
 
+/** The animation's native loop is 6s (180 frames @ 30fps) — sped up to fit
+ * a 5s loop instead. */
 function PackingScene() {
   return (
     <div className="prep-scene prep-scene--finalizing">
-      <LottiePlayer animationData={finalizingAnimation} loop className="prep-scene__lottie" />
+      <LottiePlayer animationData={finalizingAnimation} loop speed={6 / 5} className="prep-scene__lottie" />
     </div>
   );
 }
@@ -49,7 +51,7 @@ function PackingScene() {
 function ReadyScene() {
   return (
     <div className="prep-scene prep-scene--ready">
-      <LottiePlayer animationData={readyAnimation} className="prep-scene__lottie" />
+      <LottiePlayer animationData={readyAnimation} loop className="prep-scene__lottie" />
     </div>
   );
 }

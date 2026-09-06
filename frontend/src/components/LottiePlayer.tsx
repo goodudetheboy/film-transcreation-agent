@@ -4,6 +4,9 @@ import type { AnimationItem } from 'lottie-web';
 export interface LottiePlayerProps {
   animationData: object;
   loop?: boolean;
+  /** Playback speed multiplier (1 = the JSON's native pace) — use to retime
+   * a loop to a specific real-world duration without re-authoring the file. */
+  speed?: number;
   className?: string;
 }
 
@@ -11,7 +14,7 @@ export interface LottiePlayerProps {
  * probes for canvas support at module-load time, which crashes under jsdom
  * (and would otherwise pull the player into every bundle that imports
  * PrepAnimation, not just the pages that render a Lottie-based scene). */
-export function LottiePlayer({ animationData, loop = false, className }: LottiePlayerProps) {
+export function LottiePlayer({ animationData, loop = false, speed = 1, className }: LottiePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +32,7 @@ export function LottiePlayer({ animationData, loop = false, className }: LottieP
           autoplay: true,
           animationData,
         });
+        anim.setSpeed(speed);
       })
       // Swallow load/init failures (e.g. no canvas support in a test
       // environment) rather than surfacing an unhandled rejection — a
@@ -39,7 +43,7 @@ export function LottiePlayer({ animationData, loop = false, className }: LottieP
       cancelled = true;
       anim?.destroy();
     };
-  }, [animationData, loop]);
+  }, [animationData, loop, speed]);
 
   return <div ref={containerRef} className={className} />;
 }

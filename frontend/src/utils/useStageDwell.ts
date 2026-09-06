@@ -6,8 +6,8 @@ import type { FilmPrepStage } from '../api/apiClient.types';
 export type DisplayPrepStage = FilmPrepStage | 'preparing';
 
 /** Minimum time each prep-flow animation stays on screen, shared with the
- * upload-stage animations in `ImportFilmPage.tsx` so "at least Ns" is one
- * constant across the whole flow. */
+ * pre-creation upload-stage animations in `FilmPreparingView.tsx` so
+ * "at least Ns" is one constant across the whole flow. */
 export const MIN_STAGE_DWELL_MS = 3000;
 
 /** User-facing copy for each display stage — shared between `FilmPreparingView`

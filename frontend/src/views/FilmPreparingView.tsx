@@ -1,35 +1,73 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getFilm, streamFilmPrep } from '../api/filmsApiClient';
+import { createFilm, getFilm, streamFilmPrep, uploadSubtitleFile, uploadVideoFile } from '../api/filmsApiClient';
 import { useFilmPrepStore } from '../store/filmPrepStore';
 import { PrepAnimation } from '../components/PrepAnimation';
-import { useStageDwell, STAGE_LABELS } from '../utils/useStageDwell';
+import { ImportFilmForm } from './ImportFilmForm';
+import { useStageDwell, STAGE_LABELS, MIN_STAGE_DWELL_MS } from '../utils/useStageDwell';
+import { withMinDuration } from '../utils/withMinDuration';
 import type { Film, FilmPrepStage } from '../api/apiClient.types';
 
 export interface FilmPreparingViewProps {
   passcode: string;
+  testMode: boolean;
 }
 
-export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
-  const { id } = useParams<{ id: string }>();
+function PrepHeader() {
+  return (
+    <div className="page-header__heading">
+      <h1 className="page-header__title">Your film is being prepared</h1>
+      <p className="page-header__subtitle">Hang tight — we're uploading and processing everything.</p>
+    </div>
+  );
+}
+
+/**
+ * Doubles as both the "import a new film" step and the "watch it get
+ * prepared" step, so the whole animated sequence — video uploading,
+ * subtitle uploading, discovery running, finalizing, ready — plays out
+ * contiguously on one screen instead of cutting away to a different page
+ * partway through. Reached at `/films/new/preparing` (no film yet — shows
+ * `ImportFilmForm`) or `/films/:id/preparing` (an existing film — streams
+ * its real prep progress). See docs/progress/20260906.md for why the
+ * upload stages used to live on a separate `/films/new` page and why that
+ * was undone.
+ */
+export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps) {
+  const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { prep, applyEvent, reset } = useFilmPrepStore();
   const [runDiscoveryOnCreate, setRunDiscoveryOnCreate] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  const [filmId, setFilmId] = useState<string | null>(routeId && routeId !== 'new' ? routeId : null);
+  const [title, setTitle] = useState('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [subtitleFile, setSubtitleFile] = useState<File | null>(null);
+  const [runDiscovery, setRunDiscovery] = useState(true);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [uploadStage, setUploadStage] = useState<'video_uploading' | 'subtitle_uploading' | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [phaseLabel, setPhaseLabel] = useState<string | null>(null);
+
   useEffect(() => {
+    if (routeId && routeId !== 'new' && routeId !== filmId) setFilmId(routeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeId]);
+
+  useEffect(() => {
+    if (!filmId) return;
     reset();
     setLoadError(null);
-    if (!id) return;
 
     let cancelled = false;
 
-    getFilm(id, passcode)
+    getFilm(filmId, passcode)
       .then((film: Film) => {
         if (cancelled) return;
         setRunDiscoveryOnCreate(film.runDiscoveryOnCreate);
         applyEvent({ type: 'prep_update', prep: film.prep });
-        return streamFilmPrep(id, passcode, (event) => {
+        return streamFilmPrep(filmId, passcode, (event) => {
           if (!cancelled) applyEvent(event);
         });
       })
@@ -41,9 +79,83 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, passcode]);
+  }, [filmId, passcode]);
 
   const displayStage = useStageDwell(prep?.stage ?? null);
+  const canSubmit = title.trim() !== '' && videoFile !== null && subtitleFile !== null;
+
+  async function handleFormSubmit() {
+    if (!canSubmit || !videoFile || !subtitleFile) return;
+    setFormError(null);
+    try {
+      setUploadStage('video_uploading');
+      setPhaseLabel(STAGE_LABELS.video_uploading);
+      setUploadProgress(testMode ? null : 0);
+      const { videoUrl } = await withMinDuration(
+        uploadVideoFile(videoFile, { passcode, testMode }, undefined, setUploadProgress),
+        MIN_STAGE_DWELL_MS,
+      );
+      setUploadProgress(null);
+
+      setUploadStage('subtitle_uploading');
+      setPhaseLabel(STAGE_LABELS.subtitle_uploading);
+      const { subtitleUrl, format, entries } = await withMinDuration(
+        uploadSubtitleFile(subtitleFile, { passcode, testMode }),
+        MIN_STAGE_DWELL_MS,
+      );
+
+      setPhaseLabel('Creating your film…');
+      const film = await createFilm({
+        passcode,
+        title,
+        videoUrl,
+        subtitleUrl,
+        subtitleFormat: format,
+        subtitleEntries: entries,
+        runDiscovery,
+        testMode,
+      });
+
+      setFilmId(film.id);
+      navigate(`/films/${film.id}/preparing`, { replace: true });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'failed to import film');
+      setUploadStage(null);
+      setPhaseLabel(null);
+      setUploadProgress(null);
+    }
+  }
+
+  if (!filmId) {
+    if (uploadStage) {
+      return (
+        <div className="app-body-inner app-body-inner--centered">
+          <PrepHeader />
+          <PrepAnimation stage={uploadStage} />
+          <p className="prep-stage-label">{phaseLabel}</p>
+          {uploadStage === 'video_uploading' && uploadProgress !== null && (
+            <progress className="upload-progress" value={uploadProgress} max={1} aria-label="Video upload progress" />
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <ImportFilmForm
+        title={title}
+        onTitleChange={setTitle}
+        videoFile={videoFile}
+        onVideoFile={setVideoFile}
+        subtitleFile={subtitleFile}
+        onSubtitleFile={setSubtitleFile}
+        runDiscovery={runDiscovery}
+        onRunDiscoveryChange={setRunDiscovery}
+        canSubmit={canSubmit}
+        error={formError}
+        onSubmit={handleFormSubmit}
+      />
+    );
+  }
 
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
 
@@ -56,10 +168,7 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
 
   return (
     <div className="app-body-inner app-body-inner--centered">
-      <div className="page-header__heading">
-        <h1 className="page-header__title">Your film is being prepared</h1>
-        <p className="page-header__subtitle">Hang tight — we're uploading and processing everything.</p>
-      </div>
+      <PrepHeader />
 
       <PrepAnimation stage={displayStage} />
 
@@ -100,7 +209,7 @@ export function FilmPreparingView({ passcode }: FilmPreparingViewProps) {
         </>
       )}
 
-      <button type="button" className="btn btn--primary" disabled={!isReady} onClick={() => id && navigate(`/films/${id}`)}>
+      <button type="button" className="btn btn--primary" disabled={!isReady} onClick={() => navigate(`/films/${filmId}`)}>
         Start Creating
       </button>
     </div>
