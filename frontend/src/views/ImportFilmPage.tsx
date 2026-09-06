@@ -1,6 +1,9 @@
 import { useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createFilm, uploadSubtitleFile, uploadVideoFile } from '../api/filmsApiClient';
+import { PrepAnimation } from '../components/PrepAnimation';
+import { MIN_STAGE_DWELL_MS } from '../utils/useStageDwell';
+import { withMinDuration } from '../utils/withMinDuration';
 
 export interface ImportFilmPageProps {
   passcode: string;
@@ -77,6 +80,7 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [animationStage, setAnimationStage] = useState<'video_uploading' | 'subtitle_uploading' | null>(null);
 
   const canSubmit = title.trim() !== '' && videoFile !== null && subtitleFile !== null;
 
@@ -87,13 +91,21 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
     setSubmitting(true);
     setError(null);
     try {
+      setAnimationStage('video_uploading');
       setStatus('Uploading your video…');
       setUploadProgress(testMode ? null : 0);
-      const { videoUrl } = await uploadVideoFile(videoFile, { passcode, testMode }, undefined, setUploadProgress);
+      const { videoUrl } = await withMinDuration(
+        uploadVideoFile(videoFile, { passcode, testMode }, undefined, setUploadProgress),
+        MIN_STAGE_DWELL_MS,
+      );
       setUploadProgress(null);
 
+      setAnimationStage('subtitle_uploading');
       setStatus('Uploading your script…');
-      const { subtitleUrl, format, entries } = await uploadSubtitleFile(subtitleFile, { passcode, testMode });
+      const { subtitleUrl, format, entries } = await withMinDuration(
+        uploadSubtitleFile(subtitleFile, { passcode, testMode }),
+        MIN_STAGE_DWELL_MS,
+      );
 
       setStatus('Creating your film…');
       const film = await createFilm({
@@ -112,6 +124,8 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
       setError(err instanceof Error ? err.message : 'failed to import film');
       setSubmitting(false);
       setStatus(null);
+      setAnimationStage(null);
+      setUploadProgress(null);
     }
   }
 
@@ -139,19 +153,30 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
       </div>
 
       <div className="import-columns">
-        <div className="import-columns__col">
-          <h2 className="import-columns__heading">&hellip;the FILM itself</h2>
-          <DropZone label="Video file" accept="video/*" file={videoFile} onPick={setVideoFile} disabled={submitting} />
-          <p className="import-columns__caption">Supported filetype: .mp4</p>
-        </div>
+        {animationStage ? (
+          <div className="import-columns__col">
+            <PrepAnimation stage={animationStage} />
+            {animationStage === 'video_uploading' && uploadProgress !== null && (
+              <progress className="upload-progress" value={uploadProgress} max={1} aria-label="Video upload progress" />
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="import-columns__col">
+              <h2 className="import-columns__heading">&hellip;the FILM itself</h2>
+              <DropZone label="Video file" accept="video/*" file={videoFile} onPick={setVideoFile} disabled={submitting} />
+              <p className="import-columns__caption">Supported filetype: .mp4</p>
+            </div>
 
-        <div className="import-columns__divider" />
+            <div className="import-columns__divider" />
 
-        <div className="import-columns__col">
-          <h2 className="import-columns__heading">&hellip;and the SCRIPT</h2>
-          <DropZone label="Script file (.srt / .vtt)" accept=".srt,.vtt" file={subtitleFile} onPick={setSubtitleFile} disabled={submitting} />
-          <p className="import-columns__caption">Supported filetypes: .srt, .vtt</p>
-        </div>
+            <div className="import-columns__col">
+              <h2 className="import-columns__heading">&hellip;and the SCRIPT</h2>
+              <DropZone label="Script file (.srt / .vtt)" accept=".srt,.vtt" file={subtitleFile} onPick={setSubtitleFile} disabled={submitting} />
+              <p className="import-columns__caption">Supported filetypes: .srt, .vtt</p>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="import-page__footer">
@@ -170,9 +195,6 @@ export function ImportFilmPage({ passcode, testMode }: ImportFilmPageProps) {
             <p className="results-status" role="status">
               {status}
             </p>
-          )}
-          {uploadProgress !== null && (
-            <progress className="upload-progress" value={uploadProgress} max={1} aria-label="Video upload progress" />
           )}
           {error && <p className="passcode-gate__error">{error}</p>}
         </div>

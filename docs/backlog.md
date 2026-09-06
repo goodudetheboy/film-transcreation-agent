@@ -67,11 +67,13 @@ Triaged 2026-09-05 from a single batch of user feedback (see
 - [x] Clicking a details-table row opens in-panel (like Project Details),
   not a modal
 
-## Phase 5 — self-contained polish
+## Phase 5 — self-contained polish — done 2026-09-06
 
-- [ ] Upload flow: sequence the animations instead of jumping straight to
+- [x] Upload flow: sequence the animations instead of jumping straight to
   animation 3 of 5 — video+progress-bar animation, then SRT upload
   animation, then (if applicable) the 3rd/4th/5th, each playing at least 5s
+  (shipped with a 3s floor per user direction, not the originally-triaged
+  5s — see [docs/progress/20260906.md](progress/20260906.md))
 
 ## Phase 6 — needs user input before building
 

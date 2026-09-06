@@ -5,6 +5,11 @@ import type { FilmPrepStage } from '../api/apiClient.types';
  * sketch's "Your film is being prepared" beat that kicks off the sequence. */
 export type DisplayPrepStage = FilmPrepStage | 'preparing';
 
+/** Minimum time each prep-flow animation stays on screen, shared with the
+ * upload-stage animations in `ImportFilmPage.tsx` so "at least Ns" is one
+ * constant across the whole flow. */
+export const MIN_STAGE_DWELL_MS = 3000;
+
 /**
  * Decouples the *displayed* prep stage from the raw SSE-driven one so bursts
  * of fast backend events (the whole pipeline can resolve almost instantly in
@@ -72,7 +77,7 @@ class StageDwellController {
   }
 }
 
-export function useStageDwell(rawStage: FilmPrepStage | null, minDwellMs = 2000): DisplayPrepStage {
+export function useStageDwell(rawStage: FilmPrepStage | null, minDwellMs = MIN_STAGE_DWELL_MS): DisplayPrepStage {
   const [displayStage, setDisplayStage] = useState<DisplayPrepStage>('preparing');
   const controllerRef = useRef<StageDwellController | null>(null);
   const onChangeRef = useRef(setDisplayStage);
