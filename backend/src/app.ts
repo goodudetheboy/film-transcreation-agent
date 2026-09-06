@@ -34,6 +34,7 @@ import { createMockResearchChatAgent } from './services/mockResearchChatAgent.js
 import { createInMemoryDiscoveryChatSessionStore, type DiscoveryChatSessionStore } from './services/discoveryChatSessionStore.js';
 import type { DiscoveryChatAgent } from './services/discoveryChatAgent.js';
 import { createMockDiscoveryChatAgent } from './services/mockDiscoveryChatAgent.js';
+import type { VideoSegmentDescriber } from './services/videoSegmentDescriber.js';
 
 export interface AppDeps {
   config?: Partial<Config>;
@@ -59,6 +60,7 @@ export interface AppDeps {
   mockDiscoveryChatAgent?: DiscoveryChatAgent;
   eventBus?: DiscoveryEventBus;
   videoBucketUploader?: VideoBucketUploader;
+  videoSegmentDescriber?: VideoSegmentDescriber;
 }
 
 const notConfiguredResearchAgent: ResearchAgent = {
@@ -90,6 +92,12 @@ const notConfiguredDiscoveryChatAgent: DiscoveryChatAgent = {
   // eslint-disable-next-line require-yield
   async *runTurn() {
     throw new Error('discoveryChatAgent not provided to createApp()');
+  },
+};
+
+const notConfiguredVideoSegmentDescriber: VideoSegmentDescriber = {
+  async describeVideoSegment() {
+    throw new Error('videoSegmentDescriber not provided to createApp()');
   },
 };
 
@@ -140,8 +148,10 @@ export function createApp(deps: AppDeps = {}): Express {
   const eventBus = deps.eventBus ?? createDiscoveryEventBus();
   const discoveryChatSessionStore = deps.discoveryChatSessionStore ?? createInMemoryDiscoveryChatSessionStore();
   const discoveryChatAgent = deps.discoveryChatAgent ?? notConfiguredDiscoveryChatAgent;
+  const videoSegmentDescriber = deps.videoSegmentDescriber ?? notConfiguredVideoSegmentDescriber;
   const mockDiscoveryChatAgent =
-    deps.mockDiscoveryChatAgent ?? createMockDiscoveryChatAgent({ filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    deps.mockDiscoveryChatAgent ??
+    createMockDiscoveryChatAgent({ filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
   const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
 
   const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({

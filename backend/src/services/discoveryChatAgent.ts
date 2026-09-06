@@ -9,6 +9,7 @@ import type { DiscoveryEventBus } from './discoveryEventBus.js';
 import type { FilmStore } from './filmStore.js';
 import { mergeDiscoveryResult, discardDiscoveryResult } from './discoveryResultActions.js';
 import { subtitleTextForRange } from './subtitleOverlap.js';
+import { MAX_CLIP_MS, type VideoSegmentDescriber } from './videoSegmentDescriber.js';
 
 export type { ChatGenAIClient } from './researchChatAgent.js';
 
@@ -38,6 +39,7 @@ export interface DiscoveryChatAgentDeps {
   discoveryJobStore: DiscoveryJobStore;
   discoveryChatSessionStore: DiscoveryChatSessionStore;
   eventBus: DiscoveryEventBus;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 export interface RunTurnInput {
@@ -138,6 +140,24 @@ const DELETE_DETAIL_ROW_DECL = {
   },
 };
 
+const DESCRIBE_VIDEO_SEGMENT_DECL = {
+  name: 'describe_video_segment',
+  description:
+    "Look at a short slice of this film's actual footage and get back a text description of what's visibly happening — actions, objects, on-screen text, gestures, expressions. Use this only when you need to know what's shown on screen and the subtitle text or existing row data doesn't already tell you; don't call it reflexively for every question.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      startMs: { type: Type.NUMBER, description: 'Clip start time in milliseconds.' },
+      endMs: {
+        type: Type.NUMBER,
+        description: `Clip end time in milliseconds. Must be after startMs and at most ${MAX_CLIP_MS}ms after it — request a shorter range and call again if you need to look at more.`,
+      },
+      focus: { type: Type.STRING, description: 'Optional: what to pay particular attention to, e.g. "what food is on the table".' },
+    },
+    required: ['startMs', 'endMs'],
+  },
+};
+
 const CHAT_TOOLS = [
   {
     functionDeclarations: [
@@ -146,6 +166,7 @@ const CHAT_TOOLS = [
       DELETE_DETAIL_ROW_DECL,
       MERGE_CANDIDATE_ROW_DECL,
       DISCARD_CANDIDATE_ROW_DECL,
+      DESCRIBE_VIDEO_SEGMENT_DECL,
     ],
   },
 ];
@@ -154,8 +175,9 @@ const SYSTEM_INSTRUCTION = `You are a Discovery Agent's interactive assistant in
 triage tool. You're chatting with a human localizer inside one Agent's thread,
 scoped to one film. Answer questions about this agent's runs (passes) and
 their candidate rows. You can also use your tools to add a new Detail row,
-edit or delete any existing Detail row, or accept/discard one of THIS agent's
-pending candidate rows. Kicking off a brand-new pass is a button the human
+edit or delete any existing Detail row, accept/discard one of THIS agent's
+pending candidate rows, or look at a short slice of the actual video footage
+when you need to know what's visibly happening on screen. Kicking off a brand-new pass is a button the human
 clicks, never something you decide to do yourself — if asked to find more
 lines, tell them to use the "Kick off another pass" button. Keep replies
 concise and conversational.`;
@@ -169,6 +191,7 @@ interface ExecuteToolDeps {
   detailRowsStore: DetailRowsStore;
   discoveryJobStore: DiscoveryJobStore;
   eventBus: DiscoveryEventBus;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 interface ExecuteToolResult {
@@ -249,6 +272,25 @@ export async function executeTool(
     );
     if (!result.ok) return { response: { error: result.error } };
     return { response: { ok: true }, rowEvent: { type: 'row_discarded', jobId: args.jobId, tempId: args.tempId } };
+  }
+
+  if (call.name === 'describe_video_segment') {
+    const args = call.args as { startMs: number; endMs: number; focus?: string };
+    if (typeof args.startMs !== 'number' || typeof args.endMs !== 'number' || !(args.endMs > args.startMs)) {
+      return { response: { error: 'startMs/endMs must be numbers with endMs > startMs' } };
+    }
+    if (args.endMs - args.startMs > MAX_CLIP_MS) {
+      return { response: { error: `clip too long — max ${MAX_CLIP_MS}ms per call, request a shorter range` } };
+    }
+    const film = await deps.filmStore.getFilm(ctx.filmId);
+    if (!film) return { response: { error: 'film not found' } };
+    const description = await deps.videoSegmentDescriber.describeVideoSegment({
+      videoUrl: film.videoUrl,
+      startMs: args.startMs,
+      endMs: args.endMs,
+      focus: args.focus,
+    });
+    return { response: { description } };
   }
 
   return { response: { error: `unknown tool "${call.name}"` } };
@@ -364,6 +406,7 @@ export function createDiscoveryChatAgent(config: DiscoveryChatAgentConfig, deps:
               detailRowsStore: deps.detailRowsStore,
               discoveryJobStore: deps.discoveryJobStore,
               eventBus: deps.eventBus,
+              videoSegmentDescriber: deps.videoSegmentDescriber,
             });
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (rowEvent) yield rowEvent;

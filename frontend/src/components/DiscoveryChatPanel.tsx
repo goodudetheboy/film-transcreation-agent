@@ -525,7 +525,7 @@ function DiscoveryRunCard({
 
 /** A tool call the agent made (edit/merge/discard) — same idea as
  * ResearchChatPanel's ToolCallCard. */
-function DiscoveryToolCallCard({ name, result }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown> }) {
+function DiscoveryToolCallCard({ name, args, result }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown> }) {
   const label =
     name === 'edit_detail_row'
       ? 'Edited a Detail row'
@@ -537,7 +537,9 @@ function DiscoveryToolCallCard({ name, result }: { name: string; args: Record<st
             ? 'Added a candidate to the Details table'
             : name === 'discard_candidate_row'
               ? 'Discarded a candidate'
-              : `Called ${name}`;
+              : name === 'describe_video_segment'
+                ? `Looking at ${formatClock(Number(args.startMs))}–${formatClock(Number(args.endMs))}`
+                : `Called ${name}`;
 
   return (
     <div className="chat-step-card">

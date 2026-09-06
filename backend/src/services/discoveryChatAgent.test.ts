@@ -35,6 +35,7 @@ async function buildDeps() {
   const discoveryJobStore = createInMemoryDiscoveryJobStore();
   const discoveryChatSessionStore = createInMemoryDiscoveryChatSessionStore();
   const eventBus = createDiscoveryEventBus();
+  const videoSegmentDescriber = { describeVideoSegment: vi.fn(async () => 'a description of what is happening') };
 
   const row = await detailRowsStore.addRow('film-a', {
     startMs: 0,
@@ -58,16 +59,16 @@ async function buildDeps() {
     resultRows: [{ tempId: 'cand-1', startMs: 2000, endMs: 3000, subtitleText: 'a new line', values: { segmentDescription: 'new' } }],
   });
 
-  return { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session, job: jobWithCandidate! };
+  return { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, row, session, job: jobWithCandidate! };
 }
 
 describe('createDiscoveryChatAgent runTurn', () => {
   it('a text-only turn yields text_delta then turn_done, with no tool calls', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'Hello there.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'text_delta', text: 'Hello there.' }, { type: 'turn_done' }]);
@@ -78,7 +79,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('edit_detail_row calls the tool, emits tool_call/tool_result/row_patched, applies immediately', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, row, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -89,7 +90,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Updated the notes.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'flag that row', }));
 
     expect(generateContentStream).toHaveBeenCalledTimes(2);
@@ -102,7 +103,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('edit_detail_row rejects an unsupported field without touching the row', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, row, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -111,7 +112,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Cannot do that.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'move it' }));
 
     const toolResult = events.find((e) => e.type === 'tool_result');
@@ -120,11 +121,11 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('includes each row\'s mm:ss timestamp range in the context sent to Gemini, so time-based references can be resolved', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     await collect(agent.runTurn({ session, userText: 'what rows exist?' }));
 
     const systemInstruction = generateContentStream.mock.calls[0][0].config.systemInstruction as string;
@@ -132,7 +133,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('edit_detail_row can set a custom column value without wiping sibling custom values', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, row, session } = await buildDeps();
     const column = await detailRowsStore.addColumn('film-a', 'Food', 'Food visible in the scene.');
     await detailRowsStore.updateRow('film-a', row.id, { values: { custom: { drink: 'water' } } });
 
@@ -146,7 +147,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Set the food.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'set the food to chicken' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_patched', 'text_delta', 'turn_done']);
@@ -155,7 +156,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('merge_candidate_row adds the candidate to the Details table and emits row_added', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session, job } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session, job } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -168,7 +169,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
     const busEvents: unknown[] = [];
     eventBus.subscribe(`discoveryJob:${job.id}`, (e) => busEvents.push(e));
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'add that candidate' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_added', 'text_delta', 'turn_done']);
@@ -183,7 +184,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('discard_candidate_row removes the candidate without touching the Details table', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session, job } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session, job } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -194,7 +195,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Discarded it.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'discard that one' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_discarded', 'text_delta', 'turn_done']);
@@ -206,7 +207,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('add_detail_row creates a new row and emits row_created', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -217,7 +218,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Added it.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'add a row from 5s to 6s' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_created', 'text_delta', 'turn_done']);
@@ -229,7 +230,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('add_detail_row rejects an invalid range without creating a row', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -238,7 +239,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Cannot do that.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'add a backwards range' }));
 
     const toolResult = events.find((e) => e.type === 'tool_result');
@@ -248,7 +249,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('delete_detail_row removes the row and emits row_deleted', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, row, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, row, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -257,7 +258,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Removed it.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'delete that row' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_deleted', 'text_delta', 'turn_done']);
@@ -266,7 +267,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('bundles multiple parallel tool calls from one model turn into a single functionResponse turn, matching Gemini\'s requirement', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session, job } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session, job } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -288,7 +289,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Done both.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'add the candidate and a new row' }));
 
     expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'row_added', 'tool_call', 'tool_result', 'row_created', 'text_delta', 'turn_done']);
@@ -305,7 +306,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('persists `run` marker turns but excludes them from what is sent to Gemini', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session, job } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session, job } = await buildDeps();
     await discoveryChatSessionStore.updateSession('film-a', session.id, {
       turns: [{ role: 'system', parts: [{ run: { jobId: job.id } }], ts: new Date().toISOString() }],
     });
@@ -314,7 +315,7 @@ describe('createDiscoveryChatAgent runTurn', () => {
     const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     await collect(agent.runTurn({ session: sessionWithRun, userText: 'how did that run go?' }));
 
     const sentContents = generateContentStream.mock.calls[0][0].contents as Array<{ role: string }>;
@@ -325,13 +326,13 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('yields only a stopped event and never calls the model when the signal is already aborted', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const controller = new AbortController();
     controller.abort();
     const generateContentStream = vi.fn();
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi', signal: controller.signal }));
 
     expect(events).toEqual([{ type: 'stopped' }]);
@@ -339,26 +340,68 @@ describe('createDiscoveryChatAgent runTurn', () => {
   });
 
   it('yields a stopped event (not error) when the stream call itself rejects with an AbortError', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const abortError = new Error('aborted');
     abortError.name = 'AbortError';
     const generateContentStream = vi.fn().mockRejectedValue(abortError);
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'stopped' }]);
   });
 
   it('yields an error event and does not throw when the underlying stream call rejects', async () => {
-    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, session } = await buildDeps();
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn().mockRejectedValue(new Error('vertex boom'));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'error', message: 'vertex boom' }]);
+  });
+
+  it("describe_video_segment calls the describer with the film's videoUrl and returns the description, with no row-mutation event", async () => {
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber } = await buildDeps();
+    const film = await filmStore.createFilm({ title: 'Test Film', videoUrl: 'gs://bucket/clip.mp4', subtitle: null, runDiscoveryOnCreate: false });
+    const session = await discoveryChatSessionStore.createSession({ filmId: film.id });
+
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([
+          { candidates: [{ content: { parts: [{ functionCall: { name: 'describe_video_segment', args: { startMs: 2000, endMs: 5000, focus: 'food' } } }] } }] },
+        ]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'I saw a red car.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
+    const events = await collect(agent.runTurn({ session, userText: 'what is happening at 2s?' }));
+
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'text_delta', 'turn_done']);
+    expect(videoSegmentDescriber.describeVideoSegment).toHaveBeenCalledWith({ videoUrl: 'gs://bucket/clip.mp4', startMs: 2000, endMs: 5000, focus: 'food' });
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toMatchObject({ result: { description: 'a description of what is happening' } });
+  });
+
+  it('describe_video_segment rejects a too-long range without calling the describer', async () => {
+    const { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber, session } = await buildDeps();
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([{ candidates: [{ content: { parts: [{ functionCall: { name: 'describe_video_segment', args: { startMs: 0, endMs: 120000 } } }] } }] }]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Cannot do that.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createDiscoveryChatAgent(CONFIG, { genAI, filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
+    const events = await collect(agent.runTurn({ session, userText: 'describe a huge range' }));
+
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toMatchObject({ result: { error: expect.stringContaining('clip too long') } });
+    expect(videoSegmentDescriber.describeVideoSegment).not.toHaveBeenCalled();
   });
 });

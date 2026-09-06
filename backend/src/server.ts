@@ -18,6 +18,7 @@ import { createResearchRunEventBus } from './services/researchRunEventBus.js';
 import { createResearchChatAgent } from './services/researchChatAgent.js';
 import { createDiscoveryChatAgent } from './services/discoveryChatAgent.js';
 import { createDiscoveryAgent } from './services/discoveryAgent.js';
+import { createVideoSegmentDescriber } from './services/videoSegmentDescriber.js';
 import { createMockDiscoveryAgent } from './services/mockDiscoveryAgent.js';
 import { createDiscoveryEventBus } from './services/discoveryEventBus.js';
 import { createDiscoveryQueueWorker } from './services/discoveryQueueWorker.js';
@@ -44,7 +45,15 @@ const trendAgent = createTrendAgent(config, { parallelSearchClient });
 const researchChatAgent = createResearchChatAgent(config, { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
 const discoveryAgent = createDiscoveryAgent(config);
 const mockDiscoveryAgent = createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
-const discoveryChatAgent = createDiscoveryChatAgent(config, { filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus });
+const videoSegmentDescriber = createVideoSegmentDescriber(config);
+const discoveryChatAgent = createDiscoveryChatAgent(config, {
+  filmStore,
+  detailRowsStore,
+  discoveryJobStore,
+  discoveryChatSessionStore,
+  eventBus,
+  videoSegmentDescriber,
+});
 
 const videoBucketUploader = createVideoBucketUploader({
   bucketName: config.videoClipsBucket,

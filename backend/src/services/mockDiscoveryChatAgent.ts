@@ -6,6 +6,7 @@ import type { DiscoveryEventBus } from './discoveryEventBus.js';
 import type { FilmStore } from './filmStore.js';
 import type { DiscoveryChatPart, DiscoveryChatTurn } from './filmTypes.js';
 import { executeTool, type DiscoveryChatAgent } from './discoveryChatAgent.js';
+import type { VideoSegmentDescriber } from './videoSegmentDescriber.js';
 
 export interface MockDiscoveryChatAgentDeps {
   filmStore: FilmStore;
@@ -13,6 +14,7 @@ export interface MockDiscoveryChatAgentDeps {
   discoveryJobStore: DiscoveryJobStore;
   discoveryChatSessionStore: DiscoveryChatSessionStore;
   eventBus: DiscoveryEventBus;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 /**
@@ -47,6 +49,7 @@ export function createMockDiscoveryChatAgent(deps: MockDiscoveryChatAgentDeps): 
           detailRowsStore: deps.detailRowsStore,
           discoveryJobStore: deps.discoveryJobStore,
           eventBus: deps.eventBus,
+          videoSegmentDescriber: deps.videoSegmentDescriber,
         });
         yield { type: 'tool_result', callId, name: 'merge_candidate_row', result: response };
         if (rowEvent) yield rowEvent;
@@ -89,6 +92,7 @@ export function createMockDiscoveryChatAgent(deps: MockDiscoveryChatAgentDeps): 
         detailRowsStore: deps.detailRowsStore,
         discoveryJobStore: deps.discoveryJobStore,
         eventBus: deps.eventBus,
+        videoSegmentDescriber: deps.videoSegmentDescriber,
       });
       yield { type: 'tool_result', callId, name: 'edit_detail_row', result: response };
       if (rowEvent) yield rowEvent;

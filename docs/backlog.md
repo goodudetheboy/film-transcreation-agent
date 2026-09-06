@@ -83,7 +83,12 @@ Triaged 2026-09-05 from a single batch of user feedback (see
   into the Phase 1 session-panel fix
 - [ ] Backfill flow: user adds a new column (e.g. "Food") on existing
   details and wants to kick off Discover against already-existing rows to
-  populate it, not just find new lines — needs UX discussion first
+  populate it, not just find new lines — needs UX discussion first. Video-sight
+  primitive (`describe_video_segment` tool, `videoSegmentDescriber.ts`) now
+  exists as groundwork — see
+  [docs/progress/20260906.md](progress/20260906.md)'s 19:05 entry — still
+  needs the row-selection UI, job-mode fork, and review-queue design discussed
+  there before this can be built.
 - [ ] Drag-and-drop a details/project-details row into an open chat compose
   box to reference it
 - [ ] Visual flair (sparkle/flash) where an agent edits something live —
