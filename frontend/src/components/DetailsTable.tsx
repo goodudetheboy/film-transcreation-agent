@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BUILTIN_COLUMN_LABELS, type ColumnDoc, type DetailRow, type Film } from '../api/apiClient.types';
 import { addColumn, addDetailRow, deleteDetailRow } from '../api/filmsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { provenanceLabel, provenanceModifier } from '../utils/detailRowProvenance';
+import { useResizableColumns } from '../utils/useResizableColumns';
 import { InfoIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { DetailRowView } from './DetailRowView';
+import { ResizableTh } from './ResizableTh';
 
 export interface DetailsTableProps {
   film: Film;
@@ -36,41 +38,6 @@ const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 640;
 
 const NEW_ROW_DEFAULT_SPAN_MS = 2000;
-
-/** Defined at module scope, not inside DetailsTable's render body — an inline
- * component redefined on every render is a *new type* to React, so every
- * `setColWidths` update during a drag would tear down and recreate this
- * `<span>`, silently losing the `setPointerCapture()` mid-gesture (the drag
- * would only keep tracking while the cursor stayed exactly over the 6px
- * sliver). Keeping it stable here is what makes capture survive the drag. */
-function ResizableTh({
-  colKey,
-  children,
-  title,
-  onResizerPointerDown,
-  onResizerPointerMove,
-  onResizerPointerUp,
-}: {
-  colKey: string;
-  children: ReactNode;
-  /** Tooltip shown on hover — used for a custom column's description. */
-  title?: string;
-  onResizerPointerDown: (e: React.PointerEvent<HTMLSpanElement>, key: string) => void;
-  onResizerPointerMove: (e: React.PointerEvent<HTMLSpanElement>) => void;
-  onResizerPointerUp: (e: React.PointerEvent<HTMLSpanElement>) => void;
-}) {
-  return (
-    <th title={title}>
-      {children}
-      <span
-        className="details-table__col-resizer"
-        onPointerDown={(e) => onResizerPointerDown(e, colKey)}
-        onPointerMove={onResizerPointerMove}
-        onPointerUp={onResizerPointerUp}
-      />
-    </th>
-  );
-}
 
 /** Small info-icon tooltip trigger — visible affordance that a header has
  * more context on hover, since a bare `title` attribute gives no visual cue. */
@@ -104,40 +71,11 @@ export function DetailsTable({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
-  const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnDescription, setNewColumnDescription] = useState('');
-  const dragRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  function colWidth(key: string): number {
-    return colWidths[key] ?? DEFAULT_COL_WIDTHS[key] ?? DEFAULT_CUSTOM_COL_WIDTH;
-  }
-
-  function handleResizerPointerDown(e: React.PointerEvent<HTMLSpanElement>, key: string) {
-    e.stopPropagation();
-    dragRef.current = { key, startX: e.clientX, startWidth: colWidth(key) };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  }
-
-  function handleResizerPointerMove(e: React.PointerEvent<HTMLSpanElement>) {
-    const drag = dragRef.current;
-    if (!drag) return;
-    const next = Math.min(MAX_COL_WIDTH, Math.max(MIN_COL_WIDTH, drag.startWidth + (e.clientX - drag.startX)));
-    setColWidths((prev) => ({ ...prev, [drag.key]: next }));
-  }
-
-  function handleResizerPointerUp(e: React.PointerEvent<HTMLSpanElement>) {
-    dragRef.current = null;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  }
-
-  const resizerHandlers = {
-    onResizerPointerDown: handleResizerPointerDown,
-    onResizerPointerMove: handleResizerPointerMove,
-    onResizerPointerUp: handleResizerPointerUp,
-  };
+  const { colWidth, resizerHandlers } = useResizableColumns(DEFAULT_COL_WIDTHS, DEFAULT_CUSTOM_COL_WIDTH, MIN_COL_WIDTH, MAX_COL_WIDTH);
 
   function isRowActive(row: DetailRow) {
     return currentTimeMs >= row.startMs && currentTimeMs < row.endMs;

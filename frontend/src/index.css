@@ -3504,6 +3504,17 @@ textarea {
   overflow-y: auto;
 }
 
+/* Wide enough to show a real details-style table (resizable columns, its own
+   horizontal scrollbar) without cramping it — see DiscoveryResultsModal in
+   DiscoveryChatPanel.tsx. Columns keep their natural widths; this only
+   controls how much is visible before the table's own scrollbar kicks in.
+   The table's vertical scrolling is handled by .details-table-wrap--standalone
+   above — already applied to this table's wrapper in the JSX. */
+.discovery-results-modal {
+  width: 90vw;
+  max-width: 1200px;
+}
+
 /* ---------- Research chat panel ---------- */
 
 .chat-panel {

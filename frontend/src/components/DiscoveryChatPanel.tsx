@@ -25,11 +25,13 @@ import type {
 } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
+import { useResizableColumns } from '../utils/useResizableColumns';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { EditableTitle } from './EditableTitle';
 import { ChatMarkdown } from './ChatMarkdown';
 import { Modal } from './Modal';
+import { ResizableTh } from './ResizableTh';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
@@ -46,10 +48,22 @@ const QUICK_PROMPTS = [
 
 const DEFAULT_COLUMNS = ['segmentDescription', 'gesture'];
 
-function columnLabel(key: string, columns: ColumnDoc[]): string {
-  if (key in BUILTIN_COLUMN_LABELS) return BUILTIN_COLUMN_LABELS[key as keyof typeof BUILTIN_COLUMN_LABELS];
-  return columns.find((c) => c.key === key)?.name ?? key;
-}
+// Same shape/defaults as DetailsTable.tsx's own column widths — checkbox/actions
+// aren't user-resizable (no ResizableTh rendered for them), matching how that
+// table's trailing actions column is sized but not draggable either.
+const RESULT_COL_WIDTHS: Record<string, number> = {
+  checkbox: 36,
+  start: 90,
+  end: 90,
+  subtitle: 260,
+  segmentDescription: 260,
+  gesture: 170,
+  notes: 220,
+  actions: 130,
+};
+const RESULT_DEFAULT_CUSTOM_WIDTH = 200;
+const RESULT_MIN_COL_WIDTH = 60;
+const RESULT_MAX_COL_WIDTH = 640;
 
 /** The inline kickoff form — same fields AgentKickoffPanel used to show in a
  * modal, minus the agent picker (we're always already inside one). Shown
@@ -183,6 +197,12 @@ function DiscoveryResultsModal({
   const [bulkBusy, setBulkBusy] = useState(false);
   const [discardTarget, setDiscardTarget] = useState<{ tempId: string; subtitleText: string } | null>(null);
   const [confirmBulkDiscard, setConfirmBulkDiscard] = useState(false);
+  const { colWidth, resizerHandlers } = useResizableColumns(
+    RESULT_COL_WIDTHS,
+    RESULT_DEFAULT_CUSTOM_WIDTH,
+    RESULT_MIN_COL_WIDTH,
+    RESULT_MAX_COL_WIDTH,
+  );
 
   // Drop any selected tempId once its candidate is gone (merged/discarded,
   // by this modal or by the chat agent's own tools) — otherwise a stale id
@@ -248,7 +268,11 @@ function DiscoveryResultsModal({
   }
 
   return (
-    <Modal title={`${job.resultRows.length} detail${job.resultRows.length === 1 ? '' : 's'} found — Run #${job.passNumber}`} onClose={onClose} className="kickoff-modal">
+    <Modal
+      title={`${job.resultRows.length} detail${job.resultRows.length === 1 ? '' : 's'} found — Run #${job.passNumber}`}
+      onClose={onClose}
+      className="discovery-results-modal"
+    >
       {job.resultRows.length === 0 ? (
         <p className="results-placeholder">All candidates handled.</p>
       ) : (
@@ -270,6 +294,19 @@ function DiscoveryResultsModal({
           <div className="details-table-wrap details-table-wrap--standalone">
             <div className="details-table-scroll">
               <table className="details-table">
+                <colgroup>
+                  <col style={{ width: colWidth('checkbox') }} />
+                  <col style={{ width: colWidth('start') }} />
+                  <col style={{ width: colWidth('end') }} />
+                  <col style={{ width: colWidth('subtitle') }} />
+                  <col style={{ width: colWidth('segmentDescription') }} />
+                  <col style={{ width: colWidth('gesture') }} />
+                  <col style={{ width: colWidth('notes') }} />
+                  {columns.map((c) => (
+                    <col key={c.id} style={{ width: colWidth(c.key) }} />
+                  ))}
+                  <col style={{ width: colWidth('actions') }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th>
@@ -280,9 +317,17 @@ function DiscoveryResultsModal({
                         aria-label={selected.size === job.resultRows.length ? 'Deselect all candidates' : 'Select all candidates'}
                       />
                     </th>
-                    <th>Time</th>
-                    <th>Subtitle</th>
-                    <th>Details</th>
+                    <ResizableTh colKey="start" {...resizerHandlers}>Start</ResizableTh>
+                    <ResizableTh colKey="end" {...resizerHandlers}>End</ResizableTh>
+                    <ResizableTh colKey="subtitle" {...resizerHandlers}>Subtitle</ResizableTh>
+                    <ResizableTh colKey="segmentDescription" {...resizerHandlers}>Segment Description</ResizableTh>
+                    <ResizableTh colKey="gesture" {...resizerHandlers}>Gesture</ResizableTh>
+                    <ResizableTh colKey="notes" {...resizerHandlers}>Notes</ResizableTh>
+                    {columns.map((c) => (
+                      <ResizableTh key={c.id} colKey={c.key} title={c.description || undefined} {...resizerHandlers}>
+                        {c.name}
+                      </ResizableTh>
+                    ))}
                     <th />
                   </tr>
                 </thead>
@@ -297,16 +342,17 @@ function DiscoveryResultsModal({
                           aria-label={`Select candidate at ${formatClock(r.startMs)}`}
                         />
                       </td>
-                      <td className="details-table__cell--nowrap-exempt">
-                        {formatClock(r.startMs)}–{formatClock(r.endMs)}
-                      </td>
-                      <td>{r.subtitleText || <em>Visual only</em>}</td>
-                      <td>
-                        {Object.entries(r.values)
-                          .filter(([k]) => k !== 'custom')
-                          .map(([k, v]) => `${columnLabel(k, columns)}: ${v}`)
-                          .join(' · ')}
-                      </td>
+                      <td title={formatClock(r.startMs)}>{formatClock(r.startMs)}</td>
+                      <td title={formatClock(r.endMs)}>{formatClock(r.endMs)}</td>
+                      <td title={r.subtitleText}>{r.subtitleText || <em>Visual only</em>}</td>
+                      <td title={r.values.segmentDescription}>{r.values.segmentDescription}</td>
+                      <td title={r.values.gesture}>{r.values.gesture}</td>
+                      <td title={r.values.notes}>{r.values.notes}</td>
+                      {columns.map((c) => (
+                        <td key={c.id} title={r.values.custom?.[c.key] ?? ''}>
+                          {r.values.custom?.[c.key] ?? ''}
+                        </td>
+                      ))}
                       <td className="details-table__cell--nowrap-exempt">
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
