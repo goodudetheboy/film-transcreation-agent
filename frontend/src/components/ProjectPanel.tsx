@@ -8,9 +8,10 @@ import {
   createRubric,
   updateRubric,
   deleteRubric,
+  getDefaultRubrics,
 } from '../api/projectsApiClient';
 import { listDetails } from '../api/filmsApiClient';
-import type { DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
+import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
 import { DetailRowPicker } from './DetailRowPicker';
@@ -46,6 +47,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
   const [tab, setTab] = useState<'items' | 'rubrics'>('items');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
+  const [filmColumns, setFilmColumns] = useState<ColumnDoc[]>([]);
   const [showAddDetails, setShowAddDetails] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
   const [agentsOpen, setAgentsOpen] = useState(false);
@@ -98,7 +100,10 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
 
   useEffect(() => {
     if (!project?.sourceFilmId) return;
-    listDetails(project.sourceFilmId, passcode).then((d) => setFilmRows(d.rows));
+    listDetails(project.sourceFilmId, passcode).then((d) => {
+      setFilmRows(d.rows);
+      setFilmColumns(d.columns);
+    });
   }, [project?.sourceFilmId, passcode]);
 
   const allItems = Object.values(items);
@@ -137,8 +142,23 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
     addRubric(rubric);
   }
 
+  async function handleGenerateDefaultRubrics() {
+    const defaults = await getDefaultRubrics(passcode);
+    for (const d of defaults) {
+      const rubric = await createRubric(projectId, { passcode, ...d });
+      addRubric(rubric);
+    }
+  }
+
   const alreadyImportedIds = new Set(allItems.map((i) => i.detailRowId));
   const openItem = openItemId ? items[openItemId] : null;
+
+  function toggleAllAddSelection() {
+    const selectableIds = filmRows.filter((r) => !alreadyImportedIds.has(r.id)).map((r) => r.id);
+    setAddSelection((prev) =>
+      selectableIds.length > 0 && selectableIds.every((id) => prev.has(id)) ? new Set() : new Set(selectableIds),
+    );
+  }
 
   if (loadError) return <p className="passcode-gate__error">{loadError}</p>;
   if (!project) return <p className="results-placeholder">Loading…</p>;
@@ -235,8 +255,8 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
                           <th>End</th>
                           <th>Importance</th>
                           <th>Subtitle</th>
-                          <th>Verdict</th>
-                          <th>Action</th>
+                          <th>AI assessment</th>
+                          <th>Your Verdict</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -294,6 +314,7 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
                 await deleteRubric(projectId, rubric.id, passcode);
                 removeRubric(rubric.id);
               }}
+              onGenerateDefaults={handleGenerateDefaultRubrics}
             />
           )}
         </div>
@@ -324,6 +345,8 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
                 })
               }
               alreadyImportedIds={alreadyImportedIds}
+              columns={filmColumns}
+              onToggleAll={toggleAllAddSelection}
             />
             <button type="button" className="btn btn--primary" onClick={handleAddDetails} disabled={addSelection.size === 0}>
               Add {addSelection.size || ''} detail{addSelection.size === 1 ? '' : 's'}

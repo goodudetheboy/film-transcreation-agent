@@ -53,6 +53,25 @@ export async function updateProject(
 
 // ---- Rubrics ------------------------------------------------------------
 
+export interface DefaultRubric {
+  name: string;
+  description: string;
+  weight: number;
+  trendEligible: boolean;
+}
+
+/** The server's placeholder rubric set (see backend/src/config/defaultRubrics.ts) —
+ * a starting point RubricsEditor can offer via "Use default rubrics", not tied to
+ * any project. */
+export async function getDefaultRubrics(passcode: string, options: ApiClientOptions = {}): Promise<DefaultRubric[]> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/default-rubrics?passcode=${encodeURIComponent(passcode)}`);
+  await throwOnError(res);
+  return (await res.json()) as DefaultRubric[];
+}
+
 export async function listRubrics(projectId: string, passcode: string, options: ApiClientOptions = {}): Promise<Rubric[]> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
@@ -333,6 +352,24 @@ export async function logResearchRun(
 
   const res = await fetchImpl(`${baseUrl}/api/projects/${projectId}/chat-sessions/${sessionId}/research-runs`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await throwOnError(res);
+  return (await res.json()) as ChatSession;
+}
+
+export async function renameChatSession(
+  projectId: string,
+  sessionId: string,
+  payload: { passcode: string; name: string },
+  options: ApiClientOptions = {},
+): Promise<ChatSession> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/projects/${projectId}/chat-sessions/${sessionId}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

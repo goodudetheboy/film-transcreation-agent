@@ -46,6 +46,20 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
     res.status(200).json(session);
   });
 
+  router.patch('/api/projects/:id/chat-sessions/:sessionId', async (req, res) => {
+    const { name } = req.body ?? {};
+    if (typeof name !== 'string' || name.trim() === '') {
+      res.status(400).json({ error: 'name must be a non-empty string' });
+      return;
+    }
+    const updated = await deps.chatSessionStore.updateSession(req.params.id, req.params.sessionId, { name });
+    if (!updated) {
+      res.status(404).json({ error: 'chat session not found' });
+      return;
+    }
+    res.status(200).json(updated);
+  });
+
   router.delete('/api/projects/:id/chat-sessions/:sessionId', async (req, res) => {
     const deleted = await deps.chatSessionStore.deleteSession(req.params.id, req.params.sessionId);
     if (!deleted) {

@@ -11,6 +11,9 @@ export interface RubricsEditorProps {
   onAdd: () => void;
   onChange: (index: number, patch: Partial<DraftRubric>) => void;
   onRemove: (index: number) => void;
+  /** Appends the server's placeholder rubric set (see backend's DEFAULT_RUBRICS) —
+   * a quick-pass starting point, not a replacement for real rubric design. */
+  onGenerateDefaults: () => void;
 }
 
 /**
@@ -20,7 +23,7 @@ export interface RubricsEditorProps {
  * additionally syncs to the CRUD routes). Modeled on AgentKickoffPanel.tsx's
  * `.column-checklist` add/remove shape as the closest existing precedent.
  */
-export function RubricsEditor({ rubrics, onAdd, onChange, onRemove }: RubricsEditorProps) {
+export function RubricsEditor({ rubrics, onAdd, onChange, onRemove, onGenerateDefaults }: RubricsEditorProps) {
   return (
     <div className="rubric-editor">
       {rubrics.length === 0 && <p className="results-placeholder">No rubrics yet.</p>}
@@ -59,9 +62,14 @@ export function RubricsEditor({ rubrics, onAdd, onChange, onRemove }: RubricsEdi
           </button>
         </div>
       ))}
-      <button type="button" className="btn" onClick={onAdd}>
-        + Add rubric
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button type="button" className="btn" onClick={onAdd}>
+          + Add rubric
+        </button>
+        <button type="button" className="btn btn--ghost" onClick={onGenerateDefaults}>
+          Use default rubrics
+        </button>
+      </div>
     </div>
   );
 }

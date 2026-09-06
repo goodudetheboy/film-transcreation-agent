@@ -3563,6 +3563,54 @@ textarea {
   color: var(--text-dim);
 }
 
+.chat-panel__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-snug) 0 0;
+}
+
+.chat-panel__title-text {
+  font-weight: 600;
+  font-size: var(--text-body-size);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-panel__title-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.chat-panel__title-edit:hover {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--panel);
+}
+
+.chat-panel__title-input {
+  font-weight: 600;
+  font-size: var(--text-body-size);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  width: 100%;
+}
+
 .chat-panel__thread {
   flex: 1;
   min-height: 0;

@@ -1,6 +1,7 @@
 import express, { type Express, Router } from 'express';
 import cors from 'cors';
 import { healthRoute } from './routes/health.js';
+import { configRoute } from './routes/config.js';
 import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { projectChatRoute } from './routes/projectChat.js';
@@ -165,6 +166,7 @@ export function createApp(deps: AppDeps = {}): Express {
   guarded.use(rateLimitMiddleware({ windowMs: config.rateLimitWindowMs, max: config.rateLimitMax }));
   guarded.use(passcodeMiddleware(config.sharedPasscode));
   guarded.use(verifyPasscodeRoute());
+  guarded.use(configRoute({ defaultRubrics: DEFAULT_RUBRICS }));
   guarded.use(
     projectsRoute({
       projectStore,

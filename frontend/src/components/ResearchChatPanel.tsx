@@ -5,6 +5,7 @@ import {
   listChatSessions,
   listItems,
   logResearchRun,
+  renameChatSession,
   streamResearchRun,
   streamResearchRunUpdates,
 } from '../api/projectsApiClient';
@@ -13,6 +14,7 @@ import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchRun } from '../
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
+import { EditableTitle } from './EditableTitle';
 
 export interface ResearchChatPanelProps {
   projectId: string;
@@ -350,6 +352,12 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     setShowKickoffForm(false);
   }
 
+  async function handleRenameSession(name: string) {
+    if (!activeSession) return;
+    const session = await renameChatSession(projectId, activeSession.id, { passcode, name });
+    upsertChatSession(session);
+  }
+
   function openSession(id: string) {
     setActiveChatSessionId(id);
     setPanelView('chat');
@@ -450,6 +458,13 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
       <button type="button" className="link-back" onClick={() => setPanelView('library')}>
         ← Library
       </button>
+
+      {activeSession && (
+        <EditableTitle
+          value={activeSession.name ?? `Session ${activeSession.sessionNumber}`}
+          onSave={handleRenameSession}
+        />
+      )}
 
       <div className="chat-panel__thread" ref={threadRef}>
         {!activeSession && chatSessions.length === 0 && (

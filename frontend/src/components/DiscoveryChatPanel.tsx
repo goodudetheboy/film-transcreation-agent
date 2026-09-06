@@ -4,6 +4,7 @@ import {
   deleteDiscoveryAgentSession,
   listDiscoveryAgentSessions,
   logDiscoveryRun,
+  renameDiscoveryAgentSession,
   sendDiscoveryChatMessage,
 } from '../api/discoveryChatApiClient';
 import { createDiscoveryJob, discardDiscoveryResult, mergeDiscoveryResult, streamDiscoveryJob } from '../api/filmsApiClient';
@@ -19,6 +20,7 @@ import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
+import { EditableTitle } from './EditableTitle';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
@@ -384,6 +386,12 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     }
   }
 
+  async function handleRenameAgent(name: string) {
+    if (!activeSession) return;
+    const session = await renameDiscoveryAgentSession(filmId, activeSession.id, { passcode, name });
+    upsertDiscoveryChatSession(session);
+  }
+
   async function handleNewAgent() {
     const session = await createDiscoveryAgentSession(filmId, { passcode });
     upsertDiscoveryChatSession(session);
@@ -485,6 +493,13 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
       <button type="button" className="link-back" onClick={() => setPanelView('library')}>
         ← Library
       </button>
+
+      {activeSession && (
+        <EditableTitle
+          value={activeSession.name ?? `Agent #${activeSession.agentNumber}`}
+          onSave={handleRenameAgent}
+        />
+      )}
 
       <div className="chat-panel__thread" ref={threadRef}>
         {activeSession?.turns.map((turn: DiscoveryChatTurn, i) => {

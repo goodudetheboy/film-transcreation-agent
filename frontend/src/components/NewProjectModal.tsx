@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getFilm, listDetails, createProjectFromFilm } from '../api/filmsApiClient';
-import { streamResearchRun, createChatSession, logResearchRun } from '../api/projectsApiClient';
-import type { DetailRow, Film, Project } from '../api/apiClient.types';
+import { streamResearchRun, createChatSession, logResearchRun, getDefaultRubrics } from '../api/projectsApiClient';
+import type { ColumnDoc, DetailRow, Film, Project } from '../api/apiClient.types';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor, type DraftRubric } from './RubricsEditor';
 import { CountrySelect } from './CountrySelect';
@@ -40,6 +40,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
   const [step, setStep] = useState<Step>('info');
   const [film, setFilm] = useState<Film | null>(null);
   const [rows, setRows] = useState<DetailRow[]>([]);
+  const [columns, setColumns] = useState<ColumnDoc[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [country, setCountry] = useState('');
@@ -58,6 +59,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
         if (cancelled) return;
         setFilm(f);
         setRows(details.rows);
+        setColumns(details.columns);
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err instanceof Error ? err.message : 'failed to load film');
@@ -82,6 +84,15 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
       else next.add(rowId);
       return next;
     });
+  }
+
+  function toggleAll() {
+    setSelectedRowIds((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))));
+  }
+
+  async function handleGenerateDefaultRubrics() {
+    const defaults = await getDefaultRubrics(passcode);
+    setRubrics((prev) => [...prev, ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight }))]);
   }
 
   function goNext() {
@@ -186,7 +197,13 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   This is where the details table is listed as a whole — select which rows to import into this
                   project. Only what&rsquo;s selected here gets fed to the research agent.
                 </p>
-                <DetailRowPicker rows={rows} selected={selectedRowIds} onToggle={toggleRow} />
+                <DetailRowPicker
+                  rows={rows}
+                  selected={selectedRowIds}
+                  onToggle={toggleRow}
+                  columns={columns}
+                  onToggleAll={toggleAll}
+                />
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button type="button" className="btn" onClick={goBack}>
                     Back
@@ -211,6 +228,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   onAdd={() => setRubrics((prev) => [...prev, emptyRubric()])}
                   onChange={(i, patch) => setRubrics((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))}
                   onRemove={(i) => setRubrics((prev) => prev.filter((_, idx) => idx !== i))}
+                  onGenerateDefaults={handleGenerateDefaultRubrics}
                 />
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button type="button" className="btn" onClick={goBack}>

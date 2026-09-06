@@ -50,6 +50,24 @@ export async function getDiscoveryAgentSession(
   return (await res.json()) as DiscoveryAgentSession;
 }
 
+export async function renameDiscoveryAgentSession(
+  filmId: string,
+  agentId: string,
+  payload: { passcode: string; name: string },
+  options: ApiClientOptions = {},
+): Promise<DiscoveryAgentSession> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  await throwOnError(res);
+  return (await res.json()) as DiscoveryAgentSession;
+}
+
 export async function deleteDiscoveryAgentSession(
   filmId: string,
   agentId: string,

@@ -53,6 +53,38 @@ describe('POST /api/projects/:id/chat-sessions and GET variants', () => {
   });
 });
 
+describe('PATCH /api/projects/:id/chat-sessions/:sessionId', () => {
+  it('renames a chat session', async () => {
+    const { app, project } = await seedAppAndProject();
+    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+
+    const renamed = await request(app)
+      .patch(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
+      .send({ passcode: TEST_PASSCODE, name: 'Renamed session' });
+
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe('Renamed session');
+
+    const fetched = await request(app).get(`/api/projects/${project.id}/chat-sessions/${created.body.id}?passcode=${TEST_PASSCODE}`);
+    expect(fetched.body.name).toBe('Renamed session');
+  });
+
+  it('rejects an empty name and 404s for an unknown session', async () => {
+    const { app, project } = await seedAppAndProject();
+    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+
+    const empty = await request(app)
+      .patch(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
+      .send({ passcode: TEST_PASSCODE, name: '   ' });
+    expect(empty.status).toBe(400);
+
+    const missing = await request(app)
+      .patch(`/api/projects/${project.id}/chat-sessions/does-not-exist`)
+      .send({ passcode: TEST_PASSCODE, name: 'X' });
+    expect(missing.status).toBe(404);
+  });
+});
+
 describe('POST /api/projects/:id/chat-sessions/:sessionId/research-runs', () => {
   it('files a run marker turn for an existing research run belonging to this project', async () => {
     const { app, project } = await seedAppAndProject();

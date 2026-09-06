@@ -46,6 +46,20 @@ export function discoveryChatRoute(deps: DiscoveryChatRouteDeps): Router {
     res.status(200).json(session);
   });
 
+  router.patch('/api/films/:id/discovery-agents/:agentId', async (req, res) => {
+    const { name } = req.body ?? {};
+    if (typeof name !== 'string' || name.trim() === '') {
+      res.status(400).json({ error: 'name must be a non-empty string' });
+      return;
+    }
+    const updated = await deps.discoveryChatSessionStore.updateSession(req.params.id, req.params.agentId, { name });
+    if (!updated) {
+      res.status(404).json({ error: 'discovery agent not found' });
+      return;
+    }
+    res.status(200).json(updated);
+  });
+
   router.delete('/api/films/:id/discovery-agents/:agentId', async (req, res) => {
     const deleted = await deps.discoveryChatSessionStore.deleteSession(req.params.id, req.params.agentId);
     if (!deleted) {

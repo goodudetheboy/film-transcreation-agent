@@ -50,6 +50,38 @@ describe('POST /api/films/:id/discovery-agents and GET variants', () => {
   });
 });
 
+describe('PATCH /api/films/:id/discovery-agents/:agentId', () => {
+  it('renames a discovery agent session', async () => {
+    const { app, film } = await seedAppAndFilm();
+    const created = await request(app).post(`/api/films/${film.id}/discovery-agents`).send({ passcode: TEST_PASSCODE });
+
+    const renamed = await request(app)
+      .patch(`/api/films/${film.id}/discovery-agents/${created.body.id}`)
+      .send({ passcode: TEST_PASSCODE, name: 'Renamed agent' });
+
+    expect(renamed.status).toBe(200);
+    expect(renamed.body.name).toBe('Renamed agent');
+
+    const fetched = await request(app).get(`/api/films/${film.id}/discovery-agents/${created.body.id}?passcode=${TEST_PASSCODE}`);
+    expect(fetched.body.name).toBe('Renamed agent');
+  });
+
+  it('rejects an empty name and 404s for an unknown agent', async () => {
+    const { app, film } = await seedAppAndFilm();
+    const created = await request(app).post(`/api/films/${film.id}/discovery-agents`).send({ passcode: TEST_PASSCODE });
+
+    const empty = await request(app)
+      .patch(`/api/films/${film.id}/discovery-agents/${created.body.id}`)
+      .send({ passcode: TEST_PASSCODE, name: '   ' });
+    expect(empty.status).toBe(400);
+
+    const missing = await request(app)
+      .patch(`/api/films/${film.id}/discovery-agents/does-not-exist`)
+      .send({ passcode: TEST_PASSCODE, name: 'X' });
+    expect(missing.status).toBe(404);
+  });
+});
+
 describe('POST /api/films/:id/discovery-agents/:agentId/runs', () => {
   it('files a run marker turn for a job that belongs to this agent', async () => {
     const { app, film, discoveryJobStore } = await seedAppAndFilm();

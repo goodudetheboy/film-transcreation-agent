@@ -38,14 +38,14 @@ Triaged 2026-09-05 from a single batch of user feedback (see
   - agent can't edit custom fields (e.g. a "Food" column) — tool schemas
     (`edit_detail_row`, `update_rubric_score`) only cover a fixed field list
 
-## Phase 2 — quick, low-risk wins
+## Phase 2 — quick, low-risk wins — done 2026-09-05
 
-- [ ] Agent name shown in the chatbot window title; renameable
-- [ ] Project-creation "selected details" table: select-all checkbox, show
+- [x] Agent name shown in the chatbot window title; renameable
+- [x] Project-creation "selected details" table: select-all checkbox, show
   all columns
-- [ ] Default rubrics generator (quick pass, equal weights) — real rubric
+- [x] Default rubrics generator (quick pass, equal weights) — real rubric
   design to follow later
-- [ ] Rename "Verdict"/"Action" → "AI assessment"/"Your Verdict"
+- [x] Rename "Verdict"/"Action" → "AI assessment"/"Your Verdict"
 
 ## Phase 3 — chat UX
 
