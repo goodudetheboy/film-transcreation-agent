@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import {
+  bulkDiscardDiscoveryResults,
+  bulkMergeDiscoveryResults,
   createDiscoveryJob,
   createFilm,
   listDetails,
@@ -25,11 +27,15 @@ const SRT = '1\n00:00:01,000 --> 00:00:04,000\nHello there.\n';
 describe('frontend filmsApiClient -> real backend -> faked discovery agent', () => {
   let backend: TestBackend;
   let worker: DiscoveryQueueWorker;
+  let detailRowsStoreRef: ReturnType<typeof createInMemoryDetailRowsStore>;
+  let discoveryJobStoreRef: ReturnType<typeof createInMemoryDiscoveryJobStore>;
 
   beforeAll(async () => {
     const filmStore = createInMemoryFilmStore();
     const detailRowsStore = createInMemoryDetailRowsStore();
     const discoveryJobStore = createInMemoryDiscoveryJobStore();
+    detailRowsStoreRef = detailRowsStore;
+    discoveryJobStoreRef = discoveryJobStore;
     const eventBus = createDiscoveryEventBus();
     const discoveryAgent = fakeDiscoveryAgent();
 
@@ -109,6 +115,36 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
 
     const details = await listDetails(film.id, TEST_PASSCODE, { baseUrl: backend.url });
     expect(details.rows).toHaveLength(1);
+  });
+
+  it('bulk-adds and bulk-discards candidates in one request each, over real HTTP', async () => {
+    // Seeded directly on the job doc (bypassing the fake agent's one-row-per-pass
+    // shape) — this test is about the bulk routes/actions, not the discovery
+    // pass itself, which the "imports a film end-to-end" test above already covers.
+    const job = await discoveryJobStoreRef.createJob({
+      filmId: 'bulk-film',
+      specialInstruction: '',
+      targetColumns: ['segmentDescription'],
+      testMode: true,
+    });
+    await discoveryJobStoreRef.updateJob('bulk-film', job.id, {
+      status: 'done',
+      resultRows: [
+        { tempId: 'b-1', startMs: 0, endMs: 1000, subtitleText: 'one', values: { segmentDescription: 'a' } },
+        { tempId: 'b-2', startMs: 1000, endMs: 2000, subtitleText: 'two', values: { segmentDescription: 'b' } },
+        { tempId: 'b-3', startMs: 2000, endMs: 3000, subtitleText: 'three', values: { segmentDescription: 'c' } },
+      ],
+    });
+
+    const merged = await bulkMergeDiscoveryResults('bulk-film', job.id, ['b-1', 'b-2'], TEST_PASSCODE, { baseUrl: backend.url });
+    expect(merged.map((r) => r.subtitleText).sort()).toEqual(['one', 'two']);
+
+    await bulkDiscardDiscoveryResults('bulk-film', job.id, ['b-3'], TEST_PASSCODE, { baseUrl: backend.url });
+
+    const finalJob = await discoveryJobStoreRef.getJob('bulk-film', job.id);
+    expect(finalJob?.resultRows).toHaveLength(0);
+    const rows = await detailRowsStoreRef.listRows('bulk-film');
+    expect(rows.map((r) => r.subtitleText).sort()).toEqual(['one', 'two']);
   });
 
   it('rejects film creation with an error when the passcode is wrong', async () => {

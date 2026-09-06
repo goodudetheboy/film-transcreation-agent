@@ -7,7 +7,14 @@ import {
   renameDiscoveryAgentSession,
   sendDiscoveryChatMessage,
 } from '../api/discoveryChatApiClient';
-import { createDiscoveryJob, discardDiscoveryResult, mergeDiscoveryResult, streamDiscoveryJob } from '../api/filmsApiClient';
+import {
+  bulkDiscardDiscoveryResults,
+  bulkMergeDiscoveryResults,
+  createDiscoveryJob,
+  discardDiscoveryResult,
+  mergeDiscoveryResult,
+  streamDiscoveryJob,
+} from '../api/filmsApiClient';
 import { BUILTIN_COLUMN_LABELS } from '../api/apiClient.types';
 import type {
   ColumnDoc,
@@ -151,31 +158,60 @@ function KickoffForm({
   );
 }
 
-/** One run (DiscoveryJob pass), inline in the thread — the same content
- * AgentStatusPanel used to show as its own panel, restyled as a card. */
-function DiscoveryRunCard({
+/** The full list of a run's candidates — a checkbox table (leftmost
+ * select-all-then-act column) inside a modal, opened from the count badge on
+ * a done DiscoveryRunCard instead of dumping every row into the chat thread. */
+function DiscoveryResultsModal({
   job,
   columns,
-  onMerge,
-  onDiscard,
+  onMergeOne,
+  onDiscardOne,
+  onBulkMerge,
+  onBulkDiscard,
+  onClose,
 }: {
-  job: DiscoveryJob | undefined;
+  job: DiscoveryJob;
   columns: ColumnDoc[];
-  onMerge: (jobId: string, tempId: string) => Promise<void>;
-  onDiscard: (jobId: string, tempId: string) => Promise<void>;
+  onMergeOne: (tempId: string) => Promise<void>;
+  onDiscardOne: (tempId: string) => Promise<void>;
+  onBulkMerge: (tempIds: string[]) => Promise<void>;
+  onBulkDiscard: (tempIds: string[]) => Promise<void>;
+  onClose: () => void;
 }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busyTempId, setBusyTempId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [discardTarget, setDiscardTarget] = useState<{ tempId: string; subtitleText: string } | null>(null);
+  const [confirmBulkDiscard, setConfirmBulkDiscard] = useState(false);
 
-  if (!job) return <div className="agent-run-card results-placeholder">Loading run…</div>;
+  // Drop any selected tempId once its candidate is gone (merged/discarded,
+  // by this modal or by the chat agent's own tools) — otherwise a stale id
+  // could ride along into a later bulk call.
+  useEffect(() => {
+    setSelected((prev) => {
+      const stillPresent = new Set(job.resultRows.map((r) => r.tempId));
+      const next = new Set([...prev].filter((id) => stillPresent.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [job.resultRows]);
 
-  const currentJob = job;
-  const isRunning = currentJob.status === 'queued' || currentJob.status === 'running';
+  function toggle(tempId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(tempId)) next.delete(tempId);
+      else next.add(tempId);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) => (prev.size === job.resultRows.length ? new Set() : new Set(job.resultRows.map((r) => r.tempId))));
+  }
 
   async function handleMerge(tempId: string) {
     setBusyTempId(tempId);
     try {
-      await onMerge(currentJob.id, tempId);
+      await onMergeOne(tempId);
     } finally {
       setBusyTempId(null);
     }
@@ -185,12 +221,166 @@ function DiscoveryRunCard({
     if (!discardTarget) return;
     setBusyTempId(discardTarget.tempId);
     try {
-      await onDiscard(currentJob.id, discardTarget.tempId);
+      await onDiscardOne(discardTarget.tempId);
       setDiscardTarget(null);
     } finally {
       setBusyTempId(null);
     }
   }
+
+  async function handleBulkMerge() {
+    setBulkBusy(true);
+    try {
+      await onBulkMerge([...selected]);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkDiscardConfirmed() {
+    setBulkBusy(true);
+    try {
+      await onBulkDiscard([...selected]);
+      setConfirmBulkDiscard(false);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`${job.resultRows.length} detail${job.resultRows.length === 1 ? '' : 's'} found — Run #${job.passNumber}`} onClose={onClose} className="kickoff-modal">
+      {job.resultRows.length === 0 ? (
+        <p className="results-placeholder">All candidates handled.</p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button type="button" className="btn btn--primary" disabled={selected.size === 0 || bulkBusy} onClick={handleBulkMerge}>
+              Add {selected.size || ''} selected
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={() => setConfirmBulkDiscard(true)}
+            >
+              Discard {selected.size || ''} selected
+            </button>
+          </div>
+
+          <div className="details-table-wrap details-table-wrap--standalone">
+            <div className="details-table-scroll">
+              <table className="details-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        checked={selected.size === job.resultRows.length}
+                        onChange={toggleAll}
+                        aria-label={selected.size === job.resultRows.length ? 'Deselect all candidates' : 'Select all candidates'}
+                      />
+                    </th>
+                    <th>Time</th>
+                    <th>Subtitle</th>
+                    <th>Details</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {job.resultRows.map((r) => (
+                    <tr key={r.tempId}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.tempId)}
+                          onChange={() => toggle(r.tempId)}
+                          aria-label={`Select candidate at ${formatClock(r.startMs)}`}
+                        />
+                      </td>
+                      <td className="details-table__cell--nowrap-exempt">
+                        {formatClock(r.startMs)}–{formatClock(r.endMs)}
+                      </td>
+                      <td>{r.subtitleText || <em>Visual only</em>}</td>
+                      <td>
+                        {Object.entries(r.values)
+                          .filter(([k]) => k !== 'custom')
+                          .map(([k, v]) => `${columnLabel(k, columns)}: ${v}`)
+                          .join(' · ')}
+                      </td>
+                      <td className="details-table__cell--nowrap-exempt">
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost"
+                            disabled={busyTempId === r.tempId}
+                            onClick={() => setDiscardTarget({ tempId: r.tempId, subtitleText: r.subtitleText })}
+                            aria-label="Discard candidate"
+                            title="Discard candidate"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {discardTarget && (
+        <ConfirmModal
+          title="Discard this candidate?"
+          body={`"${discardTarget.subtitleText}" will be dropped from this run's suggestions. This can't be undone.`}
+          confirmLabel="Discard"
+          busy={busyTempId === discardTarget.tempId}
+          onConfirm={handleDiscardConfirmed}
+          onCancel={() => setDiscardTarget(null)}
+        />
+      )}
+
+      {confirmBulkDiscard && (
+        <ConfirmModal
+          title="Discard these candidates?"
+          body={`${selected.size} candidate${selected.size === 1 ? '' : 's'} will be dropped from this run's suggestions. This can't be undone.`}
+          confirmLabel="Discard"
+          busy={bulkBusy}
+          onConfirm={handleBulkDiscardConfirmed}
+          onCancel={() => setConfirmBulkDiscard(false)}
+        />
+      )}
+    </Modal>
+  );
+}
+
+/** One run (DiscoveryJob pass), inline in the thread — the same content
+ * AgentStatusPanel used to show as its own panel, restyled as a card. */
+function DiscoveryRunCard({
+  job,
+  columns,
+  onMerge,
+  onDiscard,
+  onBulkMerge,
+  onBulkDiscard,
+}: {
+  job: DiscoveryJob | undefined;
+  columns: ColumnDoc[];
+  onMerge: (jobId: string, tempId: string) => Promise<void>;
+  onDiscard: (jobId: string, tempId: string) => Promise<void>;
+  onBulkMerge: (jobId: string, tempIds: string[]) => Promise<void>;
+  onBulkDiscard: (jobId: string, tempIds: string[]) => Promise<void>;
+}) {
+  const [showResults, setShowResults] = useState(false);
+
+  if (!job) return <div className="agent-run-card results-placeholder">Loading run…</div>;
+
+  const currentJob = job;
+  const isRunning = currentJob.status === 'queued' || currentJob.status === 'running';
 
   return (
     <div className="agent-run-card">
@@ -213,49 +403,22 @@ function DiscoveryRunCard({
           {job.resultRows.length === 0 ? (
             <p className="results-placeholder">No new candidates this pass.</p>
           ) : (
-            <ul className="content-list">
-              {job.resultRows.map((r) => (
-                <li key={r.tempId} className="content-card">
-                  <p className="content-card__caption">
-                    {formatClock(r.startMs)} – {formatClock(r.endMs)}
-                  </p>
-                  <p className="content-card__primary">&ldquo;{r.subtitleText}&rdquo;</p>
-                  <p className="content-card__secondary">
-                    {Object.entries(r.values)
-                      .filter(([k]) => k !== 'custom')
-                      .map(([k, v]) => `${columnLabel(k, columns)}: ${v}`)
-                      .join(' · ')}
-                  </p>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button type="button" className="btn btn--primary" disabled={busyTempId === r.tempId} onClick={() => handleMerge(r.tempId)}>
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost"
-                      disabled={busyTempId === r.tempId}
-                      onClick={() => setDiscardTarget({ tempId: r.tempId, subtitleText: r.subtitleText })}
-                      aria-label="Discard candidate"
-                      title="Discard candidate"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <button type="button" className="run-result-badge" onClick={() => setShowResults(true)}>
+              <SparkleIcon width={14} height={14} /> {job.resultRows.length} detail{job.resultRows.length === 1 ? '' : 's'} found
+            </button>
           )}
         </>
       )}
 
-      {discardTarget && (
-        <ConfirmModal
-          title="Discard this candidate?"
-          body={`"${discardTarget.subtitleText}" will be dropped from this run's suggestions. This can't be undone.`}
-          confirmLabel="Discard"
-          busy={busyTempId === discardTarget.tempId}
-          onConfirm={handleDiscardConfirmed}
-          onCancel={() => setDiscardTarget(null)}
+      {showResults && (
+        <DiscoveryResultsModal
+          job={currentJob}
+          columns={columns}
+          onMergeOne={(tempId) => onMerge(currentJob.id, tempId)}
+          onDiscardOne={(tempId) => onDiscard(currentJob.id, tempId)}
+          onBulkMerge={(tempIds) => onBulkMerge(currentJob.id, tempIds)}
+          onBulkDiscard={(tempIds) => onBulkDiscard(currentJob.id, tempIds)}
+          onClose={() => setShowResults(false)}
         />
       )}
     </div>
@@ -357,10 +520,15 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession, filmId, passcode]);
 
-  function removeCandidateFromJob(jobId: string, tempId: string) {
+  function removeCandidatesFromJob(jobId: string, tempIds: string[]) {
+    const idSet = new Set(tempIds);
     setJobDetails((prev) =>
-      prev[jobId] ? { ...prev, [jobId]: { ...prev[jobId], resultRows: prev[jobId].resultRows.filter((r) => r.tempId !== tempId) } } : prev,
+      prev[jobId] ? { ...prev, [jobId]: { ...prev[jobId], resultRows: prev[jobId].resultRows.filter((r) => !idSet.has(r.tempId)) } } : prev,
     );
+  }
+
+  function removeCandidateFromJob(jobId: string, tempId: string) {
+    removeCandidatesFromJob(jobId, [tempId]);
   }
 
   async function handleMergeCandidate(jobId: string, tempId: string) {
@@ -372,6 +540,17 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   async function handleDiscardCandidate(jobId: string, tempId: string) {
     await discardDiscoveryResult(filmId, jobId, tempId, passcode);
     removeCandidateFromJob(jobId, tempId);
+  }
+
+  async function handleBulkMergeCandidates(jobId: string, tempIds: string[]) {
+    const rows = await bulkMergeDiscoveryResults(filmId, jobId, tempIds, passcode);
+    for (const row of rows) addRow(row);
+    removeCandidatesFromJob(jobId, tempIds);
+  }
+
+  async function handleBulkDiscardCandidates(jobId: string, tempIds: string[]) {
+    await bulkDiscardDiscoveryResults(filmId, jobId, tempIds, passcode);
+    removeCandidatesFromJob(jobId, tempIds);
   }
 
   async function handleDeleteConfirmed() {
@@ -545,6 +724,8 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
                   columns={columns}
                   onMerge={handleMergeCandidate}
                   onDiscard={handleDiscardCandidate}
+                  onBulkMerge={handleBulkMergeCandidates}
+                  onBulkDiscard={handleBulkDiscardCandidates}
                 />
               );
             }

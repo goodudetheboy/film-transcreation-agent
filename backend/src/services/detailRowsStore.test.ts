@@ -58,6 +58,26 @@ describe('createInMemoryDetailRowsStore rows', () => {
     expect(updated?.values.custom).toEqual({ food: 'chicken', drink: 'water' });
   });
 
+  it('addRows creates every input row and returns them, same defaults as addRow', async () => {
+    const store = createInMemoryDetailRowsStore();
+    const rows = await store.addRows('film-a', [
+      { startMs: 0, endMs: 1000, subtitleText: 'One', values: { gesture: 'wave' }, provenance: { type: 'user-marked' } },
+      { startMs: 1000, endMs: 2000, subtitleText: 'Two', values: {}, provenance: { type: 'user-marked' } },
+    ]);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].values).toEqual({ segmentDescription: '', gesture: 'wave', notes: '', custom: {} });
+    expect(new Set(rows.map((r) => r.id)).size).toBe(2);
+
+    const listed = await store.listRows('film-a');
+    expect(listed).toHaveLength(2);
+  });
+
+  it('addRows with an empty array creates nothing', async () => {
+    const store = createInMemoryDetailRowsStore();
+    expect(await store.addRows('film-a', [])).toEqual([]);
+    expect(await store.listRows('film-a')).toHaveLength(0);
+  });
+
   it('deleteRow removes only the targeted row for the right film', async () => {
     const store = createInMemoryDetailRowsStore();
     const row = await store.addRow('film-a', {

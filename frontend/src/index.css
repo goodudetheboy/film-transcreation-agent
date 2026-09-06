@@ -1865,10 +1865,6 @@ textarea {
   cursor: pointer;
 }
 
-.details-table__row--editing {
-  background: var(--panel-2);
-}
-
 .details-table__row--active {
   background: var(--warning-dim);
 }
@@ -2928,30 +2924,8 @@ textarea {
   width: 440px;
 }
 
-/* ---- Detail row modal ---- */
-
-.detail-row-modal {
-  width: 560px;
-  max-height: 85vh;
-  overflow-y: auto;
-}
-
 .add-column-modal {
   width: 440px;
-}
-
-.detail-row-modal .field textarea {
-  min-height: 70px;
-}
-
-.detail-row-modal__readonly {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-  font-size: var(--text-caption-size);
 }
 
 /* ==========================================================================
@@ -3203,6 +3177,60 @@ textarea {
   align-items: center;
   gap: 8px;
   margin-left: auto;
+}
+
+/* DetailsTable.tsx's "open one row" view — same back/prev/next/dropdown
+   pattern as .project-item-view above, no __chat variant since Discovery
+   chat is film-scoped, not row-scoped (its toggle lives one level up in
+   FilmWorkspaceView.tsx's toolbar). */
+.detail-row-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.detail-row-view__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-default);
+  flex-wrap: wrap;
+}
+
+.detail-row-view__title {
+  font-weight: 600;
+}
+
+.detail-row-view__nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.detail-row-view__body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-default);
+  overflow-y: auto;
+  padding-right: var(--space-snug);
+}
+
+.detail-row-view__body textarea {
+  min-height: 70px;
+}
+
+.detail-row-view__readonly {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: var(--text-caption-size);
 }
 
 /* Explicitly flagged as an AI feature — a bordered, labeled pill rather than
@@ -3802,6 +3830,28 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* The count-badge button a done run collapses to (see DiscoveryChatPanel.tsx's
+   DiscoveryRunCard) — opens DiscoveryResultsModal instead of dumping every
+   candidate into the chat thread. */
+.run-result-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: var(--text-caption-size);
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.run-result-badge:hover {
+  border-color: var(--accent);
 }
 
 /* Now rendered inside a Modal (.kickoff-modal), which already supplies the card

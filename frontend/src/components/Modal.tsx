@@ -5,7 +5,7 @@ export interface ModalProps {
   onClose: () => void;
   busy?: boolean;
   /** Extra class appended to "modal", for a wider/taller variant — same convention
-   * as new-project-modal/detail-row-modal in index.css. */
+   * as new-project-modal/kickoff-modal in index.css. */
   className?: string;
   children: ReactNode;
 }

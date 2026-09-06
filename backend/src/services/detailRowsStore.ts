@@ -12,6 +12,20 @@ export interface CreateDetailRowInput {
   provenance: DetailRowProvenance;
 }
 
+function buildRow(filmId: string, input: CreateDetailRowInput, now: string): DetailRow {
+  return {
+    id: randomUUID(),
+    filmId,
+    startMs: input.startMs,
+    endMs: input.endMs,
+    subtitleText: input.subtitleText,
+    values: fillValues(input.values),
+    provenance: input.provenance,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function fillValues(values: Partial<DetailRowValues>): DetailRowValues {
   return {
     segmentDescription: values.segmentDescription ?? '',
@@ -42,6 +56,9 @@ function mergeValues(current: DetailRowValues, patch: Partial<DetailRowValues>):
 export interface DetailRowsStore {
   listRows(filmId: string): Promise<DetailRow[]>;
   addRow(filmId: string, input: CreateDetailRowInput): Promise<DetailRow>;
+  /** Bulk variant of addRow — one Firestore batch commit instead of N
+   * sequential writes, same precedent as projectItemStore.ts's createItems. */
+  addRows(filmId: string, inputs: CreateDetailRowInput[]): Promise<DetailRow[]>;
   updateRow(
     filmId: string,
     rowId: string,
@@ -75,20 +92,21 @@ export function createFirestoreDetailRowsStore(firestore: Firestore): DetailRows
     },
 
     async addRow(filmId, input) {
-      const now = new Date().toISOString();
-      const row: DetailRow = {
-        id: randomUUID(),
-        filmId,
-        startMs: input.startMs,
-        endMs: input.endMs,
-        subtitleText: input.subtitleText,
-        values: fillValues(input.values),
-        provenance: input.provenance,
-        createdAt: now,
-        updatedAt: now,
-      };
+      const row = buildRow(filmId, input, new Date().toISOString());
       await rowsCollection(firestore, filmId).doc(row.id).set(row);
       return row;
+    },
+
+    async addRows(filmId, inputs) {
+      if (inputs.length === 0) return [];
+      const now = new Date().toISOString();
+      const batch = firestore.batch();
+      const rows = inputs.map((input) => buildRow(filmId, input, now));
+      for (const row of rows) {
+        batch.set(rowsCollection(firestore, filmId).doc(row.id), row);
+      }
+      await batch.commit();
+      return rows;
     },
 
     async updateRow(filmId, rowId, patch) {
@@ -147,20 +165,16 @@ export function createInMemoryDetailRowsStore(): DetailRowsStore {
     },
 
     async addRow(filmId, input) {
-      const now = new Date().toISOString();
-      const row: DetailRow = {
-        id: randomUUID(),
-        filmId,
-        startMs: input.startMs,
-        endMs: input.endMs,
-        subtitleText: input.subtitleText,
-        values: fillValues(input.values),
-        provenance: input.provenance,
-        createdAt: now,
-        updatedAt: now,
-      };
+      const row = buildRow(filmId, input, new Date().toISOString());
       rows.set(row.id, row);
       return row;
+    },
+
+    async addRows(filmId, inputs) {
+      const now = new Date().toISOString();
+      const created = inputs.map((input) => buildRow(filmId, input, now));
+      for (const row of created) rows.set(row.id, row);
+      return created;
     },
 
     async updateRow(filmId, rowId, patch) {

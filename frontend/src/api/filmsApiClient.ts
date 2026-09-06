@@ -393,6 +393,45 @@ export async function discardDiscoveryResult(
   await throwOnError(res);
 }
 
+/** Bulk sibling of mergeDiscoveryResult — one request regardless of selection
+ * size, backed by discoveryResultActions.ts's mergeDiscoveryResults. */
+export async function bulkMergeDiscoveryResults(
+  filmId: string,
+  jobId: string,
+  tempIds: string[],
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<DetailRow[]> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-add?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tempIds }) },
+  );
+  await throwOnError(res);
+  return (await res.json()) as DetailRow[];
+}
+
+/** Bulk sibling of discardDiscoveryResult — one request regardless of
+ * selection size, backed by discoveryResultActions.ts's discardDiscoveryResults. */
+export async function bulkDiscardDiscoveryResults(
+  filmId: string,
+  jobId: string,
+  tempIds: string[],
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<void> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-discard?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tempIds }) },
+  );
+  await throwOnError(res);
+}
+
 // ---- Bridge to Project (Research) --------------------------------------------
 
 export interface CreateProjectFromFilmPayload {

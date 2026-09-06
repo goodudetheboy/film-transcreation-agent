@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import type { DetailRowsStore } from '../services/detailRowsStore.js';
 import type { DiscoveryEventBus } from '../services/discoveryEventBus.js';
 import type { DiscoveryJob, DiscoveryJobStore } from '../services/discoveryJobStore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
-import { mergeDiscoveryResult, discardDiscoveryResult } from '../services/discoveryResultActions.js';
+import { mergeDiscoveryResult, discardDiscoveryResult, mergeDiscoveryResults, discardDiscoveryResults } from '../services/discoveryResultActions.js';
 import type { FilmPrep, FilmStore } from '../services/filmStore.js';
 import type { FilmPrepPipeline } from '../services/filmPrepPipeline.js';
 import type { ProjectStore } from '../services/projectStore.js';
@@ -611,6 +611,50 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       req.params.id,
       req.params.jobId,
       req.params.resultRowId,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(204).end();
+  });
+
+  function readTempIds(req: Request): string[] | null {
+    const { tempIds } = req.body ?? {};
+    if (!Array.isArray(tempIds) || tempIds.length === 0 || !tempIds.every((t) => typeof t === 'string')) return null;
+    return tempIds;
+  }
+
+  router.post('/api/films/:id/discovery-jobs/:jobId/results/bulk-add', async (req, res) => {
+    const tempIds = readTempIds(req);
+    if (!tempIds) {
+      res.status(400).json({ error: 'tempIds must be a non-empty array of strings' });
+      return;
+    }
+    const result = await mergeDiscoveryResults(
+      { discoveryJobStore: deps.discoveryJobStore, detailRowsStore: deps.detailRowsStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.jobId,
+      tempIds,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result.value);
+  });
+
+  router.post('/api/films/:id/discovery-jobs/:jobId/results/bulk-discard', async (req, res) => {
+    const tempIds = readTempIds(req);
+    if (!tempIds) {
+      res.status(400).json({ error: 'tempIds must be a non-empty array of strings' });
+      return;
+    }
+    const result = await discardDiscoveryResults(
+      { discoveryJobStore: deps.discoveryJobStore, detailRowsStore: deps.detailRowsStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.jobId,
+      tempIds,
     );
     if (!result.ok) {
       res.status(404).json({ error: result.error });

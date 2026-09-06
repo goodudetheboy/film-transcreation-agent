@@ -57,13 +57,14 @@ Triaged 2026-09-05 from a single batch of user feedback (see
 - [x] New-agent-run kickoff moves to a modal instead of cluttering the chat
   thread
 
-## Phase 4 — Run/Details UI overhaul
+## Phase 4 — Run/Details UI overhaul — done 2026-09-06
 
-- [ ] Completed Run shows a count badge ("N details found") instead of
+- [x] Completed Run shows a count badge ("N details found") instead of
   dumping everything into the chat; clicking opens a modal with the
   discovered details, add/delete, and a leftmost select-all-the-way
-  bulk-action checkbox column
-- [ ] Clicking a details-table row opens in-panel (like Project Details),
+  bulk-action checkbox column (bulk add/discard via new backend endpoints,
+  not a client-side loop — see [docs/progress/20260906.md](progress/20260906.md))
+- [x] Clicking a details-table row opens in-panel (like Project Details),
   not a modal
 
 ## Phase 5 — self-contained polish
