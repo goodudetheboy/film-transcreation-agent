@@ -1035,6 +1035,9 @@ textarea {
 /* ---------- Status / verdict pills ---------- */
 
 .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex: 0 0 auto;
   font-size: 11px;
   font-weight: 600;
@@ -1043,6 +1046,26 @@ textarea {
   border-radius: var(--radius-pill);
   color: var(--text-dim);
   white-space: nowrap;
+}
+
+.status-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.status-dot--running {
+  opacity: 1;
+  animation: status-dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes status-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; }
+  50% { box-shadow: 0 0 0 4px transparent; }
 }
 
 .status-badge--pending,
@@ -2185,6 +2208,13 @@ textarea {
   gap: 4px;
 }
 
+/* Agent Status tab: no video/scrubber alongside it, so it gets the whole
+   workspace width instead of sharing .workspace__split's two columns. */
+.workspace__panel--full {
+  flex: 1;
+  min-height: 0;
+}
+
 /* ---------- Details tab: table + sliding Discovery agent panel ----------
    Same mechanism as .project-item-view__body/__chat — a docked side panel
    that slides open/closed via width, pushing the table over rather than
@@ -3230,6 +3260,201 @@ textarea {
   color: var(--text-dim);
 }
 
+/* ---------- Full-width list rows (Agent Status, Projects) ----------
+   A single-column, edge-to-edge tile used wherever a grid of small square
+   cards used to waste the workspace's full width — the row lays icon,
+   name/tags, and a right-aligned status+meta column out horizontally
+   instead of stacking everything in a narrow card. */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--space-tight);
+}
+
+.filter-bar__label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  margin-right: 2px;
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: border-color, background, color;
+}
+
+.filter-pill:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-pill--active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.list-row-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+  width: 100%;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-default);
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-snug) var(--space-default);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition-fast);
+  transition-property: border-color, box-shadow, transform;
+}
+
+.list-row:hover {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
+}
+
+.list-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.list-row__icon {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--accent);
+}
+
+.list-row__icon--research {
+  color: var(--warning);
+}
+
+.list-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.list-row__title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.list-row__name {
+  font-size: var(--text-item-size);
+  font-weight: var(--text-item-weight);
+  color: var(--text);
+}
+
+.list-row__country {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.list-row__flag {
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.list-row__preview {
+  font-size: var(--text-caption-size);
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.list-row__side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.list-row__stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.list-row__meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.list-row__delete {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  transition-property: color, border-color, background;
+}
+
+.list-row__delete:hover {
+  color: var(--danger);
+  border-color: var(--danger-dim);
+  background: var(--danger-dim);
+}
+
 .chat-panel__title {
   display: flex;
   align-items: center;
@@ -3626,73 +3851,16 @@ textarea {
   color: var(--text);
 }
 
-/* ---------- Project cards (Projects Library + per-film project list) ----------
-   A card-grid replacement for the old details-table row, styled like the chat
-   session library's cards (bordered panel, accent border on hover) but richer:
-   country flag, both status pills, and a row of item-count stats. */
-
-.project-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-snug);
-  margin-bottom: var(--space-loose);
-}
-
-.project-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-tight);
-  align-items: stretch;
-  text-align: left;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--panel);
-  box-shadow: var(--shadow-card);
-  padding: var(--space-default);
-  cursor: pointer;
-  transition: var(--transition-fast);
-  transition-property: border-color, box-shadow, transform;
-}
-
-.project-card:hover {
-  border-color: var(--accent);
-  box-shadow: var(--shadow-card-hover);
-  transform: translateY(-1px);
-}
-
-.project-card:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.project-card__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-tight);
-}
-
-.project-card__country {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--text-item-size);
-  font-weight: var(--text-item-weight);
-  color: var(--text);
-}
+/* ---------- Project rows (Projects Library + per-film project list) ----------
+   Renders inside the shared .list-row tile (see the full-width list rows
+   section above) — country flag as the icon, both status pills in the side
+   column, and a row of item-count stat pills in the body. */
 
 .project-card__flag {
   font-size: 20px;
   line-height: 1;
   border-radius: 3px;
   box-shadow: 0 0 0 1px var(--border-strong);
-}
-
-.project-card__badges {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
 }
 
 .project-card__name {

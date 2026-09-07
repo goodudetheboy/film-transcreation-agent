@@ -806,7 +806,12 @@ export function DiscoveryChatPanel({
                 >
                   <TrashIcon />
                 </button>
-                <span className="chat-panel__library-item-name">{s.name ?? `Agent #${s.agentNumber}`}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`status-badge status-badge--${s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}`}>
+                    {s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}
+                  </span>
+                  <span className="chat-panel__library-item-name">{s.name ?? `Agent #${s.agentNumber}`}</span>
+                </div>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
                 <span className="chat-panel__library-item-meta">{new Date(s.updatedAt).toLocaleString()}</span>
               </div>

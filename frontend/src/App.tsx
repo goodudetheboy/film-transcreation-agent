@@ -5,7 +5,6 @@ import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
 import { useTheme } from './utils/useTheme';
 import { ProjectsLibraryView } from './views/ProjectsLibraryView';
-import { AgentsLibraryView } from './views/AgentsLibraryView';
 import { StartScreen } from './views/StartScreen';
 import { FilmPreparingView } from './views/FilmPreparingView';
 import { FilmWorkspaceView } from './views/FilmWorkspaceView';
@@ -49,9 +48,6 @@ function App() {
           <NavLink to="/projects" className={navLinkClass}>
             Projects
           </NavLink>
-          <NavLink to="/agents" className={navLinkClass}>
-            Agents
-          </NavLink>
           {lastWorkspacePath && (
             <NavLink to={lastWorkspacePath} end className={navLinkClass}>
               Current Workspace
@@ -75,7 +71,6 @@ function App() {
             element={<FilmWorkspaceView passcode={passcode} testMode={testMode} />}
           />
           <Route path="/projects" element={<ProjectsLibraryView passcode={passcode} />} />
-          <Route path="/agents" element={<AgentsLibraryView passcode={passcode} />} />
           {import.meta.env.DEV && <Route path="/dev/prep-animation" element={<PrepAnimationLab />} />}
         </Routes>
       </main>

@@ -12,40 +12,43 @@ export interface ProjectCardProps {
   showName?: boolean;
 }
 
-/** A richer, card-styled stand-in for the old details-table row — same data
- * (country, agent/project status, item counts) but laid out like the chat
- * session library's cards instead of a spreadsheet. Used by both the
- * per-film "Projects for this film" list and the cross-film Projects Library. */
+/** A full-width row — same data (country, agent/project status, item counts)
+ * as the old grid card, laid out like the Agent Status list's rows instead of
+ * a square tile, so the library uses the whole available width. Used by both
+ * the per-film "Projects for this film" list and the cross-film Projects
+ * Library. */
 export function ProjectCard({ project, onOpen, showName = true }: ProjectCardProps) {
   const total = project.pendingCount + project.acceptedCount + project.rejectedCount + project.needResearchCount;
 
   return (
-    <button type="button" className="project-card" onClick={onOpen}>
-      <div className="project-card__top">
-        <span className="project-card__country">
-          <Flag code={countryCode(project.country)} className="project-card__flag" />
-          <span className="project-card__country-name">{project.country}</span>
-        </span>
-        <span className="project-card__badges">
-          {project.agentStatus ? (
-            <span className={`status-badge status-badge--${project.agentStatus}`}>{project.agentStatus}</span>
-          ) : (
-            <span className="status-badge">no runs</span>
+    <button type="button" className="list-row" onClick={onOpen}>
+      <span className="list-row__icon">
+        <Flag code={countryCode(project.country)} className="project-card__flag" />
+      </span>
+
+      <div className="list-row__body">
+        <div className="list-row__title-line">
+          <span className="list-row__name">{project.country}</span>
+        </div>
+        {showName && <p className="project-card__name">{project.name}</p>}
+        <div className="project-card__stats">
+          <span className="project-card__stat project-card__stat--total">{total} detail{total === 1 ? '' : 's'}</span>
+          <span className="project-card__stat project-card__stat--pending">{project.pendingCount} pending</span>
+          <span className="project-card__stat project-card__stat--accepted">{project.acceptedCount} accepted</span>
+          <span className="project-card__stat project-card__stat--rejected">{project.rejectedCount} rejected</span>
+          {project.needResearchCount > 0 && (
+            <span className="project-card__stat project-card__stat--research">{project.needResearchCount} need research</span>
           )}
-          <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
-        </span>
+        </div>
       </div>
 
-      {showName && <p className="project-card__name">{project.name}</p>}
-
-      <div className="project-card__stats">
-        <span className="project-card__stat project-card__stat--total">{total} detail{total === 1 ? '' : 's'}</span>
-        <span className="project-card__stat project-card__stat--pending">{project.pendingCount} pending</span>
-        <span className="project-card__stat project-card__stat--accepted">{project.acceptedCount} accepted</span>
-        <span className="project-card__stat project-card__stat--rejected">{project.rejectedCount} rejected</span>
-        {project.needResearchCount > 0 && (
-          <span className="project-card__stat project-card__stat--research">{project.needResearchCount} need research</span>
+      <div className="list-row__side">
+        {project.agentStatus ? (
+          <span className={`status-badge status-badge--${project.agentStatus}`}>{project.agentStatus}</span>
+        ) : (
+          <span className="status-badge">no runs</span>
         )}
+        <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
       </div>
     </button>
   );

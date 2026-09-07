@@ -67,7 +67,7 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
             <p className="section-heading">
               <Flag code={countryCode(country)} /> {country}
             </p>
-            <div className="project-card-grid">
+            <div className="list-row-group" style={{ marginBottom: 'var(--space-loose)' }}>
               {group.map((p) => (
                 <ProjectCard key={p.id} project={p} onOpen={() => navigate(`/films/${p.sourceFilmId}?tab=project&projectId=${p.id}`)} />
               ))}

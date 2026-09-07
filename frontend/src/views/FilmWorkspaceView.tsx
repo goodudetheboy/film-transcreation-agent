@@ -11,6 +11,7 @@ import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber, type VideoSelection } from '../components/VideoScrubber';
 import { DetailsTable } from '../components/DetailsTable';
 import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
+import { FilmAgentsTab } from '../components/FilmAgentsTab';
 import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
 import { ProjectCard } from '../components/ProjectCard';
@@ -22,7 +23,7 @@ export interface FilmWorkspaceViewProps {
   testMode: boolean;
 }
 
-type Tab = 'details' | 'project';
+type Tab = 'details' | 'project' | 'agents';
 
 const LEFT_WIDTH_STORAGE_KEY = 'workspace.leftPanelWidth';
 const MIN_LEFT = 360;
@@ -52,7 +53,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const tab: Tab = tabParam === 'project' ? 'project' : 'details';
+  const tab: Tab = tabParam === 'project' ? 'project' : tabParam === 'agents' ? 'agents' : 'details';
   const projectId = searchParams.get('projectId');
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
   // A marked in/out range on the scrubber, for referencing a slice of video
@@ -205,9 +206,11 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  // Deep-link from the global Agents tab (see AgentsLibraryView.tsx) — open a
-  // specific session, or fire a create-flow, then clear the one-shot params
-  // so a page refresh doesn't replay it.
+  // Deep-link from a legacy `?openDiscovery=1`/`?openAgents=1` URL (kept for
+  // any old bookmarks) — open a specific session, or fire a create-flow, then
+  // clear the one-shot params so a page refresh doesn't replay it. The film's
+  // own Agents tab (below) drives the same pendingDeepLink state directly,
+  // without a URL round-trip.
   useEffect(() => {
     if (!id) return;
     const openDiscovery = searchParams.get('openDiscovery') === '1';
@@ -325,6 +328,17 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     }
   }
 
+  function openDiscoverySession(agentId?: string, autoCreate?: 'agent' | 'session') {
+    setTab('details');
+    setDiscoveryOpen(true);
+    setPendingDeepLink({ target: 'discovery', agentId, autoCreate });
+  }
+
+  function openResearchSession(targetProjectId: string, sessionId?: string, autoCreate?: 'agent' | 'session') {
+    selectProject(targetProjectId);
+    setPendingDeepLink({ target: 'research', sessionId, openAgentsForProject: true, autoCreate });
+  }
+
   function handleSeek(ms: number) {
     if (videoRef.current) videoRef.current.currentTime = ms / 1000;
     setCurrentTimeMs(ms);
@@ -407,8 +421,25 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         <button type="button" className={`workspace-tabs__tab${tab === 'project' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('project')}>
           Project
         </button>
+        <button type="button" className={`workspace-tabs__tab${tab === 'agents' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('agents')}>
+          Agent Status
+        </button>
       </nav>
 
+      {tab === 'agents' && (
+        <div className="workspace__panel workspace__panel--full">
+          <FilmAgentsTab
+            filmId={film.id}
+            passcode={passcode}
+            projects={filmProjects}
+            onOpenDiscovery={openDiscoverySession}
+            onOpenResearch={openResearchSession}
+          />
+        </div>
+      )}
+
+      {tab !== 'agents' && (
+      <>
       <div
         className="workspace__split"
         ref={splitRef}
@@ -469,7 +500,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   {filmProjects.length === 0 ? (
                     <p className="results-placeholder">No projects yet for this film.</p>
                   ) : (
-                    <div className="project-card-grid">
+                    <div className="list-row-group">
                       {filmProjects.map((p) => (
                         <ProjectCard key={p.id} project={p} onOpen={() => selectProject(p.id)} showName={false} />
                       ))}
@@ -569,6 +600,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           onSelectionChange={setVideoSelection}
         />
       </div>
+      </>
+      )}
 
       {showNewProjectModal && (
         <NewProjectModal
