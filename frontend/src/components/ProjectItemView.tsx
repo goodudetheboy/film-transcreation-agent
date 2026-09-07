@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ColumnDoc, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItem, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
@@ -24,77 +24,161 @@ function scoreTier(score: number): 'low' | 'mid' | 'high' {
   return score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low';
 }
 
-/** Fires a caller-provided flash of "Saved" for a couple seconds — shared by every
- * autosave-on-blur field below instead of each one re-implementing its own timer. */
-function useSavedFlash(durationMs = 2000) {
-  const [saved, setSaved] = useState(false);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+/** Matches the same semantic colors used elsewhere for these action values
+ * (see .status-badge--accepted/rejected/need-research, .details-table__row--pending). */
+function actionColor(action: ProjectItemAction): string {
+  if (action === 'accepted') return 'var(--success)';
+  if (action === 'rejected') return 'var(--danger)';
+  if (action === 'need-research') return 'var(--accent)';
+  return 'var(--warning)';
+}
 
-  useEffect(() => () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-  }, []);
-
-  function flash() {
-    setSaved(true);
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => setSaved(false), durationMs);
-  }
-
-  return [saved, flash] as const;
+function assessmentColor(shouldTranscreate: boolean | null): string {
+  if (shouldTranscreate === true) return 'var(--danger)';
+  if (shouldTranscreate === false) return 'var(--success)';
+  return 'var(--text-dim)';
 }
 
 /**
- * A plain-prose textarea that saves itself on blur — no Save button, matching
- * the note-taking flow the wireframe called for, generalized to every AI-written
- * field a human can now correct here (this is a shared workspace, not a
- * one-way AI report). Won't clobber an in-progress edit if the underlying
- * value changes from elsewhere (e.g. a chat agent) while the field is focused.
+ * A single AI-written field a human can correct — plain prose until "Edit" is
+ * clicked, then a textarea with explicit Save/Cancel (same click-to-correct
+ * pattern as a rubric's Score/Reasoning below, not autosave-on-blur — an
+ * edit here should read as a deliberate action with a real Save, not a
+ * side effect of clicking away). Shared by Executive Reason and a rubric's
+ * user note instead of each re-implementing its own edit/save/cancel state.
  */
-function AutosaveTextarea({
+function EditableField({
+  label,
   value,
   onSave,
   placeholder,
-  className = 'editable-text',
-  rows = 2,
+  emptyText = 'Not set yet.',
+  displayClassName,
 }: {
+  label: string;
   value: string;
   onSave: (next: string) => Promise<unknown>;
   placeholder?: string;
-  className?: string;
-  rows?: number;
+  emptyText?: string;
+  displayClassName?: string;
 }) {
-  const [local, setLocal] = useState(value);
-  const [saved, flash] = useSavedFlash();
-  const focusedRef = useRef(false);
-  const lastSavedRef = useRef(value);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!focusedRef.current) setLocal(value);
-    lastSavedRef.current = value;
-  }, [value]);
+  function startEdit() {
+    setDraft(value);
+    setEditing(true);
+  }
 
-  async function handleBlur() {
-    focusedRef.current = false;
-    if (local === lastSavedRef.current) return;
-    lastSavedRef.current = local;
-    await onSave(local);
-    flash();
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave(draft);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="autosave-row">
-      <textarea
-        className={className}
-        rows={rows}
-        value={local}
-        placeholder={placeholder}
-        onFocus={() => {
-          focusedRef.current = true;
-        }}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={handleBlur}
-      />
-      {saved && <span className="autosave-flash">Saved</span>}
+    <div className="field">
+      <div className="field__label-row">
+        <label>{label}</label>
+        {!editing && (
+          <button type="button" className="link-back" onClick={startEdit}>
+            Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <>
+          <textarea value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} autoFocus />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <p className={displayClassName}>{value || <em>{emptyText}</em>}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The suggested-change text and its justification save together as one edit
+ * session (matching a rubric's Score+Reasoning below) — editing one without
+ * the other rarely makes sense. Read view keeps the change itself visually
+ * louder than its own "why", the actual fix outranking its justification.
+ */
+function SuggestedReplacementSection({
+  suggestedReplacement,
+  onSave,
+}: {
+  suggestedReplacement: { text: string; justification: string } | null;
+  onSave: (patch: { text: string; justification: string }) => Promise<unknown>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(suggestedReplacement?.text ?? '');
+  const [justification, setJustification] = useState(suggestedReplacement?.justification ?? '');
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    setText(suggestedReplacement?.text ?? '');
+    setJustification(suggestedReplacement?.justification ?? '');
+    setEditing(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await onSave({ text, justification });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="field">
+      <div className="field__label-row">
+        <label>Suggested change</label>
+        {!editing && (
+          <button type="button" className="link-back" onClick={startEdit}>
+            Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <>
+          <textarea value={text} placeholder="Propose replacement text…" onChange={(e) => setText(e.target.value)} autoFocus />
+          <label>Why</label>
+          <textarea value={justification} placeholder="Why this replacement?" onChange={(e) => setJustification(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn btn--primary" onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="suggested-change-display">{suggestedReplacement?.text || <em>No suggested change yet.</em>}</p>
+          {suggestedReplacement?.justification && (
+            <p className="finding-card__text">
+              <strong>Why: </strong>
+              {suggestedReplacement.justification}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -199,10 +283,13 @@ function ScoreBlock({
               Edit score
             </button>
 
-            <div className="field">
-              <label>Your note</label>
-              <AutosaveTextarea value={existing?.userNote ?? ''} placeholder="Add a private note for this rubric…" onSave={saveNote} />
-            </div>
+            <EditableField
+              label="Your note"
+              value={existing?.userNote ?? ''}
+              placeholder="Add a private note for this rubric…"
+              emptyText="No note yet."
+              onSave={saveNote}
+            />
 
             <div className="field">
               <label>About this rubric</label>
@@ -335,7 +422,7 @@ export function ProjectItemView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
 
-  async function saveShouldTranscreate(next: boolean) {
+  async function saveShouldTranscreate(next: boolean | null) {
     const updated = await updateItem(projectId, item.id, { passcode, shouldTranscreate: next });
     onScorePatched(item.id, updated);
   }
@@ -418,87 +505,65 @@ export function ProjectItemView({
                   <p>{item.sceneDescription}</p>
                 </div>
               </div>
-              <div style={{ textAlign: 'center', flex: '0 0 auto' }}>
+              <div className="overview-card__side">
                 <span
                   className={`score-circle score-circle--lg ${item.importanceScore == null ? 'score-circle--none' : `score-circle--${scoreTier(item.importanceScore)}`}`}
                 >
                   <span className="score-circle__value">{item.importanceScore ?? '—'}</span>
                   {item.importanceScore != null && <span className="score-circle__max">/10</span>}
                 </span>
-                <p className="finding-card__weight" style={{ marginTop: 4 }}>
+                <p className="finding-card__weight" style={{ marginTop: -4 }}>
                   importance
                 </p>
-              </div>
-            </div>
 
-            <div className="overview-card__section">
-              <div className="field">
-                <label>Your verdict</label>
-                <div className="verdict-picker">
-                  {ACTIONS.map((a) => (
-                    <button
-                      key={a}
-                      type="button"
-                      className={`verdict-picker__option${item.action === a ? ` verdict-picker__option--active-${a}` : ''}`}
-                      onClick={() => onActionChange(item.id, a)}
-                    >
-                      {a}
-                    </button>
-                  ))}
+                <div className="field">
+                  <label>Your verdict</label>
+                  <select
+                    className="nav-select"
+                    style={{ color: actionColor(item.action), fontWeight: 600 }}
+                    value={item.action}
+                    onChange={(e) => onActionChange(item.id, e.target.value as ProjectItemAction)}
+                  >
+                    {ACTIONS.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label>AI Assessment</label>
+                  <select
+                    className="nav-select"
+                    style={{ color: assessmentColor(item.shouldTranscreate), fontWeight: 600 }}
+                    value={item.shouldTranscreate === true ? 'change' : item.shouldTranscreate === false ? 'no-change' : 'unassessed'}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      saveShouldTranscreate(v === 'change' ? true : v === 'no-change' ? false : null);
+                    }}
+                  >
+                    <option value="unassessed">Not assessed</option>
+                    <option value="no-change">Fine As-Is</option>
+                    <option value="change">Needs Change</option>
+                  </select>
                 </div>
               </div>
             </div>
 
             <div className="overview-card__section">
-              <div className="field">
-                <label>AI Assessment</label>
-                <div className="verdict-toggle">
-                  <button
-                    type="button"
-                    className={`verdict-toggle__option${item.shouldTranscreate === false ? ' verdict-toggle__option--active-no-change' : ''}`}
-                    onClick={() => saveShouldTranscreate(false)}
-                  >
-                    Fine As-Is
-                  </button>
-                  <button
-                    type="button"
-                    className={`verdict-toggle__option${item.shouldTranscreate === true ? ' verdict-toggle__option--active-change' : ''}`}
-                    onClick={() => saveShouldTranscreate(true)}
-                  >
-                    Needs Change
-                  </button>
-                </div>
-              </div>
-              <div className="field">
-                <label>Executive reason</label>
-                <AutosaveTextarea
-                  value={item.summary ?? ''}
-                  placeholder="Why does — or doesn't — this line need a change?"
-                  onSave={saveSummary}
-                />
-              </div>
+              <EditableField
+                label="Executive reason"
+                value={item.summary ?? ''}
+                placeholder="Why does — or doesn't — this line need a change?"
+                emptyText="No executive reason yet."
+                onSave={saveSummary}
+              />
             </div>
 
             {item.shouldTranscreate && (
               <div className="overview-card__section">
-                <div className="field">
-                  <label>Suggested change</label>
-                  <AutosaveTextarea
-                    value={item.suggestedReplacement?.text ?? ''}
-                    placeholder="Propose replacement text…"
-                    onSave={(v) => saveReplacement({ text: v })}
-                    className="suggested-change-field"
-                    rows={2}
-                  />
-                </div>
-                <div className="field">
-                  <label>Why</label>
-                  <AutosaveTextarea
-                    value={item.suggestedReplacement?.justification ?? ''}
-                    placeholder="Why this replacement?"
-                    onSave={(v) => saveReplacement({ justification: v })}
-                  />
-                </div>
+                <SuggestedReplacementSection suggestedReplacement={item.suggestedReplacement} onSave={saveReplacement} />
               </div>
             )}
 

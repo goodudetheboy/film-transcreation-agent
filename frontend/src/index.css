@@ -1411,156 +1411,47 @@ textarea {
   border-top: 1px solid var(--border);
 }
 
-/* Editable text that reads as plain prose until focused — a bare textarea
-   with no visible chrome so an "always-editable" field doesn't look like a
-   wall of form inputs (see aiux human-in-the-loop: reject/edit has to be as
-   easy as approving, not buried behind an Edit-mode switch). */
-.editable-text {
+/* The right-hand column of .overview-card__top — importance score plus the
+   two verdict dropdowns stacked under it, out of the main reading column so
+   Executive Reason/Suggested Change sit right after the context fields. */
+.overview-card__side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-snug);
+  flex: 0 0 auto;
+  width: 168px;
+}
+
+.overview-card__side .field {
   width: 100%;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-  line-height: 1.5;
-  padding: 6px 8px;
-  margin: -6px -8px;
-  resize: vertical;
-  transition: var(--transition-fast);
-  transition-property: border-color, background;
 }
 
-.editable-text:hover {
-  border-color: var(--border);
-}
-
-.editable-text:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg);
-}
-
-.editable-text::placeholder {
-  color: var(--text-faint);
+.overview-card__side .nav-select {
+  max-width: none;
+  text-align: center;
+  text-transform: capitalize;
 }
 
 /* The one field on the Overview card that should visually lead — the actual
-   fix a localizer will paste into the script, so it needs to outrank the
-   surrounding plain-prose fields (including its own "Why" justification
-   right below it) instead of reading as just another line of text. */
-.suggested-change-field {
-  width: 100%;
+   fix a localizer will paste into the script, so its read view needs to
+   outrank the surrounding plain-prose fields (including its own "Why"
+   justification right below it) instead of reading as just another line of
+   text. Only styles the read view — editing it uses a plain themed
+   textarea like every other edit form here, so an in-progress edit doesn't
+   look like an oversized, half-empty callout box. */
+.suggested-change-display {
+  margin: 0;
   background: var(--accent-dim);
-  border: 1px solid var(--accent-dim);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   color: var(--text);
-  font: inherit;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.5;
   padding: 10px 12px;
-  resize: vertical;
-  transition: var(--transition-fast);
-  transition-property: border-color, background;
 }
 
-.suggested-change-field:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg);
-}
-
-.suggested-change-field::placeholder {
-  color: var(--text-dim);
-  font-weight: 400;
-}
-
-.autosave-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.autosave-flash {
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--success);
-  animation: autosave-flash-fade 2s ease forwards;
-}
-
-@keyframes autosave-flash-fade {
-  0%, 60% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-/* ---------- Verdict toggle (AI's shouldTranscreate, human-editable) and
-   verdict picker (the human's own action) ---------- */
-
-.verdict-toggle,
-.verdict-picker {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.verdict-toggle__option,
-.verdict-picker__option {
-  padding: 5px 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--border-strong);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition-fast);
-  transition-property: border-color, background, color;
-}
-
-.verdict-toggle__option:hover,
-.verdict-picker__option:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.verdict-toggle__option--active-change {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-dim);
-}
-
-.verdict-toggle__option--active-no-change {
-  color: var(--success);
-  border-color: var(--success);
-  background: var(--success-dim);
-}
-
-.verdict-picker__option--active-pending {
-  color: var(--warning);
-  border-color: var(--warning);
-  background: var(--warning-dim);
-}
-
-.verdict-picker__option--active-accepted {
-  color: var(--success);
-  border-color: var(--success);
-  background: var(--success-dim);
-}
-
-.verdict-picker__option--active-rejected {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: var(--danger-dim);
-}
-
-.verdict-picker__option--active-need-research {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
 
 .source-list {
   display: flex;
