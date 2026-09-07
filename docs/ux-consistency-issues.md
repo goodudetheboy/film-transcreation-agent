@@ -36,23 +36,34 @@ Ordered roughly by fix-cost-vs-impact, cheapest/highest-impact first.
   Fix: a persistent, visible indicator in the chat header/empty-state saying
   what (if anything) this session is scoped to.
 
-- [ ] **3. Verdicts can be set from the table without ever seeing the evidence.**
-  The Items table lets you flip "Your Verdict" (pending/accepted/rejected/
-  need-research) directly from a row where Subtitle and AI Assessment are
-  truncated to a fixed ~68px column with no tooltip and no way to preview.
-  Principle: **Human-in-the-Loop** — "approving has to cost something to mean
-  something." Fix: widen the truncated columns, add a hover tooltip with full
-  text, or make the row itself open the detail panel on click, so a verdict
-  can't be set without the reviewer having seen what they're ruling on.
+- [x] **3. Verdicts can be set from the table without ever seeing the evidence.**
+  Fixed 2026-09-07 (commit `b2bbf82`). Correction to the original write-up:
+  code research before implementing found the row was already fully
+  clickable-to-open (`ProjectPanel.tsx`'s `<tr onClick={() => setOpenItemId(...)}>`,
+  present since Aug 30) — the earlier "only the AI Assessment pill opens
+  detail" observation was a live-testing artifact, not real. The actual,
+  confirmed root cause: the table shared `DetailsTable.tsx`'s `.details-table`
+  CSS class but never got its `<colgroup>`/`useResizableColumns`/`ResizableTh`
+  treatment, so `table-layout: fixed` split all 6 columns evenly (~68px each)
+  with no tooltip — Subtitle/AI-assessment were unreadable in place. Fixed by
+  giving the table real per-column widths (Subtitle 320px) via the same
+  resizable-column convention `DetailsTable.tsx` and `DiscoveryChatPanel`'s
+  results modal already use, plus a `title` tooltip on every truncated cell
+  (the AI-assessment cell's tooltip shows the full executive reasoning, not
+  just the "needs change" badge). Principle: **Human-in-the-Loop** —
+  "approving has to cost something to mean something."
 
-- [ ] **4. "Your Verdict" and "AI Assessment" are two overlapping status
+- [x] **4. "Your Verdict" and "AI Assessment" are two overlapping status
   fields with unrelated vocabularies and no stated relationship.**
-  Verdict: pending/accepted/rejected/need-research. AI Assessment:
-  not-assessed/fine-as-is/needs-change. Both are human-editable, both read as
-  "the status of this item," and nothing in the UI explains how (or whether)
-  one should follow from the other. Fix: either merge them, or add a short
-  inline explanation of what each one is *for* (e.g. "AI Assessment: the
-  agent's read. Your Verdict: your decision.").
+  Fixed 2026-09-07 (commit `b2bbf82`), bundled with #3 since both touch the
+  same table headers. Added an info-icon tooltip on each of the "AI
+  assessment" and "Your Verdict" column headers (new shared `ColInfoIcon.tsx`,
+  extracted from `DetailsTable.tsx` which had its own private copy) stating
+  what each field means and that setting one doesn't change the other — a
+  lightweight clarification rather than merging the fields, since they're
+  legitimately different things (the agent's read vs. your decision) once
+  named as such. Principle: **Explainable AI** — "show the real drivers" /
+  give the user enough to act on, not a bare label.
 
 - [ ] **5. Discovery (film-level) and Research (project-level) runs get very
   different status treatment for comparable work.**
