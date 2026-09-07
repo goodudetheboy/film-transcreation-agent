@@ -92,8 +92,11 @@ Triaged 2026-09-05 from a single batch of user feedback (see
   [docs/progress/20260906.md](progress/20260906.md)'s 19:05 entry — still
   needs the row-selection UI, job-mode fork, and review-queue design discussed
   there before this can be built.
-- [ ] Drag-and-drop a details/project-details row into an open chat compose
-  box to reference it
+- [x] Drag-and-drop a details/project-details row into an open chat compose
+  box to reference it. Expanded into a full `@`-mention + drag-and-drop
+  reference-chip system (Detail rows, Project items, and a new video
+  range-selection on the scrubber) — see
+  [docs/progress/20260906.md](progress/20260906.md)'s 21:20 entry.
 - [ ] Visual flair (sparkle/flash) where an agent edits something live —
   "let's talk more about this"
 - [ ] Project detail view redesign (font size, layout/scannability) —

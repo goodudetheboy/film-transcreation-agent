@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   createDiscoveryAgentSession,
   deleteDiscoveryAgentSession,
@@ -26,12 +26,16 @@ import type {
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
 import { useResizableColumns } from '../utils/useResizableColumns';
+import { detailRowReference, type ChatReference } from '../utils/chatReferences';
+import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { EditableTitle } from './EditableTitle';
 import { ChatMarkdown } from './ChatMarkdown';
 import { Modal } from './Modal';
 import { ResizableTh } from './ResizableTh';
+import { MentionComposeInput, type MentionComposeInputHandle } from './MentionComposeInput';
+import { MessageWithReferences } from './MessageWithReferences';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
@@ -44,6 +48,10 @@ export interface DiscoveryChatPanelProps {
   /** Deep-link from the global Agents tab's create-flow picker — fires the
    * matching create handler once, instead of landing on the library view. */
   initialAutoCreate?: 'agent' | 'session';
+  /** The scrubber's current marked in/out range, if any — offered as a
+   * "Current video selection" pick in the @ dropdown and via drag-and-drop
+   * from the scrubber itself. */
+  videoSelection?: VideoSelection | null;
 }
 
 const QUICK_PROMPTS = [
@@ -563,7 +571,15 @@ function DiscoveryToolCallCard({ name, args, result }: { name: string; args: Rec
   );
 }
 
-export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initialAgentId, initialAutoCreate }: DiscoveryChatPanelProps) {
+export function DiscoveryChatPanel({
+  filmId,
+  passcode,
+  testMode,
+  columns,
+  initialAgentId,
+  initialAutoCreate,
+  videoSelection,
+}: DiscoveryChatPanelProps) {
   const {
     discoveryChatSessions,
     activeDiscoveryChatSessionId,
@@ -573,9 +589,10 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
     setActiveDiscoveryChatSessionId,
     applyDiscoveryChatEvent,
     addRow,
+    rows,
   } = useFilmWorkspaceStore();
   const [panelView, setPanelView] = useState<'library' | 'chat'>('library');
-  const [draft, setDraft] = useState('');
+  const composeRef = useRef<MentionComposeInputHandle>(null);
   const [sending, setSending] = useState(false);
   const [liveEvents, setLiveEvents] = useState<DiscoveryChatStreamEvent[]>([]);
   const [pendingUserText, setPendingUserText] = useState<string | null>(null);
@@ -622,6 +639,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
   }, [initialAgentId, initialAutoCreate]);
 
   const activeSession = discoveryChatSessions.find((s) => s.id === activeDiscoveryChatSessionId) ?? null;
+  const mentionable = useMemo<ChatReference[]>(() => rows.map(detailRowReference), [rows]);
 
   // Populate jobDetails for every `run` part in the active session's turns —
   // one-shot per job (streamDiscoveryJob replays the current snapshot then
@@ -718,18 +736,13 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
     setShowKickoffForm(false);
   }
 
-  async function handleSend(e: FormEvent) {
-    e.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-
+  async function handleSend(text: string) {
     let session = activeSession;
     if (!session) {
       session = await createDiscoveryAgentSession(filmId, { passcode });
       upsertDiscoveryChatSession(session);
     }
 
-    setDraft('');
     setSending(true);
     setError(null);
     setLiveEvents([]);
@@ -870,7 +883,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
               const isModel = turn.role !== 'user';
               return (
                 <div key={`${i}-${gi}`} className={`chat-bubble chat-bubble--${isModel ? 'model' : 'user'}`}>
-                  {isModel ? <ChatMarkdown text={g.text} /> : g.text}
+                  {isModel ? <ChatMarkdown text={g.text} /> : <MessageWithReferences text={g.text} />}
                 </div>
               );
             }
@@ -882,7 +895,11 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
             return null;
           });
         })}
-        {pendingUserText && <div className="chat-bubble chat-bubble--user">{pendingUserText}</div>}
+        {pendingUserText && (
+          <div className="chat-bubble chat-bubble--user">
+            <MessageWithReferences text={pendingUserText} />
+          </div>
+        )}
 
         {liveEvents.map((event, i) => {
           // Skip a text_delta that's immediately continuing the previous one — it's
@@ -947,17 +964,30 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
 
       <div className="chat-panel__quick-prompts">
         {QUICK_PROMPTS.map((p) => (
-          <button key={p} type="button" className="btn btn--ghost" style={{ borderColor: 'var(--border-strong)', color: 'var(--text-dim)' }} onClick={() => setDraft(p)}>
+          <button
+            key={p}
+            type="button"
+            className="btn btn--ghost"
+            style={{ borderColor: 'var(--border-strong)', color: 'var(--text-dim)' }}
+            onClick={() => composeRef.current?.setText(p)}
+          >
             {p}
           </button>
         ))}
       </div>
 
-      <form className="chat-panel__composer" onSubmit={handleSend}>
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+      <form
+        className="chat-panel__composer"
+        onSubmit={(e) => {
+          e.preventDefault();
+          composeRef.current?.submit();
+        }}
+      >
+        <MentionComposeInput
+          ref={composeRef}
+          onSubmit={handleSend}
+          mentionable={mentionable}
+          videoSelection={videoSelection}
           placeholder="Ask about this agent's runs, or ask it to edit a row…"
           disabled={sending}
         />
@@ -966,7 +996,7 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initia
             Stop
           </button>
         ) : (
-          <button type="submit" className="btn btn--primary" disabled={draft.trim() === ''}>
+          <button type="submit" className="btn btn--primary">
             Send
           </button>
         )}

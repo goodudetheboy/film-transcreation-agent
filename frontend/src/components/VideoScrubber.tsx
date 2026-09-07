@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DetailRow, SubtitleEntry } from '../api/apiClient.types';
 import { formatClock } from '../utils/timeFormat';
+import { CHAT_REFERENCE_MIME, detailRowLabel, detailRowReference, setChipDragImage, type ChatReference } from '../utils/chatReferences';
 
 /** Mirrors ProjectItemAction (apiClient.types.ts) without importing the Project
  * domain into this general-purpose video component. 'need-research' (or no entry
@@ -8,6 +9,11 @@ import { formatClock } from '../utils/timeFormat';
  * untinted block — it means "no agent has looked at this yet," not a status worth
  * flagging in the timeline. */
 export type DetailRowStatus = 'pending' | 'accepted' | 'rejected' | 'need-research';
+
+export interface VideoSelection {
+  startMs: number;
+  endMs: number;
+}
 
 export interface VideoScrubberProps {
   entries: SubtitleEntry[];
@@ -20,6 +26,14 @@ export interface VideoScrubberProps {
    * instead of a separate overlay. Omitted rows (or when not viewing a project)
    * render with the default untinted styling. */
   rowStatus?: Record<string, DetailRowStatus>;
+  /** A marked in/out range, for referencing a specific slice of video in
+   * chat (drag it into a compose box, or pick "Current video selection"
+   * from the @ dropdown) — lives in the parent (FilmWorkspaceView) since
+   * both this scrubber and whichever chat panel is open need to read it.
+   * Shift+drag on the track marks/updates it; plain click/drag keeps
+   * today's seek-only behavior. */
+  selection?: VideoSelection | null;
+  onSelectionChange?: (selection: VideoSelection | null) => void;
 }
 
 const MIN_ZOOM = 1;
@@ -50,20 +64,26 @@ function formatTickLabel(ms: number, stepMs: number): string {
   return `${formatClock(ms)}.${String(Math.round(ms % 1000)).padStart(3, '0')}`;
 }
 
-function detailRowLabel(row: DetailRow): string {
-  return row.subtitleText || row.values.segmentDescription || row.values.gesture || row.values.notes || '(untitled)';
-}
-
 /** A zoomable, scrollable, two-track timeline: scroll to zoom (centered on the
  * cursor), drag the native scrollbar (or shift+scroll) to pan once zoomed in.
  * A time ruler, the film's raw subtitle-entry track, and the curated
  * Details-row track all live on one wide "track" whose percentage-based
  * positions automatically scale with zoom — only the track's pixel width and
  * the viewport's scroll position change. */
-export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, onSeek, rowStatus }: VideoScrubberProps) {
+export function VideoScrubber({
+  entries,
+  detailRows,
+  durationMs,
+  currentTimeMs,
+  onSeek,
+  rowStatus,
+  selection,
+  onSelectionChange,
+}: VideoScrubberProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const pendingScrollLeftRef = useRef<number | null>(null);
+  const selectionDragStartMsRef = useRef<number | null>(null);
   // Refs mirror the zoom/viewportWidth state so the wheel handler below always
   // reads the just-computed value, not a stale render closure — without this,
   // a burst of wheel events firing faster than React re-renders (routine on a
@@ -134,21 +154,47 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
     return () => viewport.removeEventListener('wheel', handleWheel);
   }, [durationMs]);
 
-  function seekFromClientX(clientX: number) {
+  function msFromClientX(clientX: number): number | null {
     const track = trackRef.current;
-    if (!track || durationMs <= 0) return;
+    if (!track || durationMs <= 0) return null;
     const rect = track.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    onSeek(ratio * durationMs);
+    return ratio * durationMs;
+  }
+
+  function seekFromClientX(clientX: number) {
+    const ms = msFromClientX(clientX);
+    if (ms !== null) onSeek(ms);
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.shiftKey && onSelectionChange) {
+      const ms = msFromClientX(e.clientX);
+      if (ms !== null) {
+        selectionDragStartMsRef.current = ms;
+        onSelectionChange({ startMs: ms, endMs: ms });
+      }
+      e.currentTarget.setPointerCapture(e.pointerId);
+      return;
+    }
     seekFromClientX(e.clientX);
     e.currentTarget.setPointerCapture(e.pointerId);
   }
 
+  function handlePointerUp() {
+    selectionDragStartMsRef.current = null;
+  }
+
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (e.buttons !== 1) return;
+    if (selectionDragStartMsRef.current !== null && onSelectionChange) {
+      const ms = msFromClientX(e.clientX);
+      if (ms !== null) {
+        const start = selectionDragStartMsRef.current;
+        onSelectionChange({ startMs: Math.min(start, ms), endMs: Math.max(start, ms) });
+      }
+      return;
+    }
     seekFromClientX(e.clientX);
   }
 
@@ -183,6 +229,7 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
           style={{ width: `${zoom * 100}%` }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           role="slider"
           aria-label="Video position"
           aria-valuemin={0}
@@ -235,9 +282,21 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
                 return (
                   <div
                     key={row.id}
-                    className={`scrubber__block scrubber__block--detail${statusClass}${isActive ? ' scrubber__block--active' : ''}`}
+                    className={`scrubber__block scrubber__block--detail scrubber__block--draggable${statusClass}${isActive ? ' scrubber__block--active' : ''}`}
                     style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                     title={label}
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      const ref = detailRowReference(row);
+                      e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
+                      e.dataTransfer.effectAllowed = 'copy';
+                      setChipDragImage(e.dataTransfer, ref);
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSeek(row.startMs);
+                    }}
                   >
                     <span className="scrubber__block-label">{label}</span>
                   </div>
@@ -245,6 +304,39 @@ export function VideoScrubber({ entries, detailRows, durationMs, currentTimeMs, 
               })}
           </div>
           <div className="scrubber-handle" style={{ left: `${progressPct}%` }} />
+          {selection && durationMs > 0 && (
+            <div
+              className="scrubber__selection"
+              style={{
+                left: `${Math.max(0, (selection.startMs / durationMs) * 100)}%`,
+                width: `${Math.max(0, Math.min(100, ((selection.endMs - selection.startMs) / durationMs) * 100))}%`,
+              }}
+              title={`Video ${formatClock(selection.startMs)}–${formatClock(selection.endMs)} — drag into chat to reference it`}
+              draggable
+              onPointerDown={(e) => e.stopPropagation()}
+              onDragStart={(e) => {
+                e.stopPropagation();
+                const ref: ChatReference = { type: 'video', startMs: selection.startMs, endMs: selection.endMs };
+                e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
+                e.dataTransfer.effectAllowed = 'copy';
+                setChipDragImage(e.dataTransfer, ref);
+              }}
+            >
+              <button
+                type="button"
+                className="scrubber__selection-clear"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectionChange?.(null);
+                }}
+                aria-label="Clear video selection"
+                title="Clear selection"
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
       </div>
       <div className="scrubber-zoom">

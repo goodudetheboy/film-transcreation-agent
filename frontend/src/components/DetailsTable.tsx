@@ -3,6 +3,7 @@ import { BUILTIN_COLUMN_LABELS, type ColumnDoc, type DetailRow, type Film } from
 import { addColumn, addDetailRow, deleteDetailRow } from '../api/filmsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { provenanceLabel, provenanceModifier } from '../utils/detailRowProvenance';
+import { CHAT_REFERENCE_MIME, detailRowReference, setChipDragImage } from '../utils/chatReferences';
 import { useResizableColumns } from '../utils/useResizableColumns';
 import { InfoIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -229,6 +230,13 @@ export function DetailsTable({
                   key={row.id}
                   data-row-id={row.id}
                   className={isActive ? 'details-table__row--active' : undefined}
+                  draggable
+                  onDragStart={(e) => {
+                    const ref = detailRowReference(row);
+                    e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
+                    e.dataTransfer.effectAllowed = 'copy';
+                    setChipDragImage(e.dataTransfer, ref);
+                  }}
                   onClick={() => {
                     setOpenRowId(row.id);
                     onSeek(row.startMs);

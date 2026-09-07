@@ -8,7 +8,7 @@ import { toPlayableUrl } from '../utils/gsUrl';
 import { setLastWorkspacePath } from '../utils/lastWorkspace';
 import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
-import { VideoScrubber } from '../components/VideoScrubber';
+import { VideoScrubber, type VideoSelection } from '../components/VideoScrubber';
 import { DetailsTable } from '../components/DetailsTable';
 import { DiscoveryChatPanel } from '../components/DiscoveryChatPanel';
 import { ProjectPanel } from '../components/ProjectPanel';
@@ -55,6 +55,10 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const tab: Tab = tabParam === 'project' ? 'project' : 'details';
   const projectId = searchParams.get('projectId');
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  // A marked in/out range on the scrubber, for referencing a slice of video
+  // in chat — lives here since the scrubber (always mounted regardless of
+  // tab) and whichever chat panel is open both need to read it.
+  const [videoSelection, setVideoSelection] = useState<VideoSelection | null>(null);
   const [pendingDeepLink, setPendingDeepLink] = useState<{
     target: 'discovery' | 'research';
     agentId?: string;
@@ -451,6 +455,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   columns={columns}
                   initialAgentId={pendingDeepLink?.target === 'discovery' ? pendingDeepLink.agentId : undefined}
                   initialAutoCreate={pendingDeepLink?.target === 'discovery' ? pendingDeepLink.autoCreate : undefined}
+                  videoSelection={videoSelection}
                 />
               </div>
             </div>
@@ -494,6 +499,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   initialOpenAgents={pendingDeepLink?.target === 'research' ? pendingDeepLink.openAgentsForProject : undefined}
                   initialSessionId={pendingDeepLink?.target === 'research' ? pendingDeepLink.sessionId : undefined}
                   initialAutoCreate={pendingDeepLink?.target === 'research' ? pendingDeepLink.autoCreate : undefined}
+                  videoSelection={videoSelection}
                 />
               )}
             </>
@@ -559,6 +565,8 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           currentTimeMs={currentTimeMs}
           onSeek={handleSeek}
           rowStatus={itemStatusByRow}
+          selection={videoSelection}
+          onSelectionChange={setVideoSelection}
         />
       </div>
 

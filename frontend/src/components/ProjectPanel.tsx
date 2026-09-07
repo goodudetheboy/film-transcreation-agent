@@ -14,6 +14,8 @@ import { listDetails } from '../api/filmsApiClient';
 import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
+import { CHAT_REFERENCE_MIME, projectItemReference, setChipDragImage } from '../utils/chatReferences';
+import type { VideoSelection } from './VideoScrubber';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
 import { ResearchChatPanel } from './ResearchChatPanel';
@@ -37,6 +39,9 @@ export interface ProjectPanelProps {
   initialOpenAgents?: boolean;
   initialSessionId?: string;
   initialAutoCreate?: 'agent' | 'session';
+  /** The scrubber's current marked in/out range, if any — threaded through
+   * to ResearchChatPanel for its @ dropdown / drag-and-drop target. */
+  videoSelection?: VideoSelection | null;
 }
 
 const FILTERS: ProjectItemFilter[] = ['all', 'accepted', 'pending', 'rejected', 'need-research'];
@@ -59,6 +64,7 @@ export function ProjectPanel({
   initialOpenAgents,
   initialSessionId,
   initialAutoCreate,
+  videoSelection,
 }: ProjectPanelProps) {
   const [tab, setTab] = useState<'items' | 'rubrics'>('items');
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -283,7 +289,19 @@ export function ProjectPanel({
                       </thead>
                       <tbody>
                         {sorted.map((item) => (
-                          <tr key={item.id} className={`details-table__row--clickable details-table__row--${item.action}`} onClick={() => setOpenItemId(item.id)}>
+                          <tr
+                            key={item.id}
+                            data-item-id={item.id}
+                            className={`details-table__row--clickable details-table__row--${item.action}`}
+                            draggable
+                            onDragStart={(e) => {
+                              const ref = projectItemReference(item);
+                              e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
+                              e.dataTransfer.effectAllowed = 'copy';
+                              setChipDragImage(e.dataTransfer, ref);
+                            }}
+                            onClick={() => setOpenItemId(item.id)}
+                          >
                             <td className="details-table__cell--nowrap-exempt">{formatClock(item.startMs)}</td>
                             <td className="details-table__cell--nowrap-exempt">{formatClock(item.endMs)}</td>
                             <td>{item.importanceScore ?? <span className="results-placeholder">—</span>}</td>
@@ -349,6 +367,7 @@ export function ProjectPanel({
             items={allItems}
             initialSessionId={initialSessionId}
             initialAutoCreate={initialAutoCreate}
+            videoSelection={videoSelection}
           />
         </div>
       </div>

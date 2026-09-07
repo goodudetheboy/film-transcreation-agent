@@ -1694,6 +1694,48 @@ textarea {
   z-index: 2;
 }
 
+/* Detail-track blocks are pointer-events: none by default (a plain click
+   passes through to the track underneath for seeking) — draggable blocks
+   need to actually receive the pointer to start a drag, so this override
+   only applies to the ones wired up for it (see VideoScrubber.tsx). */
+.scrubber__block--draggable {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+/* A marked in/out range for referencing a slice of video in chat (Shift+drag
+   on the track) — spans the full track height so it reads as a real
+   selection overlay, not just another Details-track block. */
+.scrubber__selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 3px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  opacity: 0.55;
+  cursor: grab;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.scrubber__selection-clear {
+  pointer-events: auto;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-on);
+  width: 14px;
+  height: 14px;
+  line-height: 14px;
+  font-size: 11px;
+  border-radius: 50%;
+  cursor: pointer;
+  margin: 2px;
+  opacity: 1;
+}
+
 .scrubber-zoom {
   display: flex;
   flex-direction: column;
@@ -3443,6 +3485,126 @@ textarea {
 
 .run-result-badge:hover {
   border-color: var(--accent);
+}
+
+/* A reference chip — @-mention/drag-and-drop pointer to a Detail row,
+   Project item, or a marked slice of video (see chatReferences.ts,
+   MentionChip.tsx, MentionComposeInput.tsx). Same pill convention as
+   .verdict-badge/.run-result-badge above (pill radius, -dim border, 600
+   weight), but tinted with the plain accent semantic — a reference isn't a
+   verdict, so it doesn't borrow danger/success/warning. */
+.mention-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius-pill);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: var(--text-caption-size);
+  font-weight: 600;
+  padding: 2px 10px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* The native drag-ghost image (see setChipDragImage in chatReferences.ts) —
+   solid accent fill instead of the softer -dim pill, since the browser
+   applies its own semi-transparency to any drag image and this needs the
+   contrast headroom to still read clearly once dimmed. */
+.mention-chip--drag-ghost {
+  background: var(--accent);
+  color: var(--accent-on);
+  border-color: var(--accent);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.mention-compose {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.mention-compose__input {
+  width: 100%;
+  min-height: 38px;
+  max-height: 120px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: var(--text-caption-size);
+  font-family: inherit;
+  padding: 8px 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mention-compose__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.mention-compose__input:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.mention-compose--drag-over .mention-compose__input {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-modal);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mention-dropdown__empty {
+  padding: 6px 10px;
+  font-size: var(--text-caption-size);
+  color: var(--text-faint);
+}
+
+.mention-dropdown__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--text-caption-size);
+}
+
+.mention-dropdown__item-meta {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.mention-dropdown__item--active {
+  background: var(--accent-dim);
+  color: var(--accent);
 }
 
 /* Now rendered inside a Modal (.kickoff-modal), which already supplies the card
