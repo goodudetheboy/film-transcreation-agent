@@ -230,13 +230,15 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   you give it. Parallel is used underneath for information grounding and discovery. Leave this empty
                   to use the default rubric set.
                 </p>
-                <RubricsEditor
-                  rubrics={rubrics}
-                  onAdd={() => setRubrics((prev) => [...prev, emptyRubric()])}
-                  onChange={(i, patch) => setRubrics((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))}
-                  onRemove={(i) => setRubrics((prev) => prev.filter((_, idx) => idx !== i))}
-                  onGenerateDefaults={handleGenerateDefaultRubrics}
-                />
+                <div className="rubric-editor-scroll">
+                  <RubricsEditor
+                    rubrics={rubrics}
+                    onAdd={() => setRubrics((prev) => [...prev, emptyRubric()])}
+                    onChange={(i, patch) => setRubrics((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))}
+                    onRemove={(i) => setRubrics((prev) => prev.filter((_, idx) => idx !== i))}
+                    onGenerateDefaults={handleGenerateDefaultRubrics}
+                  />
+                </div>
                 <div style={{ display: 'flex', gap: 12 }}>
                   <button type="button" className="btn" onClick={goBack}>
                     Back

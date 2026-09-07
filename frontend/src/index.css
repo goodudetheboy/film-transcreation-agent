@@ -3058,7 +3058,17 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: var(--space-default);
-  max-width: 720px;
+}
+
+/* Bounds just the rubric card list inside the new-project wizard's Rubrics
+   step, so the hint text above and Back/Next buttons below never get pushed
+   out of view by a long list — same "bounded internal scroll" convention as
+   the Selected-details step's own DetailRowPicker table
+   (.details-table-wrap--standalone), scoped to this one step only. */
+.rubric-editor-scroll {
+  max-height: 48vh;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 /* .rubric-card is a .finding-card — same index circle / weight badge
