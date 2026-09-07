@@ -6,7 +6,8 @@ import type { EnrichedProject, ProjectItemAction } from '../api/apiClient.types'
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { setLastWorkspacePath } from '../utils/lastWorkspace';
-import { CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
+import { CHAT_PANEL_OPEN_STORAGE_KEY, CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
+import { usePersistedBoolean } from '../utils/usePersistedBoolean';
 import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber, type VideoSelection } from '../components/VideoScrubber';
@@ -58,7 +59,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const tabParam = searchParams.get('tab');
   const tab: Tab = tabParam === 'project' ? 'project' : tabParam === 'agents' ? 'agents' : 'details';
   const projectId = searchParams.get('projectId');
-  const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [discoveryOpen, setDiscoveryOpen] = usePersistedBoolean(CHAT_PANEL_OPEN_STORAGE_KEY, false);
   // A marked in/out range on the scrubber, for referencing a slice of video
   // in chat — lives here since the scrubber (always mounted regardless of
   // tab) and whichever chat panel is open both need to read it.

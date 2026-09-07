@@ -72,11 +72,87 @@ interface SearchResultCard {
   title?: string;
 }
 
-function ToolCallCard({ name, args, result }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown> }) {
+interface MutationResultDetail {
+  summary: string;
+  title: string;
+  body: ReactNode;
+}
+
+/** Turns a mutation tool's raw result object into a human-readable summary
+ * line plus a fuller breakdown for the detail modal — replaces dumping
+ * `JSON.stringify(result)` straight into the chat, which read as raw and
+ * technical. Returns null for a tool/result shape this doesn't know how to
+ * format, so the caller can fall back to the JSON dump rather than show
+ * nothing. */
+function formatMutationResult(name: string, result: Record<string, unknown>, rubrics: Rubric[]): MutationResultDetail | null {
+  if (name === 'update_rubric_score') {
+    const { rubricId, score, importanceScore } = result as { rubricId?: unknown; score?: unknown; importanceScore?: unknown };
+    if (typeof rubricId !== 'string' || typeof score !== 'number') return null;
+    const rubricName = rubrics.find((r) => r.id === rubricId)?.name ?? 'this rubric';
+    return {
+      summary: `Set "${rubricName}" to ${score}/10`,
+      title: 'Rubric score updated',
+      body: (
+        <>
+          <div className="field">
+            <label>Rubric</label>
+            <p>{rubricName}</p>
+          </div>
+          <div className="field">
+            <label>New score</label>
+            <p>{score}/10</p>
+          </div>
+          {typeof importanceScore === 'number' && (
+            <div className="field">
+              <label>New importance score</label>
+              <p>{importanceScore.toFixed(1)}</p>
+            </div>
+          )}
+        </>
+      ),
+    };
+  }
+  if (name === 'propose_replacement') {
+    const { suggestedReplacement } = result as { suggestedReplacement?: { text?: string; justification?: string } };
+    if (!suggestedReplacement?.text) return null;
+    return {
+      summary: `Proposed a replacement: "${suggestedReplacement.text.length > 50 ? `${suggestedReplacement.text.slice(0, 50)}…` : suggestedReplacement.text}"`,
+      title: 'Replacement proposed',
+      body: (
+        <>
+          <div className="field">
+            <label>Replacement text</label>
+            <p>{suggestedReplacement.text}</p>
+          </div>
+          {suggestedReplacement.justification && (
+            <div className="field">
+              <label>Why</label>
+              <p>{suggestedReplacement.justification}</p>
+            </div>
+          )}
+        </>
+      ),
+    };
+  }
+  return null;
+}
+
+function ToolCallCard({ name, args, result, rubrics }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown>; rubrics: Rubric[] }) {
+  const [showDetail, setShowDetail] = useState(false);
   const isSearch = name === 'search_web';
   const isVideoSight = name === 'describe_video_segment';
+  const isMutation = !isSearch && !isVideoSight;
+  const mutationDetail = isMutation && result && result.error === undefined ? formatMutationResult(name, result, rubrics) : null;
+
   return (
-    <div className={`chat-step-card${isSearch ? ' chat-step-card--search' : ''}`}>
+    <>
+    <div
+      className={`chat-step-card${isSearch ? ' chat-step-card--search' : ''}${mutationDetail ? ' chat-step-card--clickable' : ''}`}
+      onClick={mutationDetail ? () => setShowDetail(true) : undefined}
+      role={mutationDetail ? 'button' : undefined}
+      tabIndex={mutationDetail ? 0 : undefined}
+      onKeyDown={mutationDetail ? (e) => (e.key === 'Enter' || e.key === ' ') && setShowDetail(true) : undefined}
+    >
       <p className="chat-step-card__label">
         {result
           ? isSearch
@@ -96,7 +172,7 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
       {isSearch && result && Array.isArray(result.results) && (
         <div className="chat-step-card__results">
           {(result.results as SearchResultCard[]).map((r, i) => (
-            <a key={i} href={r.url} target="_blank" rel="noreferrer" className="chat-search-result">
+            <a key={i} href={r.url} target="_blank" rel="noreferrer" className="chat-search-result" onClick={(e) => e.stopPropagation()}>
               <p className="chat-search-result__title">{r.title ?? r.url}</p>
             </a>
           ))}
@@ -105,10 +181,17 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
       {isVideoSight && result && typeof result.description === 'string' && (
         <p className="chat-step-card__query">{result.description}</p>
       )}
-      {!isSearch && !isVideoSight && result && result.error === undefined && (
-        <p className="chat-step-card__query">Applied: {JSON.stringify(result)}</p>
+      {isMutation && result && result.error === undefined && (
+        <p className="chat-step-card__query">{mutationDetail ? mutationDetail.summary : `Applied: ${JSON.stringify(result)}`}</p>
       )}
     </div>
+
+    {showDetail && mutationDetail && (
+      <Modal title={mutationDetail.title} onClose={() => setShowDetail(false)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-default)' }}>{mutationDetail.body}</div>
+      </Modal>
+    )}
+    </>
   );
 }
 
@@ -896,7 +979,7 @@ export function ResearchChatPanel({
             if (g.functionCall) {
               const nextTurn = activeSession.turns[i + 1];
               const response = nextTurn?.parts.find((p) => p.functionResponse?.name === g.functionCall!.name)?.functionResponse?.response;
-              return <ToolCallCard key={`${i}-${gi}`} name={g.functionCall.name} args={g.functionCall.args} result={response} />;
+              return <ToolCallCard key={`${i}-${gi}`} name={g.functionCall.name} args={g.functionCall.args} result={response} rubrics={rubrics} />;
             }
             return null;
           });
@@ -924,6 +1007,7 @@ export function ResearchChatPanel({
                 name={event.name}
                 args={event.args}
                 result={result && result.type === 'tool_result' ? result.result : undefined}
+                rubrics={rubrics}
               />
             );
           }

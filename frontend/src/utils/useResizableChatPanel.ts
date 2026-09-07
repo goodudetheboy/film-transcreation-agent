@@ -1,9 +1,15 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 
-/** Shared by FilmWorkspaceView.tsx's Discovery chat panel and
- * ProjectPanel.tsx's Research chat panel — one width remembered for
- * whichever docked "Agent" chat panel the user resized last. */
+/** Shared by every docked "Agent" chat panel (Discovery in
+ * FilmWorkspaceView.tsx, Research in ProjectPanel.tsx and
+ * ProjectItemView.tsx) — one width remembered for whichever one the user
+ * resized last. */
 export const CHAT_PANEL_WIDTH_STORAGE_KEY = 'workspace.chatPanelWidth';
+
+/** Same sharing as above, for whether the panel is open or closed — via
+ * usePersistedBoolean.ts — so leaving it open doesn't reset to closed on
+ * the next reload or the next item/session you open. */
+export const CHAT_PANEL_OPEN_STORAGE_KEY = 'workspace.chatPanelOpen';
 
 export interface ResizableChatPanelResult {
   width: number;

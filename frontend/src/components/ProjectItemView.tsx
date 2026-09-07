@@ -6,6 +6,8 @@ import { formatClock } from '../utils/timeFormat';
 import { Modal } from './Modal';
 import { ResearchChatPanel } from './ResearchChatPanel';
 import { SparkleIcon } from './icons';
+import { CHAT_PANEL_OPEN_STORAGE_KEY, CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
+import { usePersistedBoolean } from '../utils/usePersistedBoolean';
 
 const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-research'];
 
@@ -419,8 +421,10 @@ export function ProjectItemView({
   const prev = index > 0 ? allItems[index - 1] : undefined;
   const next = index >= 0 && index < allItems.length - 1 ? allItems[index + 1] : undefined;
 
-  const [chatOpen, setChatOpen] = useState(false);
+  const [chatOpen, setChatOpen] = usePersistedBoolean(CHAT_PANEL_OPEN_STORAGE_KEY, false);
   const [showFullDetail, setShowFullDetail] = useState(false);
+  const { width: chatPanelWidth, isDragging: isDraggingChatPanel, panelRef: chatPanelRef, dividerProps: chatPanelDividerProps } =
+    useResizableChatPanel(CHAT_PANEL_WIDTH_STORAGE_KEY);
 
   // Keep the video scrubbed to whichever item is open, same as DetailsTable's
   // row-click behavior — parity with the rest of the Film workspace.
@@ -607,7 +611,23 @@ export function ProjectItemView({
           ))}
         </div>
 
-        <div className={`project-item-view__chat${chatOpen ? ' project-item-view__chat--open' : ''}`}>
+        {chatOpen && (
+          <div
+            className={`chat-panel-divider${isDraggingChatPanel ? ' chat-panel-divider--dragging' : ''}`}
+            onPointerDown={chatPanelDividerProps.onPointerDown}
+            onPointerMove={chatPanelDividerProps.onPointerMove}
+            onPointerUp={chatPanelDividerProps.onPointerUp}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize agent panel"
+          />
+        )}
+
+        <div
+          ref={chatPanelRef}
+          className={`project-item-view__chat${chatOpen ? ' project-item-view__chat--open' : ''}`}
+          style={chatOpen ? { flexBasis: chatPanelWidth } : undefined}
+        >
           <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} items={allItems} />
         </div>
       </div>

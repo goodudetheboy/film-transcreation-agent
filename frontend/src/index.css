@@ -3952,6 +3952,19 @@ textarea {
   border-color: var(--accent-dim);
 }
 
+/* A mutation tool result (update_rubric_score/propose_replacement) whose
+   summary line can be clicked open into a detail modal instead of dumping
+   raw JSON inline — see formatMutationResult in ResearchChatPanel.tsx. */
+.chat-step-card--clickable {
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+}
+
+.chat-step-card--clickable:hover,
+.chat-step-card--clickable:focus-visible {
+  border-color: var(--accent);
+}
+
 .chat-step-card__label {
   margin: 0;
   display: flex;

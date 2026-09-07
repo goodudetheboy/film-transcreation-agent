@@ -16,7 +16,8 @@ import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/proje
 import { formatClock } from '../utils/timeFormat';
 import { projectItemReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
-import { CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
+import { CHAT_PANEL_OPEN_STORAGE_KEY, CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
+import { usePersistedBoolean } from '../utils/usePersistedBoolean';
 import type { VideoSelection } from './VideoScrubber';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
@@ -74,7 +75,7 @@ export function ProjectPanel({
   const [filmColumns, setFilmColumns] = useState<ColumnDoc[]>([]);
   const [showAddDetails, setShowAddDetails] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
-  const [agentsOpen, setAgentsOpen] = useState(false);
+  const [agentsOpen, setAgentsOpen] = usePersistedBoolean(CHAT_PANEL_OPEN_STORAGE_KEY, false);
   const { width: chatPanelWidth, isDragging: isDraggingChatPanel, panelRef: chatPanelRef, dividerProps: chatPanelDividerProps } =
     useResizableChatPanel(CHAT_PANEL_WIDTH_STORAGE_KEY);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
