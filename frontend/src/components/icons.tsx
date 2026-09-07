@@ -52,6 +52,18 @@ export function SearchIcon(props: IconProps) {
   );
 }
 
+export function MicroscopeIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 20h9" />
+      <path d="M6 20a4.5 4.5 0 1 1 6-4.2" />
+      <path d="M10.5 15.3 15 10.8a2 2 0 0 1 2.8 0 2 2 0 0 1 0 2.8l-1 1" />
+      <path d="M13.5 8 16 5.5" />
+      <path d="M15.3 3.7l3 3" />
+    </Icon>
+  );
+}
+
 export function PencilIcon(props: IconProps) {
   return (
     <Icon {...props}>

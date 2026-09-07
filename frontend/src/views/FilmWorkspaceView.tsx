@@ -426,20 +426,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
         </button>
       </nav>
 
-      {tab === 'agents' && (
-        <div className="workspace__panel workspace__panel--full">
-          <FilmAgentsTab
-            filmId={film.id}
-            passcode={passcode}
-            projects={filmProjects}
-            onOpenDiscovery={openDiscoverySession}
-            onOpenResearch={openResearchSession}
-          />
-        </div>
-      )}
-
-      {tab !== 'agents' && (
-      <>
       <div
         className="workspace__split"
         ref={splitRef}
@@ -535,6 +521,16 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               )}
             </>
           )}
+
+          {tab === 'agents' && (
+            <FilmAgentsTab
+              filmId={film.id}
+              passcode={passcode}
+              projects={filmProjects}
+              onOpenDiscovery={openDiscoverySession}
+              onOpenResearch={openResearchSession}
+            />
+          )}
         </div>
 
         <div
@@ -600,8 +596,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           onSelectionChange={setVideoSelection}
         />
       </div>
-      </>
-      )}
 
       {showNewProjectModal && (
         <NewProjectModal

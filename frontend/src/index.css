@@ -2208,13 +2208,6 @@ textarea {
   gap: 4px;
 }
 
-/* Agent Status tab: no video/scrubber alongside it, so it gets the whole
-   workspace width instead of sharing .workspace__split's two columns. */
-.workspace__panel--full {
-  flex: 1;
-  min-height: 0;
-}
-
 /* ---------- Details tab: table + sliding Discovery agent panel ----------
    Same mechanism as .project-item-view__body/__chat — a docked side panel
    that slides open/closed via width, pushing the table over rather than

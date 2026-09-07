@@ -5,7 +5,7 @@ import type { ChatSession, ChatSessionStatus, DiscoveryAgentSession, DiscoveryCh
 import { countryCode } from '../data/countries';
 import { Flag } from './Flag';
 import { Modal } from './Modal';
-import { SearchIcon, SparkleIcon } from './icons';
+import { MicroscopeIcon, SearchIcon } from './icons';
 
 export interface FilmAgentsTabProps {
   filmId: string;
@@ -28,7 +28,7 @@ interface AgentRow {
   lastMessagePreview: string | undefined;
 }
 
-type KindFilter = 'all' | 'discovery' | 'research';
+type TypeFilter = 'all' | 'discovery' | 'research';
 
 function lastTextPreview(session: DiscoveryAgentSession | ChatSession): string | undefined {
   return [...session.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
@@ -50,7 +50,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
   const [rows, setRows] = useState<AgentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickingProject, setPickingProject] = useState(false);
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
 
   useEffect(() => {
@@ -100,11 +100,11 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
   const filteredRows = useMemo(() => {
     if (rows === null) return null;
     return rows.filter((row) => {
-      if (kindFilter !== 'all' && row.kind !== kindFilter) return false;
+      if (typeFilter !== 'all' && row.kind !== typeFilter) return false;
       if (projectFilter !== 'all' && row.projectId !== projectFilter) return false;
       return true;
     });
-  }, [rows, kindFilter, projectFilter]);
+  }, [rows, typeFilter, projectFilter]);
 
   const runningCount = rows?.filter((r) => r.status === 'streaming').length ?? 0;
 
@@ -144,7 +144,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
         </div>
         <div className="page-header__actions">
           <button type="button" className="btn btn--primary" onClick={() => onOpenDiscovery(undefined, 'agent')}>
-            <SparkleIcon /> Create Agent
+            <SearchIcon /> Create Agent
           </button>
           <button type="button" className="btn" onClick={handleCreateSession} disabled={projects.length === 0} title={projects.length === 0 ? 'Add a project first' : undefined}>
             + Create Session
@@ -153,27 +153,27 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
       </div>
 
       <div className="filter-bar">
-        <span className="filter-bar__label">Kind</span>
-        <button type="button" className={`filter-pill${kindFilter === 'all' ? ' filter-pill--active' : ''}`} onClick={() => setKindFilter('all')}>
+        <span className="filter-bar__label">Type</span>
+        <button type="button" className={`filter-pill${typeFilter === 'all' ? ' filter-pill--active' : ''}`} onClick={() => setTypeFilter('all')}>
           All
         </button>
         <button
           type="button"
-          className={`filter-pill${kindFilter === 'discovery' ? ' filter-pill--active' : ''}`}
-          onClick={() => setKindFilter((k) => (k === 'discovery' ? 'all' : 'discovery'))}
+          className={`filter-pill${typeFilter === 'discovery' ? ' filter-pill--active' : ''}`}
+          onClick={() => setTypeFilter((k) => (k === 'discovery' ? 'all' : 'discovery'))}
         >
-          <SparkleIcon width={12} height={12} /> Discovery
+          <SearchIcon width={12} height={12} /> Discovery
         </button>
         <button
           type="button"
-          className={`filter-pill${kindFilter === 'research' ? ' filter-pill--active' : ''}`}
-          onClick={() => setKindFilter((k) => (k === 'research' ? 'all' : 'research'))}
+          className={`filter-pill${typeFilter === 'research' ? ' filter-pill--active' : ''}`}
+          onClick={() => setTypeFilter((k) => (k === 'research' ? 'all' : 'research'))}
         >
-          <SearchIcon width={12} height={12} /> Research
+          <MicroscopeIcon width={12} height={12} /> Research
         </button>
       </div>
 
-      {kindFilter !== 'discovery' && projects.length > 1 && (
+      {typeFilter !== 'discovery' && projects.length > 1 && (
         <div className="filter-bar">
           <span className="filter-bar__label">Project</span>
           <button type="button" className={`filter-pill${projectFilter === 'all' ? ' filter-pill--active' : ''}`} onClick={() => setProjectFilter('all')}>
@@ -205,7 +205,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
           {filteredRows.map((row) => (
             <div key={`${row.kind}-${row.id}`} role="button" tabIndex={0} className="list-row" onClick={() => openRow(row)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && openRow(row)}>
               <span className={`list-row__icon${row.kind === 'research' ? ' list-row__icon--research' : ''}`}>
-                {row.kind === 'discovery' ? <SparkleIcon width={18} height={18} /> : <SearchIcon width={18} height={18} />}
+                {row.kind === 'discovery' ? <SearchIcon width={18} height={18} /> : <MicroscopeIcon width={18} height={18} />}
               </span>
 
               <div className="list-row__body">
