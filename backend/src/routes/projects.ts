@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import type { DetailRowsStore } from '../services/detailRowsStore.js';
 import type { ProjectStore } from '../services/projectStore.js';
 import type { CreateRubricInput, ProjectRubricStore } from '../services/projectRubricStore.js';
@@ -10,6 +10,7 @@ import type { TrendAgent } from '../services/trendAgent.js';
 import type { ProjectItemAction, RubricScore } from '../services/projectTypes.js';
 import { computeImportanceScore } from '../services/importanceScore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
+import { acceptResearchResult, discardResearchResult, acceptResearchResults, discardResearchResults } from '../services/researchResultActions.js';
 
 export type ResearchRunStreamEvent =
   | { type: 'progress'; message: string; runId: string }
@@ -396,26 +397,21 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       }));
 
       let completedBatches = 0;
+      let pendingResults: ResearchResult[] = [];
       const results = await agent.researchBatch({
         items: researchItems,
         targetCountry: project.country,
         rubrics,
         onBatchComplete: async (progress) => {
-          for (const result of progress.results) {
-            const importanceScore = computeImportanceScore(result.scores, rubrics);
-            await deps.projectItemStore.applyResearchResult(project.id, result.itemId, {
-              scores: result.scores,
-              summary: result.summary,
-              shouldTranscreate: result.shouldTranscreate,
-              suggestedReplacement: result.suggestedReplacement ?? null,
-              importanceScore,
-            });
-          }
+          // Staged, not applied — a human must accept or discard each result
+          // via researchResultActions.ts before it lands on the real item.
+          pendingResults = [...pendingResults, ...progress.results];
 
           completedBatches++;
           const updatedRun = await deps.researchRunStore.updateRun(project.id, run.id, {
             totalBatches: progress.totalBatches,
             completedBatches,
+            pendingResults,
           });
           if (updatedRun) publishRunUpdate(updatedRun);
           emit({
@@ -447,6 +443,78 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
     } finally {
       res.end();
     }
+  });
+
+  router.post('/api/projects/:id/research-runs/:runId/results/:itemId/accept', async (req, res) => {
+    const result = await acceptResearchResult(
+      { researchRunStore: deps.researchRunStore, projectItemStore: deps.projectItemStore, projectRubricStore: deps.projectRubricStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.runId,
+      req.params.itemId,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result.value);
+  });
+
+  router.delete('/api/projects/:id/research-runs/:runId/results/:itemId', async (req, res) => {
+    const result = await discardResearchResult(
+      { researchRunStore: deps.researchRunStore, projectItemStore: deps.projectItemStore, projectRubricStore: deps.projectRubricStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.runId,
+      req.params.itemId,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(204).end();
+  });
+
+  function readItemIds(req: Request): string[] | null {
+    const { itemIds } = req.body ?? {};
+    if (!Array.isArray(itemIds) || itemIds.length === 0 || !itemIds.every((t) => typeof t === 'string')) return null;
+    return itemIds;
+  }
+
+  router.post('/api/projects/:id/research-runs/:runId/results/bulk-accept', async (req, res) => {
+    const itemIds = readItemIds(req);
+    if (!itemIds) {
+      res.status(400).json({ error: 'itemIds must be a non-empty array of strings' });
+      return;
+    }
+    const result = await acceptResearchResults(
+      { researchRunStore: deps.researchRunStore, projectItemStore: deps.projectItemStore, projectRubricStore: deps.projectRubricStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.runId,
+      itemIds,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(201).json(result.value);
+  });
+
+  router.post('/api/projects/:id/research-runs/:runId/results/bulk-discard', async (req, res) => {
+    const itemIds = readItemIds(req);
+    if (!itemIds) {
+      res.status(400).json({ error: 'itemIds must be a non-empty array of strings' });
+      return;
+    }
+    const result = await discardResearchResults(
+      { researchRunStore: deps.researchRunStore, projectItemStore: deps.projectItemStore, projectRubricStore: deps.projectRubricStore, eventBus: deps.eventBus },
+      req.params.id,
+      req.params.runId,
+      itemIds,
+    );
+    if (!result.ok) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    res.status(204).end();
   });
 
   // The resumable stream route — mirrors films.ts's discovery-jobs/:jobId/stream

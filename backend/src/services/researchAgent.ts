@@ -1,24 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
-import type { Rubric, RubricScore, SuggestedReplacement } from './projectTypes.js';
+import type { Rubric, ResearchResult } from './projectTypes.js';
 
-export type { Rubric, RubricScore, SuggestedReplacement, TrendSuggestion } from './projectTypes.js';
+export type { Rubric, RubricScore, SuggestedReplacement, TrendSuggestion, ResearchResult } from './projectTypes.js';
 
 export interface ResearchItem {
   id: string;
   scriptLine: string;
   sceneDescription: string;
-}
-
-export interface ResearchResult {
-  itemId: string;
-  targetCountry: string;
-  /** Always exactly one entry per project rubric, in rubric order — exhaustive. */
-  scores: RubricScore[];
-  /** Synthesis across all scores, not a re-listing. */
-  summary: string;
-  shouldTranscreate: boolean;
-  /** Present only when shouldTranscreate is true. */
-  suggestedReplacement?: SuggestedReplacement;
 }
 
 export interface ResearchBatchProgress {

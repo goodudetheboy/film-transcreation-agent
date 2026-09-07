@@ -184,7 +184,7 @@ describe('PATCH /api/projects/:id/items/:itemId/scores/:rubricId (manual score e
 });
 
 describe('POST /api/projects/:id/research-runs', () => {
-  it('streams a progress event, one batch_done event per batch, then done, and persists results onto items', async () => {
+  it('streams a progress event, one batch_done event per batch, then done, and stages results as pendingResults without touching items until accepted', async () => {
     const agent = fakeAgent((items) => [[resultFor(items[0], { shouldTranscreate: true })], [resultFor(items[1])]]);
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, 2);
     await Promise.all(
@@ -205,14 +205,32 @@ describe('POST /api/projects/:id/research-runs', () => {
 
     const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
     expect(runs.body[0]).toMatchObject({ status: 'done', mode: 'need-research', completedBatches: 2, totalBatches: 2 });
+    expect(runs.body[0].pendingResults).toHaveLength(2);
+    const runId = runs.body[0].id as string;
 
-    const fetchedItems: Array<{ id: string; summary: string | null; shouldTranscreate: boolean | null; lastResearchedAt: string | null }> = (
-      await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)
-    ).body;
+    // Nothing lands on the real items yet — staged for review, not applied.
+    type FetchedItem = { id: string; action: string; summary: string | null; shouldTranscreate: boolean | null; lastResearchedAt: string | null };
+    const beforeAccept: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
+    const unreviewed = beforeAccept.find((i) => i.id === items[0].id)!;
+    expect(unreviewed.action).toBe('need-research');
+    expect(unreviewed.shouldTranscreate).toBeNull();
+    expect(unreviewed.summary).toBeNull();
+    expect(unreviewed.lastResearchedAt).toBeNull();
+
+    const accepted = await request(app)
+      .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`)
+      .send({ passcode: TEST_PASSCODE, itemIds: items.map((i) => i.id) });
+    expect(accepted.status).toBe(201);
+
+    const runAfterAccept = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    expect(runAfterAccept.body[0].pendingResults).toHaveLength(0);
+
+    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
     const changed = fetchedItems.find((i) => i.id === items[0].id)!;
     expect(changed.shouldTranscreate).toBe(true);
     expect(changed.summary).toBe('should change');
     expect(changed.lastResearchedAt).not.toBeNull();
+    expect(changed.action).toBe('pending');
   });
 
   it('defaults to the mock research agent, never touching the real one, unless testMode is explicitly false', async () => {
@@ -282,6 +300,87 @@ describe('POST /api/projects/:id/research-runs', () => {
 
     const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
     expect(runs.body[0].status).toBe('error');
+  });
+});
+
+describe('POST/DELETE /api/projects/:id/research-runs/:runId/results/:itemId (single accept/discard)', () => {
+  async function runAndStage(rowCount = 2) {
+    const agent = fakeAgent((items) => [items.map((i) => resultFor(i, { shouldTranscreate: true }))]);
+    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, rowCount);
+    await Promise.all(
+      items.map((i) =>
+        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' }),
+      ),
+    );
+    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    return { app, project, items, runId: runs.body[0].id as string };
+  }
+
+  it('accept applies the result to the item and removes it from pendingResults', async () => {
+    const { app, project, items, runId } = await runAndStage(1);
+    const res = await request(app)
+      .post(`/api/projects/${project.id}/research-runs/${runId}/results/${items[0].id}/accept`)
+      .send({ passcode: TEST_PASSCODE });
+    expect(res.status).toBe(201);
+    expect(res.body.shouldTranscreate).toBe(true);
+
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    expect(runs.body[0].pendingResults).toHaveLength(0);
+  });
+
+  it('discard removes the pending result without touching the item', async () => {
+    const { app, project, items, runId } = await runAndStage(1);
+    const res = await request(app).delete(`/api/projects/${project.id}/research-runs/${runId}/results/${items[0].id}`).send({ passcode: TEST_PASSCODE });
+    expect(res.status).toBe(204);
+
+    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).shouldTranscreate).toBeNull();
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    expect(runs.body[0].pendingResults).toHaveLength(0);
+  });
+
+  it('returns 404 for an unknown run or an unknown/already-resolved item', async () => {
+    const { app, project, items, runId } = await runAndStage(1);
+    expect(
+      (await request(app).post(`/api/projects/${project.id}/research-runs/does-not-exist/results/${items[0].id}/accept`).send({ passcode: TEST_PASSCODE }))
+        .status,
+    ).toBe(404);
+    expect(
+      (await request(app).post(`/api/projects/${project.id}/research-runs/${runId}/results/does-not-exist/accept`).send({ passcode: TEST_PASSCODE }))
+        .status,
+    ).toBe(404);
+  });
+
+  it('bulk-accept applies every matching id in one request and bulk-discard clears the rest', async () => {
+    const { app, project, items, runId } = await runAndStage(3);
+    const bulkAccept = await request(app)
+      .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`)
+      .send({ passcode: TEST_PASSCODE, itemIds: [items[0].id, items[1].id] });
+    expect(bulkAccept.status).toBe(201);
+    expect(bulkAccept.body).toHaveLength(2);
+
+    const bulkDiscard = await request(app)
+      .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-discard`)
+      .send({ passcode: TEST_PASSCODE, itemIds: [items[2].id] });
+    expect(bulkDiscard.status).toBe(204);
+
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    expect(runs.body[0].pendingResults).toHaveLength(0);
+  });
+
+  it('returns 400 when itemIds is missing or empty for the bulk routes', async () => {
+    const { app, project, runId } = await runAndStage(1);
+    expect(
+      (await request(app).post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`).send({ passcode: TEST_PASSCODE })).status,
+    ).toBe(400);
+    expect(
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-discard`)
+          .send({ passcode: TEST_PASSCODE, itemIds: [] })
+      ).status,
+    ).toBe(400);
   });
 });
 

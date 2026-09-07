@@ -77,10 +77,13 @@ Triaged 2026-09-05 from a single batch of user feedback (see
 
 ## Phase 6 — needs user input before building
 
-- [ ] "Agents" tab: dashboard of long-running tasks (Discovery/Research
+- [x] "Agents" tab: dashboard of long-running tasks (Discovery/Research
   kickoffs only, not plain chat), explicit enough to know where to pick back
   up, clicking navigates straight to where the agent was called from — ties
-  into the Phase 1 session-panel fix
+  into the Phase 1 session-panel fix. Built alongside a broader
+  Agent/Session/Run vocabulary unification and Research's missing
+  Run-review step — see
+  [docs/progress/20260906.md](progress/20260906.md)'s 20:15 entry.
 - [ ] Backfill flow: user adds a new column (e.g. "Food") on existing
   details and wants to kick off Discover against already-existing rows to
   populate it, not just find new lines — needs UX discussion first. Video-sight

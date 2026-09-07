@@ -31,6 +31,12 @@ export interface ProjectPanelProps {
    * workspace's Details track on the scrub bar can color each block by status. */
   onItemStatusByRow?: (statusByRow: Record<string, ProjectItemAction>) => void;
   onBackToProjects: () => void;
+  /** Deep-link from the global Agents tab — opens the Agents panel (and,
+   * with initialSessionId, a specific session within it) instead of the
+   * items table. */
+  initialOpenAgents?: boolean;
+  initialSessionId?: string;
+  initialAutoCreate?: 'agent' | 'session';
 }
 
 const FILTERS: ProjectItemFilter[] = ['all', 'accepted', 'pending', 'rejected', 'need-research'];
@@ -43,7 +49,17 @@ const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-r
  * the whole time, same as the Details tab — this is a workspace panel, not a
  * separate page.
  */
-export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStatusByRow, onBackToProjects }: ProjectPanelProps) {
+export function ProjectPanel({
+  projectId,
+  passcode,
+  testMode,
+  onSeek,
+  onItemStatusByRow,
+  onBackToProjects,
+  initialOpenAgents,
+  initialSessionId,
+  initialAutoCreate,
+}: ProjectPanelProps) {
   const [tab, setTab] = useState<'items' | 'rubrics'>('items');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmRows, setFilmRows] = useState<DetailRow[]>([]);
@@ -105,6 +121,12 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
       setFilmColumns(d.columns);
     });
   }, [project?.sourceFilmId, passcode]);
+
+  // Deep-link from the global Agents tab — open the Agents panel once.
+  useEffect(() => {
+    if (initialOpenAgents) setAgentsOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenAgents]);
 
   const allItems = Object.values(items);
   const filtered = filter === 'all' ? allItems : allItems.filter((i) => i.action === filter);
@@ -320,7 +342,14 @@ export function ProjectPanel({ projectId, passcode, testMode, onSeek, onItemStat
         </div>
 
         <div className={`project-panel__chat${agentsOpen ? ' project-panel__chat--open' : ''}`}>
-          <ResearchChatPanel projectId={project.id} passcode={passcode} testMode={testMode} items={allItems} />
+          <ResearchChatPanel
+            projectId={project.id}
+            passcode={passcode}
+            testMode={testMode}
+            items={allItems}
+            initialSessionId={initialSessionId}
+            initialAutoCreate={initialAutoCreate}
+          />
         </div>
       </div>
 

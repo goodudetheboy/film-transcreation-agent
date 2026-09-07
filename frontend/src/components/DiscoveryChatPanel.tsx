@@ -38,6 +38,12 @@ export interface DiscoveryChatPanelProps {
   passcode: string;
   testMode: boolean;
   columns: ColumnDoc[];
+  /** Deep-link from the global Agents tab — opens this specific session's
+   * chat instead of the library view, once. */
+  initialAgentId?: string;
+  /** Deep-link from the global Agents tab's create-flow picker — fires the
+   * matching create handler once, instead of landing on the library view. */
+  initialAutoCreate?: 'agent' | 'session';
 }
 
 const QUICK_PROMPTS = [
@@ -557,7 +563,7 @@ function DiscoveryToolCallCard({ name, args, result }: { name: string; args: Rec
   );
 }
 
-export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: DiscoveryChatPanelProps) {
+export function DiscoveryChatPanel({ filmId, passcode, testMode, columns, initialAgentId, initialAutoCreate }: DiscoveryChatPanelProps) {
   const {
     discoveryChatSessions,
     activeDiscoveryChatSessionId,
@@ -600,6 +606,20 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [liveEvents, activeDiscoveryChatSessionId]);
+
+  // Deep-link from the global Agents tab — open a specific session or fire a
+  // create-flow once, instead of landing on the library view.
+  useEffect(() => {
+    if (initialAgentId) {
+      setActiveDiscoveryChatSessionId(initialAgentId);
+      setPanelView('chat');
+    } else if (initialAutoCreate === 'agent') {
+      handleCreateAgent();
+    } else if (initialAutoCreate === 'session') {
+      handleCreateSession();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAgentId, initialAutoCreate]);
 
   const activeSession = discoveryChatSessions.find((s) => s.id === activeDiscoveryChatSessionId) ?? null;
 
@@ -677,8 +697,16 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
     upsertDiscoveryChatSession(session);
   }
 
-  async function handleNewAgent() {
-    const session = await createDiscoveryAgentSession(filmId, { passcode });
+  async function handleCreateAgent() {
+    const nextAgentNumber = Math.max(0, ...discoveryChatSessions.map((s) => s.agentNumber)) + 1;
+    const session = await createDiscoveryAgentSession(filmId, { passcode, name: `Agent #${nextAgentNumber}` });
+    upsertDiscoveryChatSession(session);
+    setPanelView('chat');
+    setShowKickoffForm(true);
+  }
+
+  async function handleCreateSession() {
+    const session = await createDiscoveryAgentSession(filmId, { passcode, name: 'Session' });
     upsertDiscoveryChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(false);
@@ -772,9 +800,14 @@ export function DiscoveryChatPanel({ filmId, passcode, testMode, columns }: Disc
             );
           })}
         </div>
-        <button type="button" className="btn btn--primary" onClick={handleNewAgent}>
-          <SparkleIcon /> Kick off agentic discovery
-        </button>
+        <div className="chat-panel__create-actions">
+          <button type="button" className="btn btn--primary" onClick={handleCreateAgent}>
+            <SparkleIcon /> Create Agent
+          </button>
+          <button type="button" className="btn" onClick={handleCreateSession}>
+            + Create Session
+          </button>
+        </div>
         {deleteTarget && (
           <ConfirmModal
             title="Delete this agent?"

@@ -40,6 +40,18 @@ export interface SuggestedReplacement {
   justification: string;
 }
 
+export interface ResearchResult {
+  itemId: string;
+  targetCountry: string;
+  /** Always exactly one entry per project rubric, in rubric order — exhaustive. */
+  scores: RubricScore[];
+  /** Synthesis across all scores, not a re-listing. */
+  summary: string;
+  shouldTranscreate: boolean;
+  /** Present only when shouldTranscreate is true. */
+  suggestedReplacement?: SuggestedReplacement;
+}
+
 export interface TrendSuggestion {
   text: string;
   justification: string;
@@ -106,6 +118,10 @@ export interface ResearchRun {
   totalBatches: number;
   completedBatches: number;
   errorMessage?: string;
+  /** Results from a finished batch, staged here until a human accepts or
+   * discards each one via researchResultActions.ts — never applied to the
+   * real ProjectItem automatically, mirroring DiscoveryJob.resultRows. */
+  pendingResults: ResearchResult[];
 }
 
 /**

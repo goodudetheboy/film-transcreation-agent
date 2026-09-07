@@ -55,6 +55,13 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const tab: Tab = tabParam === 'project' ? 'project' : 'details';
   const projectId = searchParams.get('projectId');
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [pendingDeepLink, setPendingDeepLink] = useState<{
+    target: 'discovery' | 'research';
+    agentId?: string;
+    sessionId?: string;
+    openAgentsForProject?: boolean;
+    autoCreate?: 'agent' | 'session';
+  } | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
@@ -191,6 +198,42 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     } catch {
       // private mode / storage disabled — user just picks a project manually
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Deep-link from the global Agents tab (see AgentsLibraryView.tsx) — open a
+  // specific session, or fire a create-flow, then clear the one-shot params
+  // so a page refresh doesn't replay it.
+  useEffect(() => {
+    if (!id) return;
+    const openDiscovery = searchParams.get('openDiscovery') === '1';
+    const openAgents = searchParams.get('openAgents') === '1';
+    if (!openDiscovery && !openAgents) return;
+
+    const agentId = searchParams.get('agentId') ?? undefined;
+    const sessionId = searchParams.get('sessionId') ?? undefined;
+    const autoCreateRaw = searchParams.get('autoCreate');
+    const autoCreate = autoCreateRaw === 'agent' || autoCreateRaw === 'session' ? autoCreateRaw : undefined;
+
+    if (openDiscovery) {
+      setDiscoveryOpen(true);
+      setPendingDeepLink({ target: 'discovery', agentId, autoCreate });
+    } else {
+      setPendingDeepLink({ target: 'research', sessionId, openAgentsForProject: true, autoCreate });
+    }
+
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('openDiscovery');
+        next.delete('agentId');
+        next.delete('openAgents');
+        next.delete('sessionId');
+        next.delete('autoCreate');
+        return next;
+      },
+      { replace: true },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -401,7 +444,14 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               </div>
 
               <div className={`workspace-details__chat${discoveryOpen ? ' workspace-details__chat--open' : ''}`}>
-                <DiscoveryChatPanel filmId={film.id} passcode={passcode} testMode={testMode} columns={columns} />
+                <DiscoveryChatPanel
+                  filmId={film.id}
+                  passcode={passcode}
+                  testMode={testMode}
+                  columns={columns}
+                  initialAgentId={pendingDeepLink?.target === 'discovery' ? pendingDeepLink.agentId : undefined}
+                  initialAutoCreate={pendingDeepLink?.target === 'discovery' ? pendingDeepLink.autoCreate : undefined}
+                />
               </div>
             </div>
           )}
@@ -441,6 +491,9 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                   onSeek={handleSeek}
                   onItemStatusByRow={setItemStatusByRow}
                   onBackToProjects={() => selectProject(null)}
+                  initialOpenAgents={pendingDeepLink?.target === 'research' ? pendingDeepLink.openAgentsForProject : undefined}
+                  initialSessionId={pendingDeepLink?.target === 'research' ? pendingDeepLink.sessionId : undefined}
+                  initialAutoCreate={pendingDeepLink?.target === 'research' ? pendingDeepLink.autoCreate : undefined}
                 />
               )}
             </>

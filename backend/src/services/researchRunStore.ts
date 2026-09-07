@@ -45,6 +45,7 @@ function newRun(id: string, input: CreateResearchRunInput, now: string): Researc
     updatedAt: now,
     totalBatches: 0,
     completedBatches: 0,
+    pendingResults: [],
   };
 }
 

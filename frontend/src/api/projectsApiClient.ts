@@ -248,6 +248,80 @@ export async function listResearchRuns(
   return (await res.json()) as ResearchRun[];
 }
 
+export async function acceptResearchResult(
+  projectId: string,
+  runId: string,
+  itemId: string,
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<ProjectItem> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/projects/${projectId}/research-runs/${runId}/results/${itemId}/accept?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'POST' },
+  );
+  await throwOnError(res);
+  return (await res.json()) as ProjectItem;
+}
+
+export async function discardResearchResult(
+  projectId: string,
+  runId: string,
+  itemId: string,
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<void> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/projects/${projectId}/research-runs/${runId}/results/${itemId}?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'DELETE' },
+  );
+  await throwOnError(res);
+}
+
+/** Bulk sibling of acceptResearchResult — one request regardless of selection
+ * size, backed by researchResultActions.ts's acceptResearchResults. */
+export async function bulkAcceptResearchResults(
+  projectId: string,
+  runId: string,
+  itemIds: string[],
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<ProjectItem[]> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/projects/${projectId}/research-runs/${runId}/results/bulk-accept?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds }) },
+  );
+  await throwOnError(res);
+  return (await res.json()) as ProjectItem[];
+}
+
+/** Bulk sibling of discardResearchResult — one request regardless of
+ * selection size, backed by researchResultActions.ts's discardResearchResults. */
+export async function bulkDiscardResearchResults(
+  projectId: string,
+  runId: string,
+  itemIds: string[],
+  passcode: string,
+  options: ApiClientOptions = {},
+): Promise<void> {
+  const baseUrl = resolveBaseUrl(options);
+  const fetchImpl = options.fetchImpl ?? fetch;
+
+  const res = await fetchImpl(
+    `${baseUrl}/api/projects/${projectId}/research-runs/${runId}/results/bulk-discard?passcode=${encodeURIComponent(passcode)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemIds }) },
+  );
+  await throwOnError(res);
+}
+
 export interface StreamResearchRunPayload {
   passcode: string;
   testMode: boolean;

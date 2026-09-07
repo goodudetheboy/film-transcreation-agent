@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import {
+  acceptResearchResult,
+  bulkAcceptResearchResults,
+  bulkDiscardResearchResults,
   createChatSession,
   deleteChatSession,
+  discardResearchResult,
   listChatSessions,
   listItems,
   logResearchRun,
@@ -10,7 +14,7 @@ import {
   streamResearchRunUpdates,
 } from '../api/projectsApiClient';
 import { sendChatMessage } from '../api/projectChatApiClient';
-import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchRun } from '../api/apiClient.types';
+import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchResult, ResearchRun, Rubric } from '../api/apiClient.types';
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -30,6 +34,12 @@ export interface ResearchChatPanelProps {
    * (every context, in practice) — defaults to empty for callers that never
    * show one. */
   items?: ProjectItem[];
+  /** Deep-link from the global Agents tab — opens this specific session's
+   * chat instead of the library view, once. */
+  initialSessionId?: string;
+  /** Deep-link from the global Agents tab's create-flow picker — fires the
+   * matching create handler once, instead of landing on the library view. */
+  initialAutoCreate?: 'agent' | 'session';
 }
 
 const QUICK_PROMPTS = [
@@ -82,13 +92,244 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
   );
 }
 
+/** Read-only, per-pending-item review card — reuses ProjectItemView's
+ * verdict-badge/finding-card/replacement-card markup, without the editable
+ * expand/collapse machinery (these are short-lived pre-acceptance previews,
+ * not the permanent per-item panel). */
+function PendingResultCard({
+  result,
+  item,
+  rubrics,
+  selected,
+  onToggle,
+  onAccept,
+  onDiscard,
+  busy,
+}: {
+  result: ResearchResult;
+  item: ProjectItem | undefined;
+  rubrics: Rubric[];
+  selected: boolean;
+  onToggle: () => void;
+  onAccept: () => void;
+  onDiscard: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="pending-result-card">
+      <div className="pending-result-card__header">
+        <input type="checkbox" checked={selected} onChange={onToggle} aria-label="Select this result" />
+        <p className="content-card__primary">{item?.subtitleText ?? result.itemId}</p>
+        <span className={`verdict-badge verdict-badge--${result.shouldTranscreate ? 'change' : 'no-change'}`}>
+          {result.shouldTranscreate ? 'Needs Change' : 'Fine As-Is'}
+        </span>
+      </div>
+      <p className="verdict-block__text">{result.summary}</p>
+
+      {result.scores.map((score) => {
+        const rubric = rubrics.find((r) => r.id === score.rubricId);
+        const tier = score.score >= 7 ? 'high' : score.score >= 4 ? 'mid' : 'low';
+        return (
+          <div className="finding-card" key={score.rubricId}>
+            <div className="finding-card__top">
+              <p className="finding-card__rubric">{rubric?.name ?? score.rubricId}</p>
+              <span className={`score-circle score-circle--${tier}`}>
+                <span className="score-circle__value">{score.score}</span>
+                <span className="score-circle__max">/10</span>
+              </span>
+            </div>
+            <p className="finding-card__text">{score.reasoning}</p>
+          </div>
+        );
+      })}
+
+      {result.suggestedReplacement && (
+        <div className="replacement-card">
+          <p className="replacement-card__label">Suggested replacement</p>
+          <p className="replacement-card__text">{result.suggestedReplacement.text}</p>
+          <p className="replacement-card__why">{result.suggestedReplacement.justification}</p>
+        </div>
+      )}
+
+      <div className="pending-result-card__actions">
+        <button type="button" className="btn btn--primary" disabled={busy} onClick={onAccept}>
+          Accept
+        </button>
+        <button type="button" className="btn btn--ghost" disabled={busy} onClick={onDiscard}>
+          Discard
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ResearchResultsModal({
+  run,
+  items,
+  rubrics,
+  onAcceptOne,
+  onDiscardOne,
+  onBulkAccept,
+  onBulkDiscard,
+  onClose,
+}: {
+  run: ResearchRun;
+  items: ProjectItem[];
+  rubrics: Rubric[];
+  onAcceptOne: (itemId: string) => Promise<void>;
+  onDiscardOne: (itemId: string) => Promise<void>;
+  onBulkAccept: (itemIds: string[]) => Promise<void>;
+  onBulkDiscard: (itemIds: string[]) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busyItemId, setBusyItemId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmBulkDiscard, setConfirmBulkDiscard] = useState(false);
+
+  // Drop any selected itemId once its pending result is gone (accepted/discarded).
+  useEffect(() => {
+    setSelected((prev) => {
+      const stillPresent = new Set(run.pendingResults.map((r) => r.itemId));
+      const next = new Set([...prev].filter((id) => stillPresent.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [run.pendingResults]);
+
+  function toggle(itemId: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected((prev) => (prev.size === run.pendingResults.length ? new Set() : new Set(run.pendingResults.map((r) => r.itemId))));
+  }
+
+  async function handleAccept(itemId: string) {
+    setBusyItemId(itemId);
+    try {
+      await onAcceptOne(itemId);
+    } finally {
+      setBusyItemId(null);
+    }
+  }
+
+  async function handleDiscard(itemId: string) {
+    setBusyItemId(itemId);
+    try {
+      await onDiscardOne(itemId);
+    } finally {
+      setBusyItemId(null);
+    }
+  }
+
+  async function handleBulkAccept() {
+    setBulkBusy(true);
+    try {
+      await onBulkAccept([...selected]);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkDiscardConfirmed() {
+    setBulkBusy(true);
+    try {
+      await onBulkDiscard([...selected]);
+      setConfirmBulkDiscard(false);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`${run.pendingResults.length} result${run.pendingResults.length === 1 ? '' : 's'} pending review`}
+      onClose={onClose}
+      className="research-results-modal"
+    >
+      {run.pendingResults.length === 0 ? (
+        <p className="results-placeholder">All results reviewed.</p>
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={selected.size === run.pendingResults.length} onChange={toggleAll} /> Select all
+            </label>
+            <button type="button" className="btn btn--primary" disabled={selected.size === 0 || bulkBusy} onClick={handleBulkAccept}>
+              Accept {selected.size || ''} selected
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              disabled={selected.size === 0 || bulkBusy}
+              onClick={() => setConfirmBulkDiscard(true)}
+            >
+              Discard {selected.size || ''} selected
+            </button>
+          </div>
+
+          <div className="pending-result-list">
+            {run.pendingResults.map((result) => (
+              <PendingResultCard
+                key={result.itemId}
+                result={result}
+                item={items.find((i) => i.id === result.itemId)}
+                rubrics={rubrics}
+                selected={selected.has(result.itemId)}
+                onToggle={() => toggle(result.itemId)}
+                onAccept={() => handleAccept(result.itemId)}
+                onDiscard={() => handleDiscard(result.itemId)}
+                busy={busyItemId === result.itemId}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {confirmBulkDiscard && (
+        <ConfirmModal
+          title="Discard these results?"
+          body={`${selected.size} pending result${selected.size === 1 ? '' : 's'} will be dropped without being applied. This can't be undone.`}
+          confirmLabel="Discard"
+          busy={bulkBusy}
+          onConfirm={handleBulkDiscardConfirmed}
+          onCancel={() => setConfirmBulkDiscard(false)}
+        />
+      )}
+    </Modal>
+  );
+}
+
 /** One bulk ResearchRun, inline in the thread — subscribes to the resumable
  * per-run stream independent of whichever request originally kicked it off
  * (see docs/adr/0025 and routes/projects.ts's .../research-runs/:runId/stream),
  * the same way DiscoveryRunCard doesn't depend on its original kickoff call
- * staying open. Results are already applied to the items by the time they're
- * visible here — no accept/discard step, unlike Discovery's candidate rows. */
-function ResearchRunCard({ run }: { run: ResearchRun | undefined }) {
+ * staying open. Results are staged as pendingResults, same as Discovery's
+ * candidate rows — a human must accept or discard each one before it lands. */
+function ResearchRunCard({
+  run,
+  items,
+  rubrics,
+  onAcceptOne,
+  onDiscardOne,
+  onBulkAccept,
+  onBulkDiscard,
+}: {
+  run: ResearchRun | undefined;
+  items: ProjectItem[];
+  rubrics: Rubric[];
+  onAcceptOne: (runId: string, itemId: string) => Promise<void>;
+  onDiscardOne: (runId: string, itemId: string) => Promise<void>;
+  onBulkAccept: (runId: string, itemIds: string[]) => Promise<void>;
+  onBulkDiscard: (runId: string, itemIds: string[]) => Promise<void>;
+}) {
+  const [showResults, setShowResults] = useState(false);
+
   if (!run) return <div className="agent-run-card results-placeholder">Loading run…</div>;
 
   const isRunning = run.status === 'queued' || run.status === 'running';
@@ -110,10 +351,30 @@ function ResearchRunCard({ run }: { run: ResearchRun | undefined }) {
         </p>
       )}
       {run.status === 'error' && <p className="passcode-gate__error">{run.errorMessage}</p>}
+
       {run.status === 'done' && (
-        <p className="content-card__secondary">
-          Finished — {run.completedBatches}/{run.totalBatches} batches, results applied to the items directly.
-        </p>
+        <>
+          {run.pendingResults.length === 0 ? (
+            <p className="results-placeholder">Finished — all results reviewed.</p>
+          ) : (
+            <button type="button" className="run-result-badge" onClick={() => setShowResults(true)}>
+              <SparkleIcon width={14} height={14} /> {run.pendingResults.length} result{run.pendingResults.length === 1 ? '' : 's'} pending review
+            </button>
+          )}
+        </>
+      )}
+
+      {showResults && (
+        <ResearchResultsModal
+          run={run}
+          items={items}
+          rubrics={rubrics}
+          onAcceptOne={(itemId) => onAcceptOne(run.id, itemId)}
+          onDiscardOne={(itemId) => onDiscardOne(run.id, itemId)}
+          onBulkAccept={(itemIds) => onBulkAccept(run.id, itemIds)}
+          onBulkDiscard={(itemIds) => onBulkDiscard(run.id, itemIds)}
+          onClose={() => setShowResults(false)}
+        />
       )}
     </div>
   );
@@ -259,7 +520,15 @@ function KickoffForm({
   );
 }
 
-export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items = [] }: ResearchChatPanelProps) {
+export function ResearchChatPanel({
+  projectId,
+  passcode,
+  testMode,
+  itemId,
+  items = [],
+  initialSessionId,
+  initialAutoCreate,
+}: ResearchChatPanelProps) {
   const {
     chatSessions,
     activeChatSessionId,
@@ -270,6 +539,8 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     setActiveChatSessionId,
     applyChatEvent,
     setItems,
+    patchItem,
+    rubrics,
   } = useProjectWorkspaceStore();
   const [panelView, setPanelView] = useState<'library' | 'chat'>('library');
   const [draft, setDraft] = useState('');
@@ -299,6 +570,20 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [liveEvents, activeChatSessionId]);
+
+  // Deep-link from the global Agents tab — open a specific session or fire a
+  // create-flow once, instead of landing on the library view.
+  useEffect(() => {
+    if (initialSessionId) {
+      setActiveChatSessionId(initialSessionId);
+      setPanelView('chat');
+    } else if (initialAutoCreate === 'agent') {
+      handleCreateAgent();
+    } else if (initialAutoCreate === 'session') {
+      handleCreateSession();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessionId, initialAutoCreate]);
 
   const activeSession = chatSessions.find((s) => s.id === activeChatSessionId) ?? null;
 
@@ -333,6 +618,41 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSession?.id, activeSession?.turns.length]);
 
+  function removeResultsFromRun(runId: string, itemIds: string[]) {
+    const idSet = new Set(itemIds);
+    setRunDetails((prev) =>
+      prev[runId]
+        ? { ...prev, [runId]: { ...prev[runId], pendingResults: prev[runId].pendingResults.filter((r) => !idSet.has(r.itemId)) } }
+        : prev,
+    );
+  }
+
+  function removeResultFromRun(runId: string, itemId: string) {
+    removeResultsFromRun(runId, [itemId]);
+  }
+
+  async function handleAcceptResult(runId: string, itemId: string) {
+    const updated = await acceptResearchResult(projectId, runId, itemId, passcode);
+    patchItem(updated.id, updated);
+    removeResultFromRun(runId, itemId);
+  }
+
+  async function handleDiscardResult(runId: string, itemId: string) {
+    await discardResearchResult(projectId, runId, itemId, passcode);
+    removeResultFromRun(runId, itemId);
+  }
+
+  async function handleBulkAcceptResults(runId: string, itemIds: string[]) {
+    const updated = await bulkAcceptResearchResults(projectId, runId, itemIds, passcode);
+    for (const item of updated) patchItem(item.id, item);
+    removeResultsFromRun(runId, itemIds);
+  }
+
+  async function handleBulkDiscardResults(runId: string, itemIds: string[]) {
+    await bulkDiscardResearchResults(projectId, runId, itemIds, passcode);
+    removeResultsFromRun(runId, itemIds);
+  }
+
   async function handleDeleteConfirmed() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -347,8 +667,16 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
     }
   }
 
-  async function handleNewSession() {
-    const session = await createChatSession(projectId, { passcode });
+  async function handleCreateAgent() {
+    const nextSessionNumber = Math.max(0, ...chatSessions.map((s) => s.sessionNumber)) + 1;
+    const session = await createChatSession(projectId, { passcode, name: `Agent #${nextSessionNumber}` });
+    addChatSession(session);
+    setPanelView('chat');
+    setShowKickoffForm(true);
+  }
+
+  async function handleCreateSession() {
+    const session = await createChatSession(projectId, { passcode, name: 'Session' });
     addChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(false);
@@ -449,9 +777,14 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
             );
           })}
         </div>
-        <button type="button" className="btn btn--primary" onClick={handleNewSession}>
-          + New session
-        </button>
+        <div className="chat-panel__create-actions">
+          <button type="button" className="btn btn--primary" onClick={handleCreateAgent}>
+            <SparkleIcon /> Create Agent
+          </button>
+          <button type="button" className="btn" onClick={handleCreateSession}>
+            + Create Session
+          </button>
+        </div>
         {deleteTarget && (
           <ConfirmModal
             title="Delete this session?"
@@ -501,7 +834,18 @@ export function ResearchChatPanel({ projectId, passcode, testMode, itemId, items
           }
           return groups.map((g, gi) => {
             if (g.run) {
-              return <ResearchRunCard key={`${i}-${gi}`} run={runDetails[g.run.runId]} />;
+              return (
+                <ResearchRunCard
+                  key={`${i}-${gi}`}
+                  run={runDetails[g.run.runId]}
+                  items={items}
+                  rubrics={rubrics}
+                  onAcceptOne={handleAcceptResult}
+                  onDiscardOne={handleDiscardResult}
+                  onBulkAccept={handleBulkAcceptResults}
+                  onBulkDiscard={handleBulkDiscardResults}
+                />
+              );
             }
             if (g.text !== undefined) {
               const isModel = turn.role !== 'user';

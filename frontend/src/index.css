@@ -3043,6 +3043,49 @@ textarea {
   max-width: 1200px;
 }
 
+/* Card-per-item, not a flat table like Discovery's — rubric scores are
+   multi-dimensional per item, so a table row can't show them legibly. See
+   ResearchResultsModal in ResearchChatPanel.tsx. */
+.research-results-modal {
+  width: 90vw;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.pending-result-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-default);
+  margin-top: var(--space-default);
+}
+
+.pending-result-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: var(--space-default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
+}
+
+.pending-result-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-snug);
+}
+
+.pending-result-card__header .content-card__primary {
+  flex: 1;
+  margin: 0;
+}
+
+.pending-result-card__actions {
+  display: flex;
+  gap: 8px;
+}
+
 /* ---------- Research chat panel ---------- */
 
 .chat-panel {
@@ -3064,6 +3107,15 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.chat-panel__create-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-panel__create-actions .btn {
+  flex: 1;
 }
 
 .chat-panel__library-item {

@@ -7,6 +7,9 @@ import {
   createChatSession,
   logResearchRun,
   runTrendResearch,
+  acceptResearchResult,
+  bulkAcceptResearchResults,
+  bulkDiscardResearchResults,
 } from '../../frontend/src/api/projectsApiClient';
 import { sendChatMessage } from '../../frontend/src/api/projectChatApiClient';
 import type { ChatStreamEvent, ResearchRunStreamEvent } from '../../frontend/src/api/apiClient.types';
@@ -28,6 +31,8 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
   let backend: TestBackend;
   let filmId: string;
   let rowId: string;
+  let projectItemStoreRef: ReturnType<typeof createInMemoryProjectItemStore>;
+  let researchRunStoreRef: ReturnType<typeof createInMemoryResearchRunStore>;
 
   beforeAll(async () => {
     const filmStore = createInMemoryFilmStore();
@@ -37,6 +42,8 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const projectItemStore = createInMemoryProjectItemStore();
     const researchRunStore = createInMemoryResearchRunStore();
     const chatSessionStore = createInMemoryChatSessionStore();
+    projectItemStoreRef = projectItemStore;
+    researchRunStoreRef = researchRunStore;
 
     const film = await filmStore.createFilm({
       title: 'Integration Film',
@@ -126,11 +133,21 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
 
     expect(runEvents[0]).toMatchObject({ type: 'progress' });
     expect(runEvents.at(-1)).toMatchObject({ type: 'done', summary: { totalItems: 1, totalRecommendedForChange: 1 } });
+    const runId = (runEvents[0] as { runId: string }).runId;
+    expect(runId).toBeTruthy();
+
+    // Staged, not applied — a human must accept the pending result first.
+    const staged = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    expect(staged[0].shouldTranscreate).toBeNull();
+    expect(staged[0].summary).toBeNull();
+    expect(staged[0].action).toBe('need-research');
+
+    await acceptResearchResult(project.id, runId, items[0].id, TEST_PASSCODE, { baseUrl: backend.url });
 
     const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
     expect(afterRun[0].shouldTranscreate).toBe(true);
     expect(afterRun[0].summary).toContain('does not translate to Japan');
-    // The agent just finished researching a fresh item — bumped from need-research to
+    // The agent's result was just accepted for a fresh item — bumped from need-research to
     // pending so the user knows there's now something to review.
     expect(afterRun[0].action).toBe('pending');
 
@@ -154,6 +171,39 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const afterChat = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
     const chatPatchedScore = afterChat[0].scores.find((s) => s.updatedBy === 'chat-agent');
     expect(chatPatchedScore).toMatchObject({ score: 7, updatedBy: 'chat-agent' });
+  });
+
+  it('bulk-accepts and bulk-discards pending research results in one request each, over real HTTP', async () => {
+    // Seeded directly on the item/run docs (bypassing the fake agent's batch
+    // shape) — this test is about the bulk routes/actions, not the research
+    // pass itself, which the first test above already covers.
+    const { project } = await createProjectFromFilm(filmId, { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] }, { baseUrl: backend.url });
+
+    const extraItems = await projectItemStoreRef.createItems(project.id, [
+      { filmId, detailRowId: 'row-bulk-1', startMs: 0, endMs: 1000, subtitleText: 'one', sceneDescription: '', customValues: {} },
+      { filmId, detailRowId: 'row-bulk-2', startMs: 1000, endMs: 2000, subtitleText: 'two', sceneDescription: '', customValues: {} },
+    ]);
+    const now = new Date().toISOString();
+    const pendingResults = extraItems.map((item, i) => ({
+      itemId: item.id,
+      targetCountry: 'Japan',
+      scores: [{ rubricId: 'placeholder', score: 5, reasoning: 'r', evidence: 'e', sources: [], updatedAt: now, updatedBy: 'batch-agent' as const }],
+      summary: `summary ${i}`,
+      shouldTranscreate: false,
+    }));
+    const run = await researchRunStoreRef.createRun({ projectId: project.id, mode: 'custom', itemIds: extraItems.map((i) => i.id), rubricIds: [], testMode: true });
+    await researchRunStoreRef.updateRun(project.id, run.id, { status: 'done', pendingResults });
+
+    const accepted = await bulkAcceptResearchResults(project.id, run.id, [extraItems[0].id], TEST_PASSCODE, { baseUrl: backend.url });
+    expect(accepted.map((i) => i.summary)).toEqual(['summary 0']);
+
+    await bulkDiscardResearchResults(project.id, run.id, [extraItems[1].id], TEST_PASSCODE, { baseUrl: backend.url });
+
+    const finalRun = await researchRunStoreRef.getRun(project.id, run.id);
+    expect(finalRun?.pendingResults).toHaveLength(0);
+    const items = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    expect(items.find((i) => i.id === extraItems[0].id)?.summary).toBe('summary 0');
+    expect(items.find((i) => i.id === extraItems[1].id)?.summary).toBeNull();
   });
 
   it('logs a bulk research run into a chat session as an inline run reference', async () => {

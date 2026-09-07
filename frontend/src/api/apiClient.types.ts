@@ -129,6 +129,9 @@ export interface ResearchRun {
   totalBatches: number;
   completedBatches: number;
   errorMessage?: string;
+  /** Results from a finished batch, staged here until a human accepts or
+   * discards each one — never applied to the real item automatically. */
+  pendingResults: ResearchResult[];
 }
 
 export type ResearchRunStreamEvent =
