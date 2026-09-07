@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ColumnDoc, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
+import { BUILTIN_COLUMN_LABELS } from '../api/apiClient.types';
+import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItem, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { Modal } from './Modal';
@@ -377,6 +378,11 @@ export interface ProjectItemViewProps {
   /** The film's custom columns (beyond the fixed Subtitle/Scene description) —
    * only used to label "Show full detail"'s modal, this view never edits them. */
   columns: ColumnDoc[];
+  /** The film's own DetailRows — only used by "Show full detail" to recover the
+   * Gesture/Notes builtin columns, which don't survive onto ProjectItem itself
+   * (projectItemImport.ts folds segmentDescription/gesture/notes into a single
+   * sceneDescription fallback chain, so only one of the three makes it across). */
+  filmRows: DetailRow[];
   onBack: () => void;
   onNavigate: (itemId: string) => void;
   onSeek?: (ms: number) => void;
@@ -402,6 +408,7 @@ export function ProjectItemView({
   rubrics,
   allItems,
   columns,
+  filmRows,
   onBack,
   onNavigate,
   onSeek,
@@ -437,6 +444,10 @@ export function ProjectItemView({
     const updated = await updateItem(projectId, item.id, { passcode, suggestedReplacement: { ...current, ...patch } });
     onScorePatched(item.id, updated);
   }
+
+  // The film's own row for this item — "Show full detail" reads Gesture/Notes
+  // from here since those don't survive onto ProjectItem itself.
+  const sourceRow = filmRows.find((r) => r.id === item.detailRowId);
 
   // Ranked, not just listed — the biggest driver of the score leads, matching
   // how a reviewer actually wants to triage: worst offenders first. Unscored
@@ -525,7 +536,7 @@ export function ProjectItemView({
                     onChange={(e) => onActionChange(item.id, e.target.value as ProjectItemAction)}
                   >
                     {ACTIONS.map((a) => (
-                      <option key={a} value={a}>
+                      <option key={a} value={a} style={{ color: actionColor(a) }}>
                         {a}
                       </option>
                     ))}
@@ -543,9 +554,15 @@ export function ProjectItemView({
                       saveShouldTranscreate(v === 'change' ? true : v === 'no-change' ? false : null);
                     }}
                   >
-                    <option value="unassessed">Not assessed</option>
-                    <option value="no-change">Fine As-Is</option>
-                    <option value="change">Needs Change</option>
+                    <option value="unassessed" style={{ color: assessmentColor(null) }}>
+                      Not assessed
+                    </option>
+                    <option value="no-change" style={{ color: assessmentColor(false) }}>
+                      Fine As-Is
+                    </option>
+                    <option value="change" style={{ color: assessmentColor(true) }}>
+                      Needs Change
+                    </option>
                   </select>
                 </div>
               </div>
@@ -561,11 +578,9 @@ export function ProjectItemView({
               />
             </div>
 
-            {item.shouldTranscreate && (
-              <div className="overview-card__section">
-                <SuggestedReplacementSection suggestedReplacement={item.suggestedReplacement} onSave={saveReplacement} />
-              </div>
-            )}
+            <div className="overview-card__section">
+              <SuggestedReplacementSection suggestedReplacement={item.suggestedReplacement} onSave={saveReplacement} />
+            </div>
 
             {rubrics.some((r) => r.trendEligible) && (
               <TrendResearchButton projectId={projectId} passcode={passcode} testMode={testMode} item={item} onScorePatched={onScorePatched} />
@@ -598,7 +613,7 @@ export function ProjectItemView({
       </div>
 
       {showFullDetail && (
-        <Modal title="Full detail" onClose={() => setShowFullDetail(false)}>
+        <Modal title="Full detail" className="full-detail-modal" onClose={() => setShowFullDetail(false)}>
           <div style={{ display: 'flex', gap: 12 }}>
             <div className="field">
               <label>Start</label>
@@ -614,16 +629,25 @@ export function ProjectItemView({
             <p className="detail-row-view__readonly">{item.subtitleText || 'Visual only'}</p>
           </div>
           <div className="field">
-            <label>Scene / segment description</label>
-            <p className="detail-row-view__readonly">{item.sceneDescription}</p>
+            <label>{BUILTIN_COLUMN_LABELS.segmentDescription}</label>
+            <p className="detail-row-view__readonly">{sourceRow?.values.segmentDescription || item.sceneDescription || '—'}</p>
           </div>
+          <div className="field">
+            <label>{BUILTIN_COLUMN_LABELS.gesture}</label>
+            <p className="detail-row-view__readonly">{sourceRow?.values.gesture || '—'}</p>
+          </div>
+          <div className="field">
+            <label>{BUILTIN_COLUMN_LABELS.notes}</label>
+            <p className="detail-row-view__readonly">{sourceRow?.values.notes || '—'}</p>
+          </div>
+          {!sourceRow && <p className="results-placeholder">Its source row was removed from the film — Gesture/Notes can't be recovered.</p>}
           {columns.length === 0 ? (
             <p className="results-placeholder">This film has no custom columns.</p>
           ) : (
             columns.map((c) => (
               <div className="field" key={c.id}>
                 <label>{c.name}</label>
-                <p className="detail-row-view__readonly">{item.customValues[c.key] || '—'}</p>
+                <p className="detail-row-view__readonly">{(sourceRow?.values.custom ?? item.customValues)[c.key] || '—'}</p>
               </div>
             ))
           )}

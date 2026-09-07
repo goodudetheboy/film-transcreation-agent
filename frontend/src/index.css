@@ -341,6 +341,12 @@ textarea {
   gap: var(--space-default);
 }
 
+/* "Show full detail" — every builtin/custom column for this item, wider than
+   the default modal since it's read-only reference material, not a form. */
+.full-detail-modal {
+  width: 640px;
+}
+
 .modal__header {
   display: flex;
   align-items: center;

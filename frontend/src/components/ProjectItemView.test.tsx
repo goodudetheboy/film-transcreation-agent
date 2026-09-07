@@ -54,6 +54,7 @@ describe('ProjectItemView', () => {
         rubrics={RUBRICS}
         allItems={[fakeItem()]}
         columns={[]}
+        filmRows={[]}
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
@@ -88,6 +89,7 @@ describe('ProjectItemView', () => {
         rubrics={RUBRICS}
         allItems={[item]}
         columns={[]}
+        filmRows={[]}
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
@@ -112,6 +114,7 @@ describe('ProjectItemView', () => {
         rubrics={RUBRICS}
         allItems={[fakeItem()]}
         columns={[]}
+        filmRows={[]}
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
@@ -156,6 +159,7 @@ describe('ProjectItemView', () => {
         rubrics={[trendEligibleRubric]}
         allItems={[fakeItem()]}
         columns={[]}
+        filmRows={[]}
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={onScorePatched}

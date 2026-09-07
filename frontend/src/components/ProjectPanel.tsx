@@ -202,6 +202,7 @@ export function ProjectPanel({
         rubrics={rubrics}
         allItems={sorted}
         columns={filmColumns}
+        filmRows={filmRows}
         onBack={() => setOpenItemId(null)}
         onNavigate={setOpenItemId}
         onSeek={onSeek}
