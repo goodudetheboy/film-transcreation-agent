@@ -137,6 +137,11 @@ export function ImportFilmForm({
             <input type="checkbox" checked={runDiscovery} onChange={(e) => onRunDiscoveryChange(e.target.checked)} />
             Run Discovery agent to detect details?
           </label>
+          <p className="results-placeholder">
+            {runDiscovery
+              ? "Finds candidate rows for you to review and merge — nothing is added to the table without your say-so."
+              : "No rows to start — you'll add details by hand from the film's Details tab."}
+          </p>
 
           {error && <p className="passcode-gate__error">{error}</p>}
         </div>

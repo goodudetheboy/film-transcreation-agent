@@ -272,6 +272,11 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
                   <input type="checkbox" checked={kickOffFirstPass} onChange={(e) => setKickOffFirstPass(e.target.checked)} />
                   Kick off agentic research on project creation?
                 </label>
+                <p className="results-placeholder">
+                  {kickOffFirstPass
+                    ? "Results apply straight to the items — skips the accept/discard review step every other research run goes through."
+                    : 'Nothing runs automatically — mark items "need research" and kick off a run from the project later.'}
+                </p>
 
                 {submitError && <p className="passcode-gate__error">{submitError}</p>}
 
