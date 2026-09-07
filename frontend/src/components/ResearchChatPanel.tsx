@@ -53,10 +53,20 @@ export interface ResearchChatPanelProps {
   videoSelection?: VideoSelection | null;
 }
 
-const QUICK_PROMPTS = [
+// Split by whether an item is open: update_rubric_score/propose_replacement/
+// update_assessment all require ctx.itemId server-side (see
+// researchChatAgent.ts's NO_ITEM_OPEN_ERROR) and fail with a raw tool error
+// if invited from a project-level session with no item open. search_web
+// works either way, so it's the only action offered in both sets.
+const ITEM_QUICK_PROMPTS = [
   'What do you think of this line for the target country?',
   'Search the web to check how this reads there.',
   'Propose a replacement line.',
+];
+
+const GENERAL_QUICK_PROMPTS = [
+  'Search the web for common localization pitfalls in this country.',
+  'What should I generally watch out for when localizing for this country?',
 ];
 
 function toolStepLabel(name: string, args: Record<string, unknown>): ReactNode {
@@ -747,6 +757,7 @@ export function ResearchChatPanel({
 
   const activeSession = chatSessions.find((s) => s.id === activeChatSessionId) ?? null;
   const mentionable = useMemo<ChatReference[]>(() => items.map(projectItemReference), [items]);
+  const currentItem = itemId ? items.find((i) => i.id === itemId) : undefined;
 
   // Populate runDetails for every `run` part in the active session's turns —
   // one-shot per run (streamResearchRunUpdates replays the current snapshot
@@ -974,10 +985,17 @@ export function ResearchChatPanel({
       </button>
 
       {activeSession && (
-        <EditableTitle
-          value={activeSession.name ?? `Session ${activeSession.sessionNumber}`}
-          onSave={handleRenameSession}
-        />
+        <>
+          <EditableTitle
+            value={activeSession.name ?? `Session ${activeSession.sessionNumber}`}
+            onSave={handleRenameSession}
+          />
+          <p className="content-card__secondary">
+            {itemId
+              ? `Scoped to this line${currentItem?.subtitleText ? `: "${currentItem.subtitleText}"` : ''} — can edit its rubric scores, assessment, and replacement.`
+              : 'General project chat — no line open, so it can search the web but can’t edit rubric scores or propose a replacement. Open a detail row to do that.'}
+          </p>
+        </>
       )}
 
       <div className="chat-panel__thread" ref={threadRef}>
@@ -1096,7 +1114,7 @@ export function ResearchChatPanel({
       {error && <p className="passcode-gate__error">{error}</p>}
 
       <div className="chat-panel__quick-prompts">
-        {QUICK_PROMPTS.map((p) => (
+        {(itemId ? ITEM_QUICK_PROMPTS : GENERAL_QUICK_PROMPTS).map((p) => (
           <button
             key={p}
             type="button"
