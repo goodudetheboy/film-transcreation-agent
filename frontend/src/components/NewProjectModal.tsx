@@ -130,7 +130,11 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
         createChatSession(project.id, { passcode }).then((session) => {
           void streamResearchRun(
             project.id,
-            { passcode, testMode, mode: 'custom', itemIds: items.map((i) => i.id) },
+            // autoApply — this is the one-time default pass, which the user
+            // already opted into via the checkbox below; unlike every other
+            // research run, its results skip the accept/discard review step
+            // and land on the items directly.
+            { passcode, testMode, mode: 'custom', itemIds: items.map((i) => i.id), autoApply: true },
             (event) => {
               if (event.type === 'progress') {
                 void logResearchRun(project.id, session.id, { passcode, runId: event.runId });

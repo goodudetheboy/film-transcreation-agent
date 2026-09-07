@@ -345,6 +345,12 @@ export interface StreamResearchRunPayload {
   testMode: boolean;
   mode: 'need-research' | 'custom';
   itemIds?: string[];
+  /** Skips the usual accept/discard review step and applies every result
+   * straight to its ProjectItem as each batch completes — only meant for
+   * the one-time default pass offered at project creation (see
+   * NewProjectModal.tsx), which the user explicitly opts into without a
+   * per-result review step. Every other kickoff should omit this. */
+  autoApply?: boolean;
 }
 
 /** Kicks off a research run and streams its progress directly — the rich

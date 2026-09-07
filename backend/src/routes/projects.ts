@@ -367,7 +367,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       res.status(404).json({ error: 'project not found' });
       return;
     }
-    const { testMode, mode, itemIds: customItemIds } = req.body ?? {};
+    const { testMode, mode, itemIds: customItemIds, autoApply } = req.body ?? {};
     if (mode !== 'need-research' && mode !== 'custom') {
       res.status(400).json({ error: 'mode must be "need-research" or "custom"' });
       return;
@@ -421,6 +421,14 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
         sceneDescription: i.sceneDescription,
       }));
 
+      // Only true for the one-time default pass offered at project creation
+      // ("Kick off agentic research on project creation?" in
+      // NewProjectModal.tsx) — the user explicitly opted into that pass
+      // without a per-result review step, unlike every other kickoff (the
+      // in-panel "Kick off a research run" form, or a chat-driven run),
+      // which still stage into pendingResults for accept/discard.
+      const applyDirectly = autoApply === true;
+
       let completedBatches = 0;
       let pendingResults: ResearchResult[] = [];
       const results = await agent.researchBatch({
@@ -428,9 +436,22 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
         targetCountry: project.country,
         rubrics,
         onBatchComplete: async (progress) => {
-          // Staged, not applied — a human must accept or discard each result
-          // via researchResultActions.ts before it lands on the real item.
-          pendingResults = [...pendingResults, ...progress.results];
+          if (applyDirectly) {
+            for (const result of progress.results) {
+              const importanceScore = computeImportanceScore(result.scores, rubrics);
+              await deps.projectItemStore.applyResearchResult(project.id, result.itemId, {
+                scores: result.scores,
+                summary: result.summary,
+                shouldTranscreate: result.shouldTranscreate,
+                suggestedReplacement: result.suggestedReplacement ?? null,
+                importanceScore,
+              });
+            }
+          } else {
+            // Staged, not applied — a human must accept or discard each result
+            // via researchResultActions.ts before it lands on the real item.
+            pendingResults = [...pendingResults, ...progress.results];
+          }
 
           completedBatches++;
           const updatedRun = await deps.researchRunStore.updateRun(project.id, run.id, {

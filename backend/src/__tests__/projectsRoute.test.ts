@@ -233,6 +233,36 @@ describe('POST /api/projects/:id/research-runs', () => {
     expect(changed.action).toBe('pending');
   });
 
+  it('autoApply:true applies results straight to the items as each batch completes, with nothing staged for review', async () => {
+    const agent = fakeAgent((items) => [[resultFor(items[0], { shouldTranscreate: true })], [resultFor(items[1])]]);
+    const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, 2);
+    await Promise.all(
+      items.map((i) =>
+        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' }),
+      ),
+    );
+
+    const res = await request(app)
+      .post(`/api/projects/${project.id}/research-runs`)
+      .send({ passcode: TEST_PASSCODE, mode: 'need-research', autoApply: true });
+
+    const events = parseEvents(res.text);
+    expect(events.filter((e) => e.type === 'batch_done')).toHaveLength(2);
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    expect(runs.body[0]).toMatchObject({ status: 'done', completedBatches: 2, totalBatches: 2 });
+    expect(runs.body[0].pendingResults).toHaveLength(0);
+
+    type FetchedItem = { id: string; action: string; summary: string | null; shouldTranscreate: boolean | null; lastResearchedAt: string | null };
+    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
+    const changed = fetchedItems.find((i) => i.id === items[0].id)!;
+    expect(changed.shouldTranscreate).toBe(true);
+    expect(changed.summary).toBe('should change');
+    expect(changed.lastResearchedAt).not.toBeNull();
+    expect(changed.action).toBe('pending');
+  });
+
   it('defaults to the mock research agent, never touching the real one, unless testMode is explicitly false', async () => {
     const real = noChangeAgent();
     const mock = noChangeAgent();
