@@ -4,11 +4,15 @@ import type { ProjectRubricStore } from './projectRubricStore.js';
 import type { ChatSessionStore } from './chatSessionStore.js';
 import type { ChatPart, ChatTurn } from './projectTypes.js';
 import { executeTool, type ResearchChatAgent } from './researchChatAgent.js';
+import type { FilmStore } from './filmStore.js';
+import type { VideoSegmentDescriber } from './videoSegmentDescriber.js';
 
 export interface MockResearchChatAgentDeps {
   projectItemStore: ProjectItemStore;
   projectRubricStore: ProjectRubricStore;
   chatSessionStore: ChatSessionStore;
+  filmStore: FilmStore;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 /**
@@ -69,6 +73,8 @@ export function createMockResearchChatAgent(deps: MockResearchChatAgentDeps): Re
             throw new Error('search_web is not used by the mock chat agent');
           },
           parallelApiKey: undefined,
+          filmStore: deps.filmStore,
+          videoSegmentDescriber: deps.videoSegmentDescriber,
         },
       );
       yield { type: 'tool_result', callId, name: 'update_rubric_score', result: response };

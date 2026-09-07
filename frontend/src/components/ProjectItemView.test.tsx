@@ -42,6 +42,7 @@ const RUBRICS: Rubric[] = [];
 describe('ProjectItemView', () => {
   beforeEach(() => {
     vi.mocked(projectsApiClient.listChatSessions).mockResolvedValue([]);
+    vi.mocked(projectsApiClient.listResearchRuns).mockResolvedValue([]);
   });
 
   it('renders the evergreen suggested replacement but no trend card when trendSuggestions is null', () => {

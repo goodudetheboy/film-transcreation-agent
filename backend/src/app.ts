@@ -138,9 +138,11 @@ export function createApp(deps: AppDeps = {}): Express {
   const chatSessionStore = deps.chatSessionStore ?? createInMemoryChatSessionStore();
   const researchRunEventBus = deps.researchRunEventBus ?? createResearchRunEventBus();
   const researchChatAgent = deps.researchChatAgent ?? notConfiguredResearchChatAgent;
-  const mockResearchChatAgent =
-    deps.mockResearchChatAgent ?? createMockResearchChatAgent({ projectItemStore, projectRubricStore, chatSessionStore });
   const filmStore = deps.filmStore ?? createInMemoryFilmStore();
+  const videoSegmentDescriber = deps.videoSegmentDescriber ?? notConfiguredVideoSegmentDescriber;
+  const mockResearchChatAgent =
+    deps.mockResearchChatAgent ??
+    createMockResearchChatAgent({ projectItemStore, projectRubricStore, chatSessionStore, filmStore, videoSegmentDescriber });
   const detailRowsStore = deps.detailRowsStore ?? createInMemoryDetailRowsStore();
   const discoveryJobStore = deps.discoveryJobStore ?? createInMemoryDiscoveryJobStore();
   const discoveryAgent = deps.discoveryAgent ?? notConfiguredDiscoveryAgent;
@@ -148,7 +150,6 @@ export function createApp(deps: AppDeps = {}): Express {
   const eventBus = deps.eventBus ?? createDiscoveryEventBus();
   const discoveryChatSessionStore = deps.discoveryChatSessionStore ?? createInMemoryDiscoveryChatSessionStore();
   const discoveryChatAgent = deps.discoveryChatAgent ?? notConfiguredDiscoveryChatAgent;
-  const videoSegmentDescriber = deps.videoSegmentDescriber ?? notConfiguredVideoSegmentDescriber;
   const mockDiscoveryChatAgent =
     deps.mockDiscoveryChatAgent ??
     createMockDiscoveryChatAgent({ filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });

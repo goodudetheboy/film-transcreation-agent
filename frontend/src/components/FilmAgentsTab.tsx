@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { listDiscoveryAgentSessions } from '../api/discoveryChatApiClient';
-import { listChatSessions } from '../api/projectsApiClient';
-import type { ChatSession, ChatSessionStatus, DiscoveryAgentSession, DiscoveryChatSessionStatus, EnrichedProject } from '../api/apiClient.types';
+import { listDiscoveryJobs } from '../api/filmsApiClient';
+import { listChatSessions, listResearchRuns } from '../api/projectsApiClient';
+import type { ChatSession, DiscoveryAgentSession, EnrichedProject, ResearchRun } from '../api/apiClient.types';
 import { countryCode } from '../data/countries';
 import { Flag } from './Flag';
 import { Modal } from './Modal';
 import { MicroscopeIcon, SearchIcon } from './icons';
+import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
 
 export interface FilmAgentsTabProps {
   filmId: string;
@@ -23,27 +25,26 @@ interface AgentRow {
   projectId?: string;
   projectCountry?: string;
   projectLabel?: string;
-  status: DiscoveryChatSessionStatus | ChatSessionStatus;
+  /** Already-combined status — the session's own chat-stream status folded
+   * together with the status of any Discovery/Research Run it kicked off, via
+   * combinedAgentStatus. Not just the raw session status: a session can read
+   * "done" on its chat reply while the batch Run it started is still crunching
+   * in the background, which is exactly the ambiguity this combines away. */
+  status: 'running' | 'done' | 'error';
   updatedAt: string;
   lastMessagePreview: string | undefined;
 }
 
 type TypeFilter = 'all' | 'discovery' | 'research';
 
+interface ProjectSessionsAndRuns {
+  p: EnrichedProject;
+  sessions: ChatSession[];
+  runs: ResearchRun[];
+}
+
 function lastTextPreview(session: DiscoveryAgentSession | ChatSession): string | undefined {
   return [...session.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
-}
-
-function statusModifier(status: DiscoveryChatSessionStatus | ChatSessionStatus): 'running' | 'done' | 'error' {
-  if (status === 'streaming') return 'running';
-  if (status === 'error') return 'error';
-  return 'done';
-}
-
-function statusLabel(status: DiscoveryChatSessionStatus | ChatSessionStatus): string {
-  if (status === 'streaming') return 'running';
-  if (status === 'error') return 'error';
-  return 'done';
 }
 
 export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onOpenResearch }: FilmAgentsTabProps) {
@@ -57,34 +58,52 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
     let cancelled = false;
     (async () => {
       try {
-        const [discoverySessions, researchSettled] = await Promise.all([
+        const [discoverySessions, discoveryJobs, researchSettled] = await Promise.all([
           listDiscoveryAgentSessions(filmId, passcode),
-          Promise.allSettled(projects.map((p) => listChatSessions(p.id, passcode).then((sessions) => ({ p, sessions })))),
+          listDiscoveryJobs(filmId, passcode),
+          Promise.allSettled(
+            projects.map((p) =>
+              Promise.all([listChatSessions(p.id, passcode), listResearchRuns(p.id, passcode)]).then(([sessions, runs]) => ({ p, sessions, runs })),
+            ),
+          ),
         ]);
         if (cancelled) return;
 
-        const discoveryRows: AgentRow[] = discoverySessions.map((s) => ({
-          kind: 'discovery',
-          id: s.id,
-          name: s.name ?? `Agent #${s.agentNumber}`,
-          status: s.status,
-          updatedAt: s.updatedAt,
-          lastMessagePreview: lastTextPreview(s),
-        }));
-        const researchRows: AgentRow[] = researchSettled
-          .filter((r): r is PromiseFulfilledResult<{ p: EnrichedProject; sessions: ChatSession[] }> => r.status === 'fulfilled')
+        const fulfilledProjects = researchSettled.filter(
+          (r): r is PromiseFulfilledResult<ProjectSessionsAndRuns> => r.status === 'fulfilled',
+        );
+        const jobStatusById = new Map(discoveryJobs.map((j) => [j.id, j.status]));
+        const runStatusById = new Map(fulfilledProjects.flatMap((r) => r.value.runs.map((run) => [run.id, run.status] as const)));
+
+        const discoveryRows: AgentRow[] = discoverySessions.map((s) => {
+          const { jobIds } = collectRunRefs(s.turns);
+          const runStatuses = jobIds.map((id) => jobStatusById.get(id)).filter((v): v is NonNullable<typeof v> => v !== undefined);
+          return {
+            kind: 'discovery',
+            id: s.id,
+            name: s.name ?? `Agent #${s.agentNumber}`,
+            status: combinedAgentStatus(s.status, runStatuses),
+            updatedAt: s.updatedAt,
+            lastMessagePreview: lastTextPreview(s),
+          };
+        });
+        const researchRows: AgentRow[] = fulfilledProjects
           .flatMap((r) =>
-            r.value.sessions.map((s) => ({
-              kind: 'research' as const,
-              id: s.id,
-              name: s.name ?? `Session ${s.sessionNumber}`,
-              projectId: r.value.p.id,
-              projectCountry: r.value.p.country,
-              projectLabel: r.value.p.note ? `${r.value.p.country} — ${r.value.p.note}` : r.value.p.country,
-              status: s.status,
-              updatedAt: s.updatedAt,
-              lastMessagePreview: lastTextPreview(s),
-            })),
+            r.value.sessions.map((s) => {
+              const { runIds } = collectRunRefs(s.turns);
+              const runStatuses = runIds.map((id) => runStatusById.get(id)).filter((v): v is NonNullable<typeof v> => v !== undefined);
+              return {
+                kind: 'research' as const,
+                id: s.id,
+                name: s.name ?? `Session ${s.sessionNumber}`,
+                projectId: r.value.p.id,
+                projectCountry: r.value.p.country,
+                projectLabel: r.value.p.note ? `${r.value.p.country} — ${r.value.p.note}` : r.value.p.country,
+                status: combinedAgentStatus(s.status, runStatuses),
+                updatedAt: s.updatedAt,
+                lastMessagePreview: lastTextPreview(s),
+              };
+            }),
           );
 
         setRows([...discoveryRows, ...researchRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
@@ -106,7 +125,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
     });
   }, [rows, typeFilter, projectFilter]);
 
-  const runningCount = rows?.filter((r) => r.status === 'streaming').length ?? 0;
+  const runningCount = rows?.filter((r) => r.status === 'running').length ?? 0;
 
   function openRow(row: AgentRow) {
     if (row.kind === 'discovery') onOpenDiscovery(row.id);
@@ -221,8 +240,8 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
               </div>
 
               <div className="list-row__side">
-                <span className={`status-badge status-badge--${statusModifier(row.status)}`}>
-                  <span className={`status-dot${row.status === 'streaming' ? ' status-dot--running' : ''}`} /> {statusLabel(row.status)}
+                <span className={`status-badge status-badge--${row.status}`}>
+                  <span className={`status-dot${row.status === 'running' ? ' status-dot--running' : ''}`} /> {row.status}
                 </span>
                 <span className="list-row__meta">{new Date(row.updatedAt).toLocaleString()}</span>
               </div>

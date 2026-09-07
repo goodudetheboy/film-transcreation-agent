@@ -4,6 +4,8 @@ import { createInMemoryProjectItemStore } from './projectItemStore.js';
 import { createInMemoryProjectRubricStore } from './projectRubricStore.js';
 import { createInMemoryChatSessionStore } from './chatSessionStore.js';
 import { createInMemoryResearchRunStore } from './researchRunStore.js';
+import { createInMemoryFilmStore } from './filmStore.js';
+import type { VideoSegmentDescriber } from './videoSegmentDescriber.js';
 import type { ChatSession } from './projectTypes.js';
 
 const CONFIG = { googleCloudProject: 'test-project', geminiLocation: 'us-central1', geminiModel: 'gemini-2.5-flash' };
@@ -35,6 +37,8 @@ async function buildDeps() {
   const projectRubricStore = createInMemoryProjectRubricStore();
   const chatSessionStore = createInMemoryChatSessionStore();
   const researchRunStore = createInMemoryResearchRunStore();
+  const filmStore = createInMemoryFilmStore();
+  const videoSegmentDescriber: VideoSegmentDescriber = { describeVideoSegment: vi.fn(async () => 'a description of what is happening') };
   const rubric = await projectRubricStore.createRubric('proj-a', { name: 'Food aversion', description: 'd', weight: 3 , trendEligible: false });
   const [item] = await projectItemStore.createItems('proj-a', [
     {
@@ -48,16 +52,16 @@ async function buildDeps() {
     },
   ]);
   const session = await chatSessionStore.createSession({ projectId: 'proj-a' });
-  return { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, rubric, item, session };
+  return { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, rubric, item, session };
 }
 
 describe('createResearchChatAgent runTurn', () => {
   it('a text-only turn yields text_delta then turn_done, with no tool calls', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'Hello there.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'text_delta', text: 'Hello there.' }, { type: 'turn_done' }]);
@@ -68,7 +72,7 @@ describe('createResearchChatAgent runTurn', () => {
   });
 
   it('a single-tool-call turn calls the tool, emits tool_call/tool_result/item_patched, then makes a second round for the final text', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, rubric, item, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, rubric, item, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -77,7 +81,7 @@ describe('createResearchChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Updated it to 8.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'bump the score', itemId: item.id }));
 
     expect(generateContentStream).toHaveBeenCalledTimes(2);
@@ -91,7 +95,7 @@ describe('createResearchChatAgent runTurn', () => {
   });
 
   it('a multi-round tool-calling turn (two sequential tool calls) persists turns after every round', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, rubric, item, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, rubric, item, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -109,7 +113,7 @@ describe('createResearchChatAgent runTurn', () => {
       .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Done.' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'go', itemId: item.id }));
 
     expect(generateContentStream).toHaveBeenCalledTimes(3);
@@ -127,13 +131,13 @@ describe('createResearchChatAgent runTurn', () => {
   });
 
   it('yields only a stopped event and never calls the model when the signal is already aborted', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const controller = new AbortController();
     controller.abort();
     const generateContentStream = vi.fn();
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi', signal: controller.signal }));
 
     expect(events).toEqual([{ type: 'stopped' }]);
@@ -141,37 +145,37 @@ describe('createResearchChatAgent runTurn', () => {
   });
 
   it('yields a stopped event (not error) when the stream call itself rejects with an AbortError', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const abortError = new Error('aborted');
     abortError.name = 'AbortError';
     const generateContentStream = vi.fn().mockRejectedValue(abortError);
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'stopped' }]);
   });
 
   it('yields an error event and does not throw when the underlying stream call rejects', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn().mockRejectedValue(new Error('vertex boom'));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'hi' }));
 
     expect(events).toEqual([{ type: 'error', message: 'vertex boom' }]);
   });
 
   it('update_rubric_score returns an error result (not a throw) when no itemId is open', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, rubric, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, rubric, session } = await buildDeps();
     const generateContentStream = vi.fn(async () =>
       streamOf([{ candidates: [{ content: { parts: [{ functionCall: { name: 'update_rubric_score', args: { rubricId: rubric.id, score: 5 } } }] } }] }]),
     );
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'go' })); // no itemId
 
     const toolResult = events.find((e) => e.type === 'tool_result');
@@ -180,7 +184,7 @@ describe('createResearchChatAgent runTurn', () => {
   });
 
   it('persists `run` marker turns but excludes them from what is sent to Gemini, and summarizes the run in context', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const run = await researchRunStore.createRun({
       projectId: 'proj-a',
       mode: 'need-research',
@@ -197,7 +201,7 @@ describe('createResearchChatAgent runTurn', () => {
     const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }]));
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     await collect(agent.runTurn({ session: sessionWithRun, userText: 'how did that run go?' }));
 
     const call = generateContentStream.mock.calls[0][0] as { contents: Array<{ role: string }>; config: { systemInstruction: string } };
@@ -208,11 +212,53 @@ describe('createResearchChatAgent runTurn', () => {
     const persisted = await chatSessionStore.getSession('proj-a', session.id);
     expect(persisted?.turns.map((t) => t.role)).toEqual(['system', 'user', 'model']);
   });
+
+  it("describe_video_segment calls the describer with the film's videoUrl and returns the description", async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber } = await buildDeps();
+    const film = await filmStore.createFilm({ title: 'Test Film', videoUrl: 'gs://bucket/clip.mp4', subtitle: null, runDiscoveryOnCreate: false });
+    const session = await chatSessionStore.createSession({ projectId: 'proj-a' });
+
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([
+          { candidates: [{ content: { parts: [{ functionCall: { name: 'describe_video_segment', args: { startMs: 2000, endMs: 5000, focus: 'food' } } }] } }] },
+        ]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'I saw a red car.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
+    const events = await collect(agent.runTurn({ session, userText: 'what is happening at 2s?', filmId: film.id }));
+
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'text_delta', 'turn_done']);
+    expect(videoSegmentDescriber.describeVideoSegment).toHaveBeenCalledWith({ videoUrl: 'gs://bucket/clip.mp4', startMs: 2000, endMs: 5000, focus: 'food' });
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toMatchObject({ result: { description: 'a description of what is happening' } });
+  });
+
+  it('describe_video_segment rejects a too-long range without calling the describer', async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([{ candidates: [{ content: { parts: [{ functionCall: { name: 'describe_video_segment', args: { startMs: 0, endMs: 120000 } } }] } }] }]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Cannot do that.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
+    const events = await collect(agent.runTurn({ session, userText: 'describe a huge range', filmId: 'film-a' }));
+
+    const toolResult = events.find((e) => e.type === 'tool_result');
+    expect(toolResult).toMatchObject({ result: { error: expect.stringContaining('clip too long') } });
+    expect(videoSegmentDescriber.describeVideoSegment).not.toHaveBeenCalled();
+  });
 });
 
 describe('createResearchChatAgent runTurn — search_web', () => {
   it('calls Parallel directly via fetchImpl and surfaces the real query/results through tool_call/tool_result', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi
       .fn()
       .mockResolvedValueOnce(
@@ -237,7 +283,7 @@ describe('createResearchChatAgent runTurn — search_web', () => {
 
     const agent = createResearchChatAgent(
       { ...CONFIG, parallelApiKey: 'test-key' },
-      { genAI, fetchImpl: fetchImpl as unknown as typeof fetch, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore },
+      { genAI, fetchImpl: fetchImpl as unknown as typeof fetch, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber },
     );
     const events = await collect(agent.runTurn({ session, userText: 'is this gesture rude in Japan?' }));
 
@@ -249,13 +295,13 @@ describe('createResearchChatAgent runTurn — search_web', () => {
   });
 
   it('returns an error result when no Parallel API key is configured', async () => {
-    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, session } = await buildDeps();
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
     const generateContentStream = vi.fn(async () =>
       streamOf([{ candidates: [{ content: { parts: [{ functionCall: { name: 'search_web', args: { search_queries: ['q1'] } } }] } }] }]),
     );
     const genAI: ChatGenAIClient = { models: { generateContentStream } };
 
-    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
     const events = await collect(agent.runTurn({ session, userText: 'search please' }));
 
     const toolResult = events.find((e) => e.type === 'tool_result');

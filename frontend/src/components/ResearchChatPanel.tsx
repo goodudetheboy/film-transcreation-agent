@@ -8,15 +8,18 @@ import {
   discardResearchResult,
   listChatSessions,
   listItems,
+  listResearchRuns,
   logResearchRun,
   renameChatSession,
   streamResearchRun,
   streamResearchRunUpdates,
 } from '../api/projectsApiClient';
 import { sendChatMessage } from '../api/projectChatApiClient';
-import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchResult, ResearchRun, Rubric } from '../api/apiClient.types';
+import type { ChatSession, ChatStreamEvent, ProjectItem, ResearchResult, ResearchRun, ResearchRunStatus, Rubric } from '../api/apiClient.types';
 import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { projectItemReference, type ChatReference } from '../utils/chatReferences';
+import { formatClock } from '../utils/timeFormat';
+import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -56,10 +59,11 @@ const QUICK_PROMPTS = [
   'Propose a replacement line.',
 ];
 
-function toolStepLabel(name: string): ReactNode {
+function toolStepLabel(name: string, args: Record<string, unknown>): ReactNode {
   if (name === 'search_web') return <><SearchIcon /> Searching the web via Parallel…</>;
   if (name === 'update_rubric_score') return <><PencilIcon /> Updating a rubric score…</>;
   if (name === 'propose_replacement') return <><LightbulbIcon /> Proposing a replacement…</>;
+  if (name === 'describe_video_segment') return <>Looking at {formatClock(Number(args.startMs))}–{formatClock(Number(args.endMs))}…</>;
   return <>Calling {name}…</>;
 }
 
@@ -71,15 +75,22 @@ interface SearchResultCard {
 
 function ToolCallCard({ name, args, result }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown> }) {
   const isSearch = name === 'search_web';
+  const isVideoSight = name === 'describe_video_segment';
   return (
     <div className={`chat-step-card${isSearch ? ' chat-step-card--search' : ''}`}>
       <p className="chat-step-card__label">
-        {result ? isSearch ? <><SearchIcon /> Searched the web via Parallel</> : <><CheckIcon /> {name}</> : toolStepLabel(name)}
+        {result
+          ? isSearch
+            ? <><SearchIcon /> Searched the web via Parallel</>
+            : isVideoSight
+              ? <><CheckIcon /> Looked at {formatClock(Number(args.startMs))}–{formatClock(Number(args.endMs))}</>
+              : <><CheckIcon /> {name}</>
+          : toolStepLabel(name, args)}
       </p>
       {isSearch && Array.isArray(args.search_queries) && (
         <p className="chat-step-card__query">Query: {(args.search_queries as string[]).join(', ')}</p>
       )}
-      {!isSearch && !result && (
+      {!isSearch && !isVideoSight && !result && (
         <p className="chat-step-card__query">{JSON.stringify(args)}</p>
       )}
       {result?.error !== undefined && <p className="passcode-gate__error">{String(result.error)}</p>}
@@ -93,7 +104,10 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
           ))}
         </div>
       )}
-      {!isSearch && result && result.error === undefined && (
+      {isVideoSight && result && typeof result.description === 'string' && (
+        <p className="chat-step-card__query">{result.description}</p>
+      )}
+      {!isSearch && !isVideoSight && result && result.error === undefined && (
         <p className="chat-step-card__query">Applied: {JSON.stringify(result)}</p>
       )}
     </div>
@@ -559,6 +573,7 @@ export function ResearchChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [runDetails, setRunDetails] = useState<Record<string, ResearchRun>>({});
+  const [runStatuses, setRunStatuses] = useState<Record<string, ResearchRunStatus>>({});
   const [deleteTarget, setDeleteTarget] = useState<ChatSession | null>(null);
   const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -569,6 +584,13 @@ export function ResearchChatPanel({
     listChatSessions(projectId, passcode).then((sessions) => {
       if (cancelled) return;
       setChatSessions(sessions);
+    });
+    // The project's run status list, joined against each session's own `run`
+    // marker turns below — same "session status alone doesn't mean the batch
+    // Run finished" gap FilmAgentsTab.tsx fixes, applied to this switcher list.
+    listResearchRuns(projectId, passcode).then((runs) => {
+      if (cancelled) return;
+      setRunStatuses(Object.fromEntries(runs.map((r) => [r.id, r.status])));
     });
     return () => {
       cancelled = true;
@@ -754,6 +776,9 @@ export function ResearchChatPanel({
           )}
           {[...chatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
+            const { runIds } = collectRunRefs(s.turns);
+            const linkedRunStatuses = runIds.map((id) => runStatuses[id]).filter((v): v is ResearchRunStatus => v !== undefined);
+            const combined = combinedAgentStatus(s.status, linkedRunStatuses);
             return (
               <div
                 key={s.id}
@@ -776,9 +801,7 @@ export function ResearchChatPanel({
                   <TrashIcon />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className={`status-badge status-badge--${s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}`}>
-                    {s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}
-                  </span>
+                  <span className={`status-badge status-badge--${combined}`}>{combined}</span>
                   <span className="chat-panel__library-item-name">{s.name ?? `Session ${s.sessionNumber}`}</span>
                 </div>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}

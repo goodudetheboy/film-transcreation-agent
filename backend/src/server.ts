@@ -42,10 +42,17 @@ const eventBus = createDiscoveryEventBus();
 const researchAgent = createResearchAgent(config);
 const parallelSearchClient = createParallelSearchClient({ apiKey: config.parallelApiKey });
 const trendAgent = createTrendAgent(config, { parallelSearchClient });
-const researchChatAgent = createResearchChatAgent(config, { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore });
+const videoSegmentDescriber = createVideoSegmentDescriber(config);
+const researchChatAgent = createResearchChatAgent(config, {
+  projectItemStore,
+  projectRubricStore,
+  chatSessionStore,
+  researchRunStore,
+  filmStore,
+  videoSegmentDescriber,
+});
 const discoveryAgent = createDiscoveryAgent(config);
 const mockDiscoveryAgent = createMockDiscoveryAgent({ mockDelayScale: config.mockDelayScale });
-const videoSegmentDescriber = createVideoSegmentDescriber(config);
 const discoveryChatAgent = createDiscoveryChatAgent(config, {
   filmStore,
   detailRowsStore,

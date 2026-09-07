@@ -6,6 +6,8 @@ import type { ChatSessionStore } from './chatSessionStore.js';
 import type { ResearchRunStore } from './researchRunStore.js';
 import type { ChatPart, ChatSession, ChatTurn } from './projectTypes.js';
 import { computeImportanceScore } from './importanceScore.js';
+import type { FilmStore } from './filmStore.js';
+import { MAX_CLIP_MS, type VideoSegmentDescriber } from './videoSegmentDescriber.js';
 
 export type ChatStreamEvent =
   | { type: 'text_delta'; text: string }
@@ -50,6 +52,8 @@ export interface ResearchChatAgentDeps {
   projectRubricStore: ProjectRubricStore;
   chatSessionStore: ChatSessionStore;
   researchRunStore: ResearchRunStore;
+  filmStore: FilmStore;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 export interface RunTurnInput {
@@ -62,6 +66,10 @@ export interface RunTurnInput {
    * (update_rubric_score(rubricId, ...), no itemId param) only make sense with an
    * implicit "currently open item" carried alongside the message. See docs/adr/0025. */
   itemId?: string;
+  /** The item's source film, so describe_video_segment knows which film's footage
+   * to look at. Resolved by the route from the Project doc (project.sourceFilmId)
+   * before calling runTurn — the agent never re-fetches the Project itself. */
+  filmId?: string;
   /** Aborted when the client disconnects (e.g. the user hits Stop) — wired through
    * to generateContentStream's own abortSignal and to the search_web tool's fetch,
    * so a stop actually halts the in-flight Gemini call/tool loop server-side, not
@@ -120,16 +128,38 @@ const SEARCH_WEB_DECL = {
   },
 };
 
-const CHAT_TOOLS = [{ functionDeclarations: [UPDATE_RUBRIC_SCORE_DECL, PROPOSE_REPLACEMENT_DECL, SEARCH_WEB_DECL] }];
+const DESCRIBE_VIDEO_SEGMENT_DECL = {
+  name: 'describe_video_segment',
+  description:
+    "Look at a short slice of this project's source film footage and get back a text description of what's visibly happening — actions, objects, on-screen text, gestures, expressions. Use this only when you need to know what's shown on screen and the subtitle text or existing item data doesn't already tell you; don't call it reflexively for every question.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      startMs: { type: Type.NUMBER, description: 'Clip start time in milliseconds.' },
+      endMs: {
+        type: Type.NUMBER,
+        description: `Clip end time in milliseconds. Must be after startMs and at most ${MAX_CLIP_MS}ms after it — request a shorter range and call again if you need to look at more.`,
+      },
+      focus: { type: Type.STRING, description: 'Optional: what to pay particular attention to, e.g. "what food is on the table".' },
+    },
+    required: ['startMs', 'endMs'],
+  },
+};
+
+const CHAT_TOOLS = [
+  { functionDeclarations: [UPDATE_RUBRIC_SCORE_DECL, PROPOSE_REPLACEMENT_DECL, SEARCH_WEB_DECL, DESCRIBE_VIDEO_SEGMENT_DECL] },
+];
 
 const SYSTEM_INSTRUCTION = `You are the Research Agent's interactive assistant in a film localization
 triage tool. You're chatting with a human localizer about one project. When a
 specific item (script line + scene) is open, you can use your tools to
-update that item's rubric scores live, propose a concrete replacement, or
-search the web via Parallel for evidence you're missing. Keep replies
-concise and conversational. Never call a tool to change an item's
-accepted/rejected/pending/need-research status — that decision is always the
-human's, made by clicking in the table, not something you do.`;
+update that item's rubric scores live, propose a concrete replacement,
+search the web via Parallel for evidence you're missing, or look at a short
+slice of the actual video footage when you need to know what's visibly
+happening on screen. Keep replies concise and conversational. Never call a
+tool to change an item's accepted/rejected/pending/need-research status —
+that decision is always the human's, made by clicking in the table, not
+something you do.`;
 
 // ---- Tool execution ---------------------------------------------------
 
@@ -139,6 +169,8 @@ interface ExecuteToolDeps {
   fetchImpl: typeof fetch;
   parallelApiKey?: string;
   signal?: AbortSignal;
+  filmStore: FilmStore;
+  videoSegmentDescriber: VideoSegmentDescriber;
 }
 
 interface ExecuteToolResult {
@@ -154,7 +186,7 @@ const NO_ITEM_OPEN_ERROR = {
  * exercises the same mutation path a real tool call would. */
 export async function executeTool(
   call: { name: string; args: Record<string, unknown> },
-  ctx: { projectId: string; itemId?: string },
+  ctx: { projectId: string; itemId?: string; filmId?: string },
   deps: ExecuteToolDeps,
 ): Promise<ExecuteToolResult> {
   if (call.name === 'update_rubric_score') {
@@ -248,6 +280,26 @@ export async function executeTool(
     }
   }
 
+  if (call.name === 'describe_video_segment') {
+    const args = call.args as { startMs: number; endMs: number; focus?: string };
+    if (typeof args.startMs !== 'number' || typeof args.endMs !== 'number' || !(args.endMs > args.startMs)) {
+      return { response: { error: 'startMs/endMs must be numbers with endMs > startMs' } };
+    }
+    if (args.endMs - args.startMs > MAX_CLIP_MS) {
+      return { response: { error: `clip too long — max ${MAX_CLIP_MS}ms per call, request a shorter range` } };
+    }
+    if (!ctx.filmId) return { response: { error: 'no source film is known for this project' } };
+    const film = await deps.filmStore.getFilm(ctx.filmId);
+    if (!film) return { response: { error: 'film not found' } };
+    const description = await deps.videoSegmentDescriber.describeVideoSegment({
+      videoUrl: film.videoUrl,
+      startMs: args.startMs,
+      endMs: args.endMs,
+      focus: args.focus,
+    });
+    return { response: { description } };
+  }
+
   return { response: { error: `unknown tool "${call.name}"` } };
 }
 
@@ -286,7 +338,7 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
   const fetchImpl = deps.fetchImpl ?? fetch;
 
   return {
-    async *runTurn({ session, userText, itemId, signal }) {
+    async *runTurn({ session, userText, itemId, filmId, signal }) {
       const now = () => new Date().toISOString();
       // Persisted history keeps `run` marker turns (role: 'system') so the frontend
       // timeline sees them — but those never go to Gemini as `contents`; the model
@@ -352,12 +404,14 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
             const fc = part.functionCall;
             yield { type: 'tool_call', callId, name: fc.name, args: fc.args };
 
-            const { response, itemPatch } = await executeTool(fc, { projectId: session.projectId, itemId }, {
+            const { response, itemPatch } = await executeTool(fc, { projectId: session.projectId, itemId, filmId }, {
               projectItemStore: deps.projectItemStore,
               projectRubricStore: deps.projectRubricStore,
               fetchImpl,
               parallelApiKey: config.parallelApiKey,
               signal,
+              filmStore: deps.filmStore,
+              videoSegmentDescriber: deps.videoSegmentDescriber,
             });
             yield { type: 'tool_result', callId, name: fc.name, result: response };
             if (itemPatch) yield { type: 'item_patched', itemId: itemPatch.itemId, rubricId: itemPatch.rubricId, patch: itemPatch.patch };

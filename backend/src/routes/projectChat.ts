@@ -116,6 +116,7 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
 
     const useMock = testMode !== false;
     const agent = useMock ? deps.mockResearchChatAgent : deps.researchChatAgent;
+    const project = await deps.projectStore.getProject(req.params.id);
 
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
 
@@ -131,6 +132,7 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
         session,
         userText: text,
         itemId: typeof itemId === 'string' ? itemId : undefined,
+        filmId: project?.sourceFilmId,
         signal: controller.signal,
       })) {
         writeSSE(res, event);

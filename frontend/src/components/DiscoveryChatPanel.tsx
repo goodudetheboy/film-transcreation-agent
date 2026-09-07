@@ -12,6 +12,7 @@ import {
   bulkMergeDiscoveryResults,
   createDiscoveryJob,
   discardDiscoveryResult,
+  listDiscoveryJobs,
   mergeDiscoveryResult,
   streamDiscoveryJob,
 } from '../api/filmsApiClient';
@@ -22,11 +23,13 @@ import type {
   DiscoveryChatStreamEvent,
   DiscoveryChatTurn,
   DiscoveryJob,
+  DiscoveryJobStatus,
 } from '../api/apiClient.types';
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
 import { useResizableColumns } from '../utils/useResizableColumns';
 import { detailRowReference, type ChatReference } from '../utils/chatReferences';
+import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -599,6 +602,7 @@ export function DiscoveryChatPanel({
   const [error, setError] = useState<string | null>(null);
   const [showKickoffForm, setShowKickoffForm] = useState(false);
   const [jobDetails, setJobDetails] = useState<Record<string, DiscoveryJob>>({});
+  const [jobStatuses, setJobStatuses] = useState<Record<string, DiscoveryJobStatus>>({});
   const [deleteTarget, setDeleteTarget] = useState<DiscoveryAgentSession | null>(null);
   const [deleting, setDeleting] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -613,6 +617,12 @@ export function DiscoveryChatPanel({
     let cancelled = false;
     listDiscoveryAgentSessions(filmId, passcode).then((sessions) => {
       if (!cancelled) setDiscoveryChatSessions(sessions);
+    });
+    // The film-wide job status list, joined against each session's own `run`
+    // marker turns below — same "session status alone doesn't mean the batch
+    // Run finished" gap FilmAgentsTab.tsx fixes, applied to this switcher list.
+    listDiscoveryJobs(filmId, passcode).then((jobs) => {
+      if (!cancelled) setJobStatuses(Object.fromEntries(jobs.map((j) => [j.id, j.status])));
     });
     return () => {
       cancelled = true;
@@ -785,6 +795,9 @@ export function DiscoveryChatPanel({
           )}
           {[...discoveryChatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
+            const { jobIds } = collectRunRefs(s.turns);
+            const runStatuses = jobIds.map((id) => jobStatuses[id]).filter((v): v is DiscoveryJobStatus => v !== undefined);
+            const combined = combinedAgentStatus(s.status, runStatuses);
             return (
               <div
                 key={s.id}
@@ -807,9 +820,7 @@ export function DiscoveryChatPanel({
                   <TrashIcon />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className={`status-badge status-badge--${s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}`}>
-                    {s.status === 'streaming' ? 'running' : s.status === 'error' ? 'error' : 'done'}
-                  </span>
+                  <span className={`status-badge status-badge--${combined}`}>{combined}</span>
                   <span className="chat-panel__library-item-name">{s.name ?? `Agent #${s.agentNumber}`}</span>
                 </div>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
