@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
+import type { ColumnDoc, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItem, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
+import { Modal } from './Modal';
 import { ResearchChatPanel } from './ResearchChatPanel';
 import { SparkleIcon } from './icons';
 
@@ -286,6 +287,9 @@ export interface ProjectItemViewProps {
   item: ProjectItem;
   rubrics: Rubric[];
   allItems: ProjectItem[];
+  /** The film's custom columns (beyond the fixed Subtitle/Scene description) —
+   * only used to label "Show full detail"'s modal, this view never edits them. */
+  columns: ColumnDoc[];
   onBack: () => void;
   onNavigate: (itemId: string) => void;
   onSeek?: (ms: number) => void;
@@ -310,6 +314,7 @@ export function ProjectItemView({
   item,
   rubrics,
   allItems,
+  columns,
   onBack,
   onNavigate,
   onSeek,
@@ -321,6 +326,7 @@ export function ProjectItemView({
   const next = index >= 0 && index < allItems.length - 1 ? allItems[index + 1] : undefined;
 
   const [chatOpen, setChatOpen] = useState(false);
+  const [showFullDetail, setShowFullDetail] = useState(false);
 
   // Keep the video scrubbed to whichever item is open, same as DetailsTable's
   // row-click behavior — parity with the rest of the Film workspace.
@@ -399,7 +405,12 @@ export function ProjectItemView({
             <div className="overview-card__top">
               <div className="overview-card__context">
                 <div className="field">
-                  <label>Subtitle</label>
+                  <div className="field__label-row">
+                    <label>Subtitle</label>
+                    <button type="button" className="link-back" onClick={() => setShowFullDetail(true)}>
+                      Show full detail
+                    </button>
+                  </div>
                   <p>{item.subtitleText || <em>Visual only</em>}</p>
                 </div>
                 <div className="field">
@@ -421,33 +432,6 @@ export function ProjectItemView({
             </div>
 
             <div className="overview-card__section">
-              <div className="verdict-toggle">
-                <button
-                  type="button"
-                  className={`verdict-toggle__option${item.shouldTranscreate === false ? ' verdict-toggle__option--active-no-change' : ''}`}
-                  onClick={() => saveShouldTranscreate(false)}
-                >
-                  Fine As-Is
-                </button>
-                <button
-                  type="button"
-                  className={`verdict-toggle__option${item.shouldTranscreate === true ? ' verdict-toggle__option--active-change' : ''}`}
-                  onClick={() => saveShouldTranscreate(true)}
-                >
-                  Needs Change
-                </button>
-              </div>
-              <div className="field">
-                <label>Executive reason</label>
-                <AutosaveTextarea
-                  value={item.summary ?? ''}
-                  placeholder="Why does — or doesn't — this line need a change?"
-                  onSave={saveSummary}
-                />
-              </div>
-            </div>
-
-            <div className="overview-card__section">
               <div className="field">
                 <label>Your verdict</label>
                 <div className="verdict-picker">
@@ -465,21 +449,56 @@ export function ProjectItemView({
               </div>
             </div>
 
+            <div className="overview-card__section">
+              <div className="field">
+                <label>AI verdict</label>
+                <div className="verdict-toggle">
+                  <button
+                    type="button"
+                    className={`verdict-toggle__option${item.shouldTranscreate === false ? ' verdict-toggle__option--active-no-change' : ''}`}
+                    onClick={() => saveShouldTranscreate(false)}
+                  >
+                    Fine As-Is
+                  </button>
+                  <button
+                    type="button"
+                    className={`verdict-toggle__option${item.shouldTranscreate === true ? ' verdict-toggle__option--active-change' : ''}`}
+                    onClick={() => saveShouldTranscreate(true)}
+                  >
+                    Needs Change
+                  </button>
+                </div>
+              </div>
+              <div className="field">
+                <label>Executive reason</label>
+                <AutosaveTextarea
+                  value={item.summary ?? ''}
+                  placeholder="Why does — or doesn't — this line need a change?"
+                  onSave={saveSummary}
+                />
+              </div>
+            </div>
+
             {item.shouldTranscreate && (
-              <div className="replacement-card">
-                <p className="replacement-card__label">Suggested replacement</p>
-                <AutosaveTextarea
-                  value={item.suggestedReplacement?.text ?? ''}
-                  placeholder="Propose replacement text…"
-                  onSave={(v) => saveReplacement({ text: v })}
-                  className="editable-text replacement-card__text"
-                />
-                <AutosaveTextarea
-                  value={item.suggestedReplacement?.justification ?? ''}
-                  placeholder="Why this replacement?"
-                  onSave={(v) => saveReplacement({ justification: v })}
-                  className="editable-text replacement-card__why"
-                />
+              <div className="overview-card__section">
+                <div className="field">
+                  <label>Suggested change</label>
+                  <AutosaveTextarea
+                    value={item.suggestedReplacement?.text ?? ''}
+                    placeholder="Propose replacement text…"
+                    onSave={(v) => saveReplacement({ text: v })}
+                    className="suggested-change-field"
+                    rows={2}
+                  />
+                </div>
+                <div className="field">
+                  <label>Why</label>
+                  <AutosaveTextarea
+                    value={item.suggestedReplacement?.justification ?? ''}
+                    placeholder="Why this replacement?"
+                    onSave={(v) => saveReplacement({ justification: v })}
+                  />
+                </div>
               </div>
             )}
 
@@ -512,6 +531,39 @@ export function ProjectItemView({
           <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} items={allItems} />
         </div>
       </div>
+
+      {showFullDetail && (
+        <Modal title="Full detail" onClose={() => setShowFullDetail(false)}>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="field">
+              <label>Start</label>
+              <p className="detail-row-view__readonly">{formatClock(item.startMs)}</p>
+            </div>
+            <div className="field">
+              <label>End</label>
+              <p className="detail-row-view__readonly">{formatClock(item.endMs)}</p>
+            </div>
+          </div>
+          <div className="field">
+            <label>Subtitle</label>
+            <p className="detail-row-view__readonly">{item.subtitleText || 'Visual only'}</p>
+          </div>
+          <div className="field">
+            <label>Scene / segment description</label>
+            <p className="detail-row-view__readonly">{item.sceneDescription}</p>
+          </div>
+          {columns.length === 0 ? (
+            <p className="results-placeholder">This film has no custom columns.</p>
+          ) : (
+            columns.map((c) => (
+              <div className="field" key={c.id}>
+                <label>{c.name}</label>
+                <p className="detail-row-view__readonly">{item.customValues[c.key] || '—'}</p>
+              </div>
+            ))
+          )}
+        </Modal>
+      )}
     </div>
   );
 }

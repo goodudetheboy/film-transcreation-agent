@@ -514,6 +514,15 @@ textarea {
   color: var(--text-dim);
 }
 
+/* A .field label with a same-row trailing action (e.g. "Show full detail") —
+   the label keeps its normal eyebrow styling via the plain `.field label` rule. */
+.field__label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-snug);
+}
+
 .field textarea,
 .field input[type='text'],
 .field input[type='password'],
@@ -1434,6 +1443,38 @@ textarea {
 
 .editable-text::placeholder {
   color: var(--text-faint);
+}
+
+/* The one field on the Overview card that should visually lead — the actual
+   fix a localizer will paste into the script, so it needs to outrank the
+   surrounding plain-prose fields (including its own "Why" justification
+   right below it) instead of reading as just another line of text. */
+.suggested-change-field {
+  width: 100%;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.5;
+  padding: 10px 12px;
+  resize: vertical;
+  transition: var(--transition-fast);
+  transition-property: border-color, background;
+}
+
+.suggested-change-field:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.suggested-change-field::placeholder {
+  color: var(--text-dim);
+  font-weight: 400;
 }
 
 .autosave-row {
