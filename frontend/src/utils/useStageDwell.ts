@@ -22,6 +22,28 @@ export const STAGE_LABELS: Record<DisplayPrepStage, string> = {
   error: 'Something went wrong.',
 };
 
+/** One reassuring word per stage, for the hint line under the big dynamic
+ * headline in FilmPreparingView.tsx. */
+export const STAGE_HINTS: Record<DisplayPrepStage, string> = {
+  preparing: 'Just a moment while we get set up.',
+  video_uploading: 'Larger files take a little longer — hang tight.',
+  subtitle_uploading: 'Almost there.',
+  discovery_running: 'Our agent is watching the footage for lines worth a closer look.',
+  finalizing: 'Tidying everything up before handing it back to you.',
+  ready: 'Everything is set — jump in whenever you are ready.',
+  error: 'You can head back and try again.',
+};
+
+/** Short label for the stepper in FilmPreparingView.tsx — only the
+ * walkable, non-terminal stages get one ('ready' is the destination, not a
+ * step on the way there). */
+export const STEP_LABELS: Partial<Record<FilmPrepStage, string>> = {
+  video_uploading: 'Video',
+  subtitle_uploading: 'Script',
+  discovery_running: 'Details',
+  finalizing: 'Finalize',
+};
+
 /**
  * Decouples the *displayed* prep stage from the raw SSE-driven one so bursts
  * of fast backend events (the whole pipeline can resolve almost instantly in

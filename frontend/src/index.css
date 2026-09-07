@@ -916,31 +916,6 @@ textarea {
   }
 }
 
-.upload-progress {
-  width: 100%;
-  height: 6px;
-  border: none;
-  border-radius: 3px;
-  overflow: hidden;
-  margin: 0 0 var(--space-snug);
-}
-
-.upload-progress::-webkit-progress-bar {
-  background: var(--border-strong);
-  border-radius: 3px;
-}
-
-.upload-progress::-webkit-progress-value {
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.15s ease;
-}
-
-.upload-progress::-moz-progress-bar {
-  background: var(--accent);
-  border-radius: 3px;
-}
-
 /* ---------- Content cards ----------
    The one shared card pattern for a list of things: a film, a project, a script
    line, a rubric score. Primary sentence reads as content, not a labeled table row.
@@ -2133,34 +2108,258 @@ textarea {
   height: 397.5px;
 }
 
-/* ---- Step-dot indicator (replaces the plain checklist) ---- */
+/* ---- Prep hero — the full "watch it get prepared" screen ----
+   Truly vertically centered (not just horizontally, like the old
+   .app-body-inner--centered) inside .app-body's available height, with a
+   soft glow behind the animation so the screen reads as one deliberate
+   focal moment instead of content pinned to the top of an empty page. */
 
-.prep-steps {
+.prep-hero {
+  flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: var(--space-loose);
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: var(--space-roomy) var(--space-loose);
+  position: relative;
+  min-height: 0;
+  text-align: center;
 }
 
-.prep-steps__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.prep-hero__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 560px;
+  height: 560px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--accent-dim) 0%, transparent 68%);
+  filter: blur(32px);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.prep-hero__glow--error {
+  background: radial-gradient(circle, var(--danger-dim) 0%, transparent 68%);
+}
+
+.prep-hero__glow--ready {
+  background: radial-gradient(circle, var(--success-dim) 0%, transparent 68%);
+}
+
+.prep-hero__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-loose);
+  width: 100%;
+}
+
+.prep-hero__eyebrow {
+  font-size: var(--eyebrow-size);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-tracking);
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.prep-hero__text {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+/* The dynamic, per-stage status line — the screen's one big focal message,
+   keyed by stage in the component so each change fades/rises in fresh
+   rather than the text just snapping to new content mid-read. */
+.prep-hero__headline {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  max-width: 26ch;
+  animation: prepHeadlineIn 380ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes prepHeadlineIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.prep-hero__hint {
+  margin: 0;
+  font-size: var(--text-body-size);
+  color: var(--text-dim);
+  max-width: 44ch;
+}
+
+.prep-hero__back-link {
+  font-size: var(--text-caption-size);
+  color: var(--text-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.prep-hero__back-link:hover {
+  color: var(--text);
+}
+
+/* ---- Stepper — labeled, connected dots (replaces the old bare
+   .prep-steps checklist) ---- */
+
+.prep-stepper {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 360px;
+}
+
+.prep-stepper::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  height: 2px;
   background: var(--border-strong);
+}
+
+.prep-stepper__step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.prep-stepper__dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 2px solid var(--border-strong);
+  box-sizing: border-box;
   transition: var(--transition-base);
-  transition-property: background, transform;
+  transition-property: background, border-color, transform, box-shadow;
 }
 
-.prep-steps__dot--done {
+.prep-stepper__dot--done {
   background: var(--success);
+  border-color: var(--success);
 }
 
-.prep-steps__dot--active {
+.prep-stepper__dot--active {
   background: var(--accent);
-  transform: scale(1.4);
+  border-color: var(--accent);
+  transform: scale(1.25);
+  box-shadow: 0 0 0 4px var(--accent-dim);
 }
 
-.prep-steps__dot--error {
+.prep-stepper__dot--error {
   background: var(--danger);
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px var(--danger-dim);
+}
+
+.prep-stepper__label {
+  font-size: var(--text-caption-size);
+  font-weight: var(--text-caption-weight);
+  color: var(--text-faint);
+  white-space: nowrap;
+  transition: color var(--transition-base);
+}
+
+.prep-stepper__label--done,
+.prep-stepper__label--active {
+  color: var(--text-dim);
+}
+
+/* ---- Progress bar — determinate (real upload %) or indeterminate (a
+   backend stage with no measurable progress) — a custom element instead of
+   native <progress> so both states can share one look. ---- */
+
+.prep-progress {
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.prep-progress__track {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-strong);
+  overflow: hidden;
+  position: relative;
+}
+
+.prep-progress__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.15s ease;
+}
+
+.prep-progress--indeterminate .prep-progress__fill {
+  width: 35%;
+  animation: prepProgressIndeterminate 1.3s ease-in-out infinite;
+}
+
+@keyframes prepProgressIndeterminate {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.prep-progress__pct {
+  font-size: var(--text-caption-size);
+  color: var(--text-faint);
+}
+
+@media (max-width: 640px) {
+  .prep-hero {
+    padding: var(--space-loose) var(--space-default);
+    gap: var(--space-default);
+  }
+  .prep-hero__glow {
+    width: 380px;
+    height: 380px;
+  }
+  .prep-hero__headline {
+    font-size: 24px;
+  }
+  .prep-scene__lottie {
+    width: 300px;
+    height: 265px;
+  }
 }
 
 .prep-stage-label {

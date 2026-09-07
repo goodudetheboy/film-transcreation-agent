@@ -4,22 +4,13 @@ import { createFilm, getFilm, streamFilmPrep, uploadSubtitleFile, uploadVideoFil
 import { useFilmPrepStore } from '../store/filmPrepStore';
 import { PrepAnimation } from '../components/PrepAnimation';
 import { ImportFilmForm } from './ImportFilmForm';
-import { useStageDwell, STAGE_LABELS, MIN_STAGE_DWELL_MS } from '../utils/useStageDwell';
+import { useStageDwell, STAGE_LABELS, STAGE_HINTS, STEP_LABELS, MIN_STAGE_DWELL_MS } from '../utils/useStageDwell';
 import { withMinDuration } from '../utils/withMinDuration';
 import type { Film, FilmPrepStage } from '../api/apiClient.types';
 
 export interface FilmPreparingViewProps {
   passcode: string;
   testMode: boolean;
-}
-
-function PrepHeader() {
-  return (
-    <div className="page-header__heading">
-      <h1 className="page-header__title">Your film is being prepared</h1>
-      <p className="page-header__subtitle">Hang tight — we're uploading and processing everything.</p>
-    </div>
-  );
 }
 
 /**
@@ -128,14 +119,31 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
 
   if (!filmId) {
     if (uploadStage) {
+      const hasRealProgress = uploadStage === 'video_uploading' && uploadProgress !== null;
+      const pct = hasRealProgress ? Math.round((uploadProgress as number) * 100) : null;
       return (
-        <div className="app-body-inner app-body-inner--centered">
-          <PrepHeader />
-          <PrepAnimation stage={uploadStage} />
-          <p className="prep-stage-label">{phaseLabel}</p>
-          {uploadStage === 'video_uploading' && uploadProgress !== null && (
-            <progress className="upload-progress" value={uploadProgress} max={1} aria-label="Video upload progress" />
-          )}
+        <div className="prep-hero">
+          <div className="prep-hero__glow" aria-hidden="true" />
+          <div className="prep-hero__content">
+            <span className="prep-hero__eyebrow">Preparing your film</span>
+            <PrepAnimation stage={uploadStage} />
+            <div className="prep-hero__text">
+              <h1 className="prep-hero__headline" key={phaseLabel}>
+                {phaseLabel}
+              </h1>
+              <p className="prep-hero__hint">{STAGE_HINTS[uploadStage]}</p>
+            </div>
+            <div className={`prep-progress${hasRealProgress ? '' : ' prep-progress--indeterminate'}`}>
+              <div className="prep-progress__track">
+                <div className="prep-progress__fill" style={hasRealProgress ? { width: `${pct}%` } : undefined} />
+              </div>
+              {hasRealProgress && (
+                <span className="prep-progress__pct" aria-label="Video upload progress">
+                  {pct}%
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       );
     }
@@ -165,53 +173,59 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
   const currentIndex = prep ? stageOrder.indexOf(displayStage as FilmPrepStage) : -1;
   const isReady = displayStage === 'ready';
   const isError = displayStage === 'error';
+  const stepStages = stageOrder.filter((s) => s !== 'ready');
 
   return (
-    <div className="app-body-inner app-body-inner--centered">
-      <PrepHeader />
+    <div className="prep-hero">
+      <div
+        className={`prep-hero__glow${isError ? ' prep-hero__glow--error' : isReady ? ' prep-hero__glow--ready' : ''}`}
+        aria-hidden="true"
+      />
+      <div className="prep-hero__content">
+        <span className="prep-hero__eyebrow">Preparing your film</span>
 
-      <PrepAnimation stage={displayStage} />
+        <PrepAnimation stage={displayStage} />
 
-      <p className="prep-stage-label">{isError ? prep?.errorMessage ?? STAGE_LABELS.error : STAGE_LABELS[displayStage]}</p>
-
-      {prep && (
-        <>
-          <div className="prep-steps">
-            {stageOrder.map((stage, i) => (
-              <span
-                key={stage}
-                className={`prep-steps__dot${
-                  isError && i === currentIndex
-                    ? ' prep-steps__dot--error'
-                    : i < currentIndex || isReady
-                      ? ' prep-steps__dot--done'
-                      : i === currentIndex
-                        ? ' prep-steps__dot--active'
-                        : ''
-                }`}
-              />
-            ))}
-          </div>
-
-          {prep.log.length > 0 && (
-            <details className="output-details">
-              <summary className="section-heading">Activity log</summary>
-              <ul className="content-list">
-                {prep.log.map((entry, i) => (
-                  <li key={i} className="content-card">
-                    <p className="content-card__caption">{new Date(entry.ts).toLocaleTimeString()}</p>
-                    <p className="content-card__secondary">{entry.message}</p>
-                  </li>
-                ))}
-              </ul>
-            </details>
+        <div className="prep-hero__text">
+          <h1 className="prep-hero__headline" key={displayStage}>
+            {isError ? (prep?.errorMessage ?? STAGE_LABELS.error) : STAGE_LABELS[displayStage]}
+          </h1>
+          <p className="prep-hero__hint">{isError ? STAGE_HINTS.error : STAGE_HINTS[displayStage]}</p>
+          {isError && (
+            <button type="button" className="prep-hero__back-link" onClick={() => navigate('/')}>
+              ← Back to Films
+            </button>
           )}
-        </>
-      )}
+        </div>
 
-      <button type="button" className="btn btn--primary" disabled={!isReady} onClick={() => navigate(`/films/${filmId}`)}>
-        Start Creating
-      </button>
+        {prep && !isReady && !isError && (
+          <>
+            <div className="prep-stepper">
+              {stepStages.map((stage, i) => {
+                const modifier = i < currentIndex ? 'done' : i === currentIndex ? 'active' : '';
+                return (
+                  <div key={stage} className="prep-stepper__step">
+                    <span className={`prep-stepper__dot${modifier ? ` prep-stepper__dot--${modifier}` : ''}`} />
+                    <span className={`prep-stepper__label${modifier ? ` prep-stepper__label--${modifier}` : ''}`}>
+                      {STEP_LABELS[stage]}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="prep-progress prep-progress--indeterminate">
+              <div className="prep-progress__track">
+                <div className="prep-progress__fill" />
+              </div>
+            </div>
+          </>
+        )}
+
+        <button type="button" className="btn btn--primary" disabled={!isReady} onClick={() => navigate(`/films/${filmId}`)}>
+          Start Creating
+        </button>
+      </div>
     </div>
   );
 }
