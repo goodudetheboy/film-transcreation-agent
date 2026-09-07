@@ -70,7 +70,6 @@ function toolStepLabel(name: string, args: Record<string, unknown>): ReactNode {
 interface SearchResultCard {
   url?: string;
   title?: string;
-  excerpts?: string[];
 }
 
 function ToolCallCard({ name, args, result }: { name: string; args: Record<string, unknown>; result?: Record<string, unknown> }) {
@@ -99,7 +98,6 @@ function ToolCallCard({ name, args, result }: { name: string; args: Record<strin
           {(result.results as SearchResultCard[]).map((r, i) => (
             <a key={i} href={r.url} target="_blank" rel="noreferrer" className="chat-search-result">
               <p className="chat-search-result__title">{r.title ?? r.url}</p>
-              {r.excerpts?.[0] && <p className="chat-search-result__excerpt">{r.excerpts[0]}</p>}
             </a>
           ))}
         </div>

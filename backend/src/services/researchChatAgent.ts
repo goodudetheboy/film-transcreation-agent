@@ -165,7 +165,15 @@ slice of the actual video footage when you need to know what's visibly
 happening on screen. Keep replies concise and conversational. Never call a
 tool to change an item's accepted/rejected/pending/need-research status —
 that decision is always the human's, made by clicking in the table, not
-something you do.`;
+something you do.
+
+When you use search_web, your reply text after that call must actually cite
+what you found: reference the specific source(s) that back your claim and
+link them as real markdown links, e.g. "the term reads as vulgar slang there
+([Wikipedia](https://en.wikipedia.org/wiki/...))" — use the exact url from
+that result, not a made-up or paraphrased one. Never summarize a search
+result's findings without linking back to where you got them; a human
+reading your reply should be able to click straight through to verify it.`;
 
 // ---- Tool execution ---------------------------------------------------
 

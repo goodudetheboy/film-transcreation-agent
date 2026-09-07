@@ -3998,12 +3998,6 @@ textarea {
   color: var(--accent);
 }
 
-.chat-search-result__excerpt {
-  margin: 2px 0 0;
-  font-size: var(--text-caption-size);
-  color: var(--text-dim);
-}
-
 .chat-panel__quick-prompts {
   display: flex;
   flex-wrap: wrap;
