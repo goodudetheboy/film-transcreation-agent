@@ -3,7 +3,8 @@ import { BUILTIN_COLUMN_LABELS, type ColumnDoc, type DetailRow, type Film } from
 import { addColumn, addDetailRow, deleteDetailRow } from '../api/filmsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { provenanceLabel, provenanceModifier } from '../utils/detailRowProvenance';
-import { CHAT_REFERENCE_MIME, detailRowReference, setChipDragImage } from '../utils/chatReferences';
+import { detailRowReference } from '../utils/chatReferences';
+import { beginChipDrag } from '../utils/chipDragDrop';
 import { useResizableColumns } from '../utils/useResizableColumns';
 import { InfoIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -230,13 +231,7 @@ export function DetailsTable({
                   key={row.id}
                   data-row-id={row.id}
                   className={isActive ? 'details-table__row--active' : undefined}
-                  draggable
-                  onDragStart={(e) => {
-                    const ref = detailRowReference(row);
-                    e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
-                    e.dataTransfer.effectAllowed = 'copy';
-                    setChipDragImage(e.dataTransfer, ref);
-                  }}
+                  onPointerDown={(e) => beginChipDrag(detailRowReference(row), e)}
                   onClick={() => {
                     setOpenRowId(row.id);
                     onSeek(row.startMs);
@@ -258,7 +253,11 @@ export function DetailsTable({
                   <td className="details-table__cell--nowrap-exempt">
                     <span className={`status-badge status-badge--${provenanceModifier(row)}`}>{provenanceLabel(row)}</span>
                   </td>
-                  <td className="details-table__cell--nowrap-exempt" onClick={(e) => e.stopPropagation()}>
+                  <td
+                    className="details-table__cell--nowrap-exempt"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
                     <button
                       type="button"
                       className="btn btn--ghost"

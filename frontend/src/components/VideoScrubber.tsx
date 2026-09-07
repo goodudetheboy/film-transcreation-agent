@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { DetailRow, SubtitleEntry } from '../api/apiClient.types';
 import { formatClock } from '../utils/timeFormat';
-import { CHAT_REFERENCE_MIME, detailRowLabel, detailRowReference, setChipDragImage, type ChatReference } from '../utils/chatReferences';
+import { detailRowLabel, detailRowReference, type ChatReference } from '../utils/chatReferences';
+import { beginChipDrag } from '../utils/chipDragDrop';
 
 /** Mirrors ProjectItemAction (apiClient.types.ts) without importing the Project
  * domain into this general-purpose video component. 'need-research' (or no entry
@@ -285,13 +286,9 @@ export function VideoScrubber({
                     className={`scrubber__block scrubber__block--detail scrubber__block--draggable${statusClass}${isActive ? ' scrubber__block--active' : ''}`}
                     style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
                     title={label}
-                    draggable
-                    onDragStart={(e) => {
+                    onPointerDown={(e) => {
                       e.stopPropagation();
-                      const ref = detailRowReference(row);
-                      e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
-                      e.dataTransfer.effectAllowed = 'copy';
-                      setChipDragImage(e.dataTransfer, ref);
+                      beginChipDrag(detailRowReference(row), e);
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -312,14 +309,10 @@ export function VideoScrubber({
                 width: `${Math.max(0, Math.min(100, ((selection.endMs - selection.startMs) / durationMs) * 100))}%`,
               }}
               title={`Video ${formatClock(selection.startMs)}–${formatClock(selection.endMs)} — drag into chat to reference it`}
-              draggable
-              onPointerDown={(e) => e.stopPropagation()}
-              onDragStart={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
                 const ref: ChatReference = { type: 'video', startMs: selection.startMs, endMs: selection.endMs };
-                e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
-                e.dataTransfer.effectAllowed = 'copy';
-                setChipDragImage(e.dataTransfer, ref);
+                beginChipDrag(ref, e);
               }}
             >
               <button

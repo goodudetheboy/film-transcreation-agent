@@ -1,15 +1,6 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  type ClipboardEvent,
-  type DragEvent,
-  type KeyboardEvent,
-} from 'react';
-import { CHAT_REFERENCE_MIME, chipDisplayText, formatReferenceToken, type ChatReference } from '../utils/chatReferences';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { chipDisplayText, formatReferenceToken, type ChatReference } from '../utils/chatReferences';
+import { registerChipDropZone } from '../utils/chipDragDrop';
 import { formatClock } from '../utils/timeFormat';
 
 export interface MentionComposeInputProps {
@@ -115,7 +106,6 @@ export const MentionComposeInput = forwardRef<MentionComposeInputHandle, Mention
 ) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [dropdown, setDropdown] = useState<{ left: number; query: string } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -157,6 +147,30 @@ export const MentionComposeInput = forwardRef<MentionComposeInputHandle, Mention
     const caretRect = found.range.getBoundingClientRect();
     setDropdown({ left: Math.max(0, caretRect.left - wrapperRect.left), query: found.query });
   }
+
+  // Registers this compose box as a drop target for the custom pointer-based
+  // drag (see chipDragDrop.ts) — native HTML5 DnD isn't used for this
+  // feature at all, so there's no dataTransfer/MIME plumbing here.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    return registerChipDropZone(wrapper, (ref, clientX, clientY) => {
+      const root = rootRef.current;
+      if (!root) return;
+      const dropRange = document.caretRangeFromPoint?.(clientX, clientY);
+      const range =
+        dropRange && root.contains(dropRange.startContainer)
+          ? dropRange
+          : (() => {
+              const r = document.createRange();
+              r.selectNodeContents(root);
+              r.collapse(false);
+              return r;
+            })();
+      insertChip(ref, range);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function insertChip(ref: ChatReference, range: Range) {
     range.deleteContents();
@@ -263,45 +277,8 @@ export const MentionComposeInput = forwardRef<MentionComposeInputHandle, Mention
     document.execCommand('insertText', false, text);
   }
 
-  function handleDragOver(e: DragEvent<HTMLDivElement>) {
-    if (!e.dataTransfer.types.includes(CHAT_REFERENCE_MIME)) return;
-    e.preventDefault();
-    setDragOver(true);
-  }
-
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
-    const raw = e.dataTransfer.getData(CHAT_REFERENCE_MIME);
-    setDragOver(false);
-    if (!raw) return;
-    e.preventDefault();
-    let ref: ChatReference;
-    try {
-      ref = JSON.parse(raw);
-    } catch {
-      return;
-    }
-    const root = rootRef.current;
-    if (!root) return;
-    const dropRange = document.caretRangeFromPoint?.(e.clientX, e.clientY);
-    let range: Range;
-    if (dropRange && root.contains(dropRange.startContainer)) {
-      range = dropRange;
-    } else {
-      range = document.createRange();
-      range.selectNodeContents(root);
-      range.collapse(false);
-    }
-    insertChip(ref, range);
-  }
-
   return (
-    <div
-      ref={wrapperRef}
-      className={`mention-compose${dragOver ? ' mention-compose--drag-over' : ''}`}
-      onDragOver={handleDragOver}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-    >
+    <div ref={wrapperRef} className="mention-compose">
       <div
         ref={rootRef}
         className="mention-compose__input"

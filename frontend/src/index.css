@@ -3507,15 +3507,19 @@ textarea {
   user-select: none;
 }
 
-/* The native drag-ghost image (see setChipDragImage in chatReferences.ts) —
-   solid accent fill instead of the softer -dim pill, since the browser
-   applies its own semi-transparency to any drag image and this needs the
-   contrast headroom to still read clearly once dimmed. */
-.mention-chip--drag-ghost {
-  background: var(--accent);
-  color: var(--accent-on);
-  border-color: var(--accent);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+/* The custom drag preview (see chipDragDrop.ts) — a real, fully-opaque DOM
+   element that follows the cursor, unlike a native HTML5 drag-ghost image
+   (a frozen bitmap the browser always renders with some baked-in
+   transparency, with no override available). Its own JS-driven
+   transform/opacity handles the pop-in and cursor-follow, so this only
+   needs positioning/stacking/visual weight. */
+.mention-chip--floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .mention-compose {

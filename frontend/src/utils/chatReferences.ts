@@ -15,12 +15,6 @@ export type ChatReference =
 
 export type MessageSegment = { type: 'text'; value: string } | { type: 'chip'; ref: ChatReference };
 
-/** Custom drag-and-drop MIME type shared by every drag source (DetailsTable
- * rows, VideoScrubber's Details-track blocks and selection overlay, the
- * Project item table) and both compose boxes — no cross-component
- * coordination needed beyond agreeing on this one string. */
-export const CHAT_REFERENCE_MIME = 'application/x-chat-reference';
-
 const MAX_LABEL_LENGTH = 40;
 
 export function truncateLabel(label: string): string {
@@ -70,32 +64,6 @@ export function chipDisplayText(ref: ChatReference): string {
  * what's sent and what's redisplayed can never drift apart. */
 export function formatReferenceToken(ref: ChatReference): string {
   return `[${chipDisplayText(ref)}]`;
-}
-
-/** Swaps the browser's native drag-ghost image — which otherwise shows a
- * snapshot of the whole dragged row/element — for a compact preview
- * matching the mention-chip's own look. This is the closest a web app can
- * get to "dragging a chip": the native drag image is a static bitmap
- * snapshot taken once at dragstart, not a live DOM node a CSS transition
- * could animate afterward. Call from every drag source's onDragStart,
- * alongside dataTransfer.setData. */
-export function setChipDragImage(dataTransfer: DataTransfer, ref: ChatReference): void {
-  const ghost = document.createElement('div');
-  // A bolder, higher-contrast variant of the normal chip look — browsers
-  // apply their own semi-transparency to any native drag-ghost image (a
-  // fixed OS-level compositing behavior, not something CSS/setDragImage can
-  // override), so the ghost needs extra contrast to still read clearly once
-  // the browser dims it.
-  ghost.className = 'mention-chip mention-chip--drag-ghost';
-  ghost.textContent = chipDisplayText(ref);
-  ghost.style.position = 'fixed';
-  ghost.style.top = '-1000px';
-  ghost.style.left = '-1000px';
-  document.body.appendChild(ghost);
-  dataTransfer.setDragImage(ghost, 12, 12);
-  // The browser snapshots the ghost synchronously while handling dragstart —
-  // safe to remove it right after, once that snapshot has been taken.
-  setTimeout(() => ghost.remove(), 0);
 }
 
 const CLOCK_PATTERN = '\\d{1,2}(?::\\d{2}){1,2}';

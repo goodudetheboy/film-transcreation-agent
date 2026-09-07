@@ -14,7 +14,8 @@ import { listDetails } from '../api/filmsApiClient';
 import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
 import { formatClock } from '../utils/timeFormat';
-import { CHAT_REFERENCE_MIME, projectItemReference, setChipDragImage } from '../utils/chatReferences';
+import { projectItemReference } from '../utils/chatReferences';
+import { beginChipDrag } from '../utils/chipDragDrop';
 import type { VideoSelection } from './VideoScrubber';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
@@ -293,13 +294,7 @@ export function ProjectPanel({
                             key={item.id}
                             data-item-id={item.id}
                             className={`details-table__row--clickable details-table__row--${item.action}`}
-                            draggable
-                            onDragStart={(e) => {
-                              const ref = projectItemReference(item);
-                              e.dataTransfer.setData(CHAT_REFERENCE_MIME, JSON.stringify(ref));
-                              e.dataTransfer.effectAllowed = 'copy';
-                              setChipDragImage(e.dataTransfer, ref);
-                            }}
+                            onPointerDown={(e) => beginChipDrag(projectItemReference(item), e)}
                             onClick={() => setOpenItemId(item.id)}
                           >
                             <td className="details-table__cell--nowrap-exempt">{formatClock(item.startMs)}</td>
@@ -315,7 +310,7 @@ export function ProjectPanel({
                                 <span className="results-placeholder">not researched</span>
                               )}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()}>
+                            <td onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                               <select
                                 className="action-picker"
                                 value={item.action}
