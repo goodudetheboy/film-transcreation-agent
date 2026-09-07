@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { DetailRow, SubtitleEntry } from '../api/apiClient.types';
 import { formatClock } from '../utils/timeFormat';
 import { detailRowLabel, detailRowReference, type ChatReference } from '../utils/chatReferences';
@@ -35,6 +35,10 @@ export interface VideoScrubberProps {
    * today's seek-only behavior. */
   selection?: VideoSelection | null;
   onSelectionChange?: (selection: VideoSelection | null) => void;
+  /** Label for the Details track — swapped by the parent to something like
+   * "[flag] Details" while a project is selected, since `detailRows` is then
+   * scoped to that project's own items rather than every film-level row. */
+  detailsLabel?: ReactNode;
 }
 
 const MIN_ZOOM = 1;
@@ -80,6 +84,7 @@ export function VideoScrubber({
   rowStatus,
   selection,
   onSelectionChange,
+  detailsLabel = 'Details',
 }: VideoScrubberProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -221,7 +226,7 @@ export function VideoScrubber({
       <div className="scrubber-labels">
         <div className="scrubber-labels__ruler-spacer" />
         <div className="scrubber-labels__row">Subtitles</div>
-        <div className="scrubber-labels__row">Details</div>
+        <div className="scrubber-labels__row">{detailsLabel}</div>
       </div>
       <div className="scrubber-viewport" ref={viewportRef}>
         <div

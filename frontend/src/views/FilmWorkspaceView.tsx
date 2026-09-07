@@ -617,13 +617,22 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       <div className="workspace__scrubber-area" style={{ height: scrubberHeight }}>
         <VideoScrubber
           entries={film.subtitle?.entries ?? []}
-          detailRows={rows}
+          detailRows={selectedProject ? rows.filter((r) => r.id in itemStatusByRow) : rows}
           durationMs={durationMs}
           currentTimeMs={currentTimeMs}
           onSeek={handleSeek}
           rowStatus={itemStatusByRow}
           selection={videoSelection}
           onSelectionChange={setVideoSelection}
+          detailsLabel={
+            selectedProject ? (
+              <>
+                <Flag code={countryCode(selectedProject.country)} className="list-row__flag" /> Details
+              </>
+            ) : (
+              'Details'
+            )
+          }
         />
       </div>
 

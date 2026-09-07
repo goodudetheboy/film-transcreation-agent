@@ -13,6 +13,7 @@ import {
 import { listDetails } from '../api/filmsApiClient';
 import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
+import { actionColor } from '../utils/actionColor';
 import { formatClock } from '../utils/timeFormat';
 import { projectItemReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
@@ -320,11 +321,12 @@ export function ProjectPanel({
                             <td onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                               <select
                                 className="action-picker"
+                                style={{ color: actionColor(item.action), fontWeight: 600 }}
                                 value={item.action}
                                 onChange={(e) => handleActionChange(item.id, e.target.value as ProjectItemAction)}
                               >
                                 {ACTIONS.map((a) => (
-                                  <option key={a} value={a}>
+                                  <option key={a} value={a} style={{ color: actionColor(a) }}>
                                     {a}
                                   </option>
                                 ))}

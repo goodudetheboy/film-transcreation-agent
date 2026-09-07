@@ -8,6 +8,7 @@ import { ResearchChatPanel } from './ResearchChatPanel';
 import { SparkleIcon } from './icons';
 import { CHAT_PANEL_OPEN_STORAGE_KEY, CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
 import { usePersistedBoolean } from '../utils/usePersistedBoolean';
+import { actionColor } from '../utils/actionColor';
 
 const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-research'];
 
@@ -25,15 +26,6 @@ function describeAge(publishedDate: string): string {
 
 function scoreTier(score: number): 'low' | 'mid' | 'high' {
   return score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low';
-}
-
-/** Matches the same semantic colors used elsewhere for these action values
- * (see .status-badge--accepted/rejected/need-research, .details-table__row--pending). */
-function actionColor(action: ProjectItemAction): string {
-  if (action === 'accepted') return 'var(--success)';
-  if (action === 'rejected') return 'var(--danger)';
-  if (action === 'need-research') return 'var(--accent)';
-  return 'var(--warning)';
 }
 
 function assessmentColor(shouldTranscreate: boolean | null): string {

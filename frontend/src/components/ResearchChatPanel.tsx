@@ -515,6 +515,7 @@ function KickoffForm({
   const [error, setError] = useState<string | null>(null);
 
   const needResearchCount = items.filter((i) => i.action === 'need-research').length;
+  const allSelected = items.length > 0 && items.every((i) => selected.has(i.id));
 
   function toggle(itemId: string) {
     setSelected((prev) => {
@@ -523,6 +524,10 @@ function KickoffForm({
       else next.add(itemId);
       return next;
     });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? new Set() : new Set(items.map((i) => i.id)));
   }
 
   function handleSubmit(e: FormEvent) {
@@ -580,16 +585,36 @@ function KickoffForm({
       </div>
 
       {mode === 'custom' && (
-        <div className="details-table-wrap details-table-wrap--standalone" style={{ maxHeight: 200 }}>
+        <div className="details-table-wrap details-table-wrap--standalone">
           <div className="details-table-scroll">
             <table className="details-table">
+              <thead>
+                <tr>
+                  <th className="details-table__checkbox-col">
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} disabled={submitting} aria-label={allSelected ? 'Deselect all items' : 'Select all items'} />
+                  </th>
+                  <th>Time</th>
+                  <th>Subtitle</th>
+                  <th>Scene / segment description</th>
+                </tr>
+              </thead>
               <tbody>
                 {items.map((item) => (
                   <tr key={item.id}>
-                    <td>
-                      <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggle(item.id)} disabled={submitting} />
+                    <td className="details-table__checkbox-col">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(item.id)}
+                        onChange={() => toggle(item.id)}
+                        disabled={submitting}
+                        aria-label={`Select item at ${formatClock(item.startMs)}`}
+                      />
+                    </td>
+                    <td className="details-table__cell--nowrap-exempt">
+                      {formatClock(item.startMs)}–{formatClock(item.endMs)}
                     </td>
                     <td>{item.subtitleText || <em>Visual only</em>}</td>
+                    <td>{item.sceneDescription}</td>
                   </tr>
                 ))}
               </tbody>

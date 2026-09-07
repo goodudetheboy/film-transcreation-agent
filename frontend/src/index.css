@@ -1991,6 +1991,15 @@ textarea {
   height: 30px;
 }
 
+/* Fixed narrow width for a leading checkbox column — table-layout:fixed
+   otherwise splits width evenly across every column, which collapses a
+   text column like Subtitle to almost nothing when the table only has a
+   couple of other columns (DetailRowPicker, the research-kickoff custom
+   selection table). */
+.details-table__checkbox-col {
+  width: 32px;
+}
+
 .details-table__cell--nowrap-exempt {
   white-space: nowrap;
   overflow: visible;
@@ -2852,12 +2861,6 @@ textarea {
   box-shadow: var(--shadow-card);
 }
 
-/* ---- Kickoff modal sizing ---- */
-
-.kickoff-modal {
-  width: 440px;
-}
-
 .add-column-modal {
   width: 440px;
 }
@@ -3054,30 +3057,64 @@ textarea {
 .rubric-editor {
   display: flex;
   flex-direction: column;
-  gap: var(--space-tight);
+  gap: var(--space-default);
   max-width: 720px;
 }
 
-.rubric-editor__row {
-  display: grid;
-  grid-template-columns: 160px 1fr 110px auto;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.rubric-editor__row input,
-.rubric-editor__row select {
+/* .rubric-card is a .finding-card — same index circle / weight badge
+   language as the read-only rubric *score* cards in ProjectItemView, since
+   these are the same entity at authoring time vs. review time. */
+.rubric-card__name {
+  flex: 1;
+  min-width: 0;
   background: var(--bg);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   color: var(--text);
   padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: var(--transition-fast);
+  transition-property: border-color;
+}
+
+.rubric-card__name:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.rubric-card__weight {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+.rubric-card__description {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  padding: 10px 12px;
   font-size: var(--text-caption-size);
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  transition: var(--transition-fast);
+  transition-property: border-color;
+}
+
+.rubric-card__description:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 @media (max-width: 640px) {
-  .rubric-editor__row {
-    grid-template-columns: 1fr;
+  .rubric-card .finding-card__top {
+    flex-wrap: wrap;
+  }
+
+  .rubric-card__name {
+    flex: 1 1 100%;
+    order: 3;
   }
 }
 
@@ -3453,7 +3490,8 @@ textarea {
 }
 
 .kickoff-modal {
-  width: 480px;
+  width: 640px;
+  max-width: 95vw;
   max-height: 85vh;
   overflow-y: auto;
 }

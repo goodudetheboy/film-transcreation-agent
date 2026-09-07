@@ -40,7 +40,7 @@ export function DetailRowPicker({ rows, selected, onToggle, alreadyImportedIds, 
         <table className="details-table">
           <thead>
             <tr>
-              <th>
+              <th className="details-table__checkbox-col">
                 {onToggleAll && (
                   <input
                     type="checkbox"
@@ -67,7 +67,7 @@ export function DetailRowPicker({ rows, selected, onToggle, alreadyImportedIds, 
               const imported = alreadyImportedIds?.has(row.id) ?? false;
               return (
                 <tr key={row.id} className={imported ? 'details-table__row--imported' : undefined}>
-                  <td>
+                  <td className="details-table__checkbox-col">
                     <input
                       type="checkbox"
                       checked={imported || selected.has(row.id)}
