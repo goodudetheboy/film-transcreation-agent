@@ -47,6 +47,12 @@ export function useResizableChatPanel(storageKey: string, defaultWidth = 420, mi
     dragStartRef.current = { startX: e.clientX, startWidth: width };
     latestWidthRef.current = width;
     setIsDragging(true);
+    // The panel's CSS has `transition: flex-basis 0.25s ease` for the smooth
+    // open/close animation — left on during a drag, every mousemove's new
+    // value gets eased instead of applied instantly, so the panel visibly
+    // lags behind the cursor by about that transition's duration. Suppress
+    // it for the drag, restored on pointer-up below.
+    if (panelRef.current) panelRef.current.style.transition = 'none';
   }
 
   function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
@@ -70,6 +76,7 @@ export function useResizableChatPanel(storageKey: string, defaultWidth = 420, mi
     e.currentTarget.releasePointerCapture(e.pointerId);
     setIsDragging(false);
     dragStartRef.current = null;
+    if (panelRef.current) panelRef.current.style.removeProperty('transition');
     setWidth(latestWidthRef.current);
     try {
       window.localStorage.setItem(storageKey, String(latestWidthRef.current));
