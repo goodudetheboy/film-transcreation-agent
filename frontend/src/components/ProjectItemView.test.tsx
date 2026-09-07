@@ -56,6 +56,7 @@ describe('ProjectItemView', () => {
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
+        onActionChange={() => {}}
       />,
     );
 
@@ -88,6 +89,7 @@ describe('ProjectItemView', () => {
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
+        onActionChange={() => {}}
       />,
     );
 
@@ -110,6 +112,7 @@ describe('ProjectItemView', () => {
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={() => {}}
+        onActionChange={() => {}}
       />,
     );
 
@@ -152,6 +155,7 @@ describe('ProjectItemView', () => {
         onBack={() => {}}
         onNavigate={() => {}}
         onScorePatched={onScorePatched}
+        onActionChange={() => {}}
       />,
     );
 

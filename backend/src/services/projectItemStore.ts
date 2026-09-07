@@ -94,7 +94,14 @@ export interface ProjectItemStore {
   /** Bulk import from DetailRows — skips rows already imported (dedupes by detailRowId)
    * so "+ Manually add details" can be called repeatedly without creating duplicates. */
   createItems(projectId: string, inputs: CreateProjectItemInput[]): Promise<ProjectItem[]>;
-  updateItem(projectId: string, itemId: string, patch: Partial<Pick<ProjectItem, 'action'>>): Promise<ProjectItem | undefined>;
+  /** 'action' is the human's own verdict; 'summary'/'shouldTranscreate'/'suggestedReplacement'
+   * are normally AI-written but this is a shared workspace — a human can correct any of
+   * them the same way they can correct a rubric score (see patchScore below). */
+  updateItem(
+    projectId: string,
+    itemId: string,
+    patch: Partial<Pick<ProjectItem, 'action' | 'summary' | 'shouldTranscreate' | 'suggestedReplacement'>>,
+  ): Promise<ProjectItem | undefined>;
   deleteItem(projectId: string, itemId: string): Promise<boolean>;
   patchScore(projectId: string, itemId: string, rubricId: string, patch: PatchScoreInput): Promise<ProjectItem | undefined>;
   /** Applied by the batch research-run path: replaces the full exhaustive score set

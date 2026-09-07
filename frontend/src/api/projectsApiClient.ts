@@ -160,10 +160,19 @@ export async function addItems(
   return (await res.json()) as ProjectItem[];
 }
 
-export async function updateItemAction(
+/** General item patch — this is a shared workspace, so besides the human's own
+ * `action` verdict, the AI-written `summary`/`shouldTranscreate`/`suggestedReplacement`
+ * are equally correctable by a human here (same PATCH route, see backend/routes/projects.ts). */
+export async function updateItem(
   projectId: string,
   itemId: string,
-  payload: { passcode: string; action: ProjectItemAction },
+  payload: {
+    passcode: string;
+    action?: ProjectItemAction;
+    summary?: string | null;
+    shouldTranscreate?: boolean | null;
+    suggestedReplacement?: { text: string; justification: string } | null;
+  },
   options: ApiClientOptions = {},
 ): Promise<ProjectItem> {
   const baseUrl = resolveBaseUrl(options);
@@ -176,6 +185,15 @@ export async function updateItemAction(
   });
   await throwOnError(res);
   return (await res.json()) as ProjectItem;
+}
+
+export async function updateItemAction(
+  projectId: string,
+  itemId: string,
+  payload: { passcode: string; action: ProjectItemAction },
+  options: ApiClientOptions = {},
+): Promise<ProjectItem> {
+  return updateItem(projectId, itemId, payload, options);
 }
 
 export async function deleteItem(
@@ -198,7 +216,7 @@ export async function updateItemScore(
   projectId: string,
   itemId: string,
   rubricId: string,
-  payload: { passcode: string; score?: number; reasoning?: string; evidence?: string; userNote?: string },
+  payload: { passcode: string; score?: number; reasoning?: string; evidence?: string; sources?: string[]; userNote?: string },
   options: ApiClientOptions = {},
 ): Promise<ProjectItem> {
   const baseUrl = resolveBaseUrl(options);

@@ -205,6 +205,7 @@ export function ProjectPanel({
         onNavigate={setOpenItemId}
         onSeek={onSeek}
         onScorePatched={(itemId, patch) => patchItem(itemId, patch as Partial<ProjectItem>)}
+        onActionChange={handleActionChange}
       />
     );
   }

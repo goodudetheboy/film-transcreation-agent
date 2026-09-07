@@ -222,16 +222,37 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
   });
 
   router.patch('/api/projects/:id/items/:itemId', async (req, res) => {
-    const { action } = req.body ?? {};
+    const { action, summary, shouldTranscreate, suggestedReplacement } = req.body ?? {};
     if (action !== undefined && !isValidAction(action)) {
       res.status(400).json({ error: 'action must be one of pending/accepted/rejected/need-research' });
       return;
     }
-    const updated = await deps.projectItemStore.updateItem(
-      req.params.id,
-      req.params.itemId,
-      action !== undefined ? { action } : {},
-    );
+    if (summary !== undefined && summary !== null && typeof summary !== 'string') {
+      res.status(400).json({ error: 'summary must be a string or null' });
+      return;
+    }
+    if (shouldTranscreate !== undefined && shouldTranscreate !== null && typeof shouldTranscreate !== 'boolean') {
+      res.status(400).json({ error: 'shouldTranscreate must be a boolean or null' });
+      return;
+    }
+    if (
+      suggestedReplacement !== undefined &&
+      suggestedReplacement !== null &&
+      (typeof suggestedReplacement !== 'object' ||
+        typeof suggestedReplacement.text !== 'string' ||
+        typeof suggestedReplacement.justification !== 'string')
+    ) {
+      res.status(400).json({ error: 'suggestedReplacement must be null or { text, justification }' });
+      return;
+    }
+
+    const patch: Parameters<typeof deps.projectItemStore.updateItem>[2] = {};
+    if (action !== undefined) patch.action = action;
+    if (summary !== undefined) patch.summary = summary;
+    if (shouldTranscreate !== undefined) patch.shouldTranscreate = shouldTranscreate;
+    if (suggestedReplacement !== undefined) patch.suggestedReplacement = suggestedReplacement;
+
+    const updated = await deps.projectItemStore.updateItem(req.params.id, req.params.itemId, patch);
     if (!updated) {
       res.status(404).json({ error: 'item not found' });
       return;
@@ -257,9 +278,13 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       res.status(404).json({ error: 'item not found' });
       return;
     }
-    const { score, reasoning, evidence, userNote } = req.body ?? {};
+    const { score, reasoning, evidence, sources, userNote } = req.body ?? {};
     if (score !== undefined && typeof score !== 'number') {
       res.status(400).json({ error: 'score must be a number' });
+      return;
+    }
+    if (sources !== undefined && (!Array.isArray(sources) || sources.some((s) => typeof s !== 'string'))) {
+      res.status(400).json({ error: 'sources must be an array of strings' });
       return;
     }
 
@@ -271,7 +296,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
       score: typeof score === 'number' ? score : existing?.score ?? 0,
       reasoning: typeof reasoning === 'string' ? reasoning : existing?.reasoning ?? '',
       evidence: typeof evidence === 'string' ? evidence : existing?.evidence ?? '',
-      sources: existing?.sources ?? [],
+      sources: Array.isArray(sources) ? sources : existing?.sources ?? [],
       userNote: typeof userNote === 'string' ? userNote : existing?.userNote,
       updatedAt: now,
       updatedBy: 'user',
@@ -282,7 +307,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
     const importanceScore = computeImportanceScore(projectedScores, rubrics);
 
     const updated = await deps.projectItemStore.patchScore(req.params.id, req.params.itemId, req.params.rubricId, {
-      score, reasoning, evidence, userNote, updatedBy: 'user', importanceScore,
+      score, reasoning, evidence, sources, userNote, updatedBy: 'user', importanceScore,
     });
     res.status(200).json(updated);
   });
