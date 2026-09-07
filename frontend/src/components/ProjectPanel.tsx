@@ -19,11 +19,14 @@ import { projectItemReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
 import { CHAT_PANEL_OPEN_STORAGE_KEY, CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
 import { usePersistedBoolean } from '../utils/usePersistedBoolean';
+import { useResizableColumns } from '../utils/useResizableColumns';
 import type { VideoSelection } from './VideoScrubber';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
 import { ResearchChatPanel } from './ResearchChatPanel';
 import { ProjectItemView } from './ProjectItemView';
+import { ResizableTh } from './ResizableTh';
+import { ColInfoIcon } from './ColInfoIcon';
 import { SparkleIcon } from './icons';
 import { Flag } from './Flag';
 import { countryCode } from '../data/countries';
@@ -50,6 +53,26 @@ export interface ProjectPanelProps {
 
 const FILTERS: ProjectItemFilter[] = ['all', 'accepted', 'pending', 'rejected', 'need-research'];
 const ACTIONS: ProjectItemAction[] = ['pending', 'accepted', 'rejected', 'need-research'];
+
+// Same "explicit widths + drag-to-resize + horizontal scroll" convention
+// DetailsTable.tsx already uses — this table previously had no <colgroup> at
+// all, so `.details-table`'s `table-layout: fixed` split its width evenly
+// across all 6 columns regardless of what each one actually holds, squeezing
+// Subtitle/AI assessment to the same ~68px as Start/End.
+const ITEM_COL_WIDTHS: Record<string, number> = {
+  start: 70,
+  end: 70,
+  importance: 90,
+  subtitle: 320,
+  aiAssessment: 140,
+  verdict: 150,
+};
+const DEFAULT_ITEM_COL_WIDTH = 150;
+
+const AI_ASSESSMENT_HINT =
+  "The Research Agent's own read on whether this line needs a change — visible here, but only editable by opening the item. Separate from Your Verdict.";
+const YOUR_VERDICT_HINT =
+  "Your review decision — accept, reject, or flag for more research. This is what actually determines the item's status; it doesn't change the AI Assessment above.";
 
 /**
  * The Project tab's actual content — lives INSIDE FilmWorkspaceView's left
@@ -80,6 +103,7 @@ export function ProjectPanel({
   const { width: chatPanelWidth, isDragging: isDraggingChatPanel, panelRef: chatPanelRef, dividerProps: chatPanelDividerProps } =
     useResizableChatPanel(CHAT_PANEL_WIDTH_STORAGE_KEY);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
+  const { colWidth: itemColWidth, resizerHandlers: itemResizerHandlers } = useResizableColumns(ITEM_COL_WIDTHS, DEFAULT_ITEM_COL_WIDTH);
 
   const {
     project,
@@ -286,14 +310,28 @@ export function ProjectPanel({
                 <div className="details-table-wrap">
                   <div className="details-table-scroll">
                     <table className="details-table">
+                      <colgroup>
+                        <col style={{ width: itemColWidth('start') }} />
+                        <col style={{ width: itemColWidth('end') }} />
+                        <col style={{ width: itemColWidth('importance') }} />
+                        <col style={{ width: itemColWidth('subtitle') }} />
+                        <col style={{ width: itemColWidth('aiAssessment') }} />
+                        <col style={{ width: itemColWidth('verdict') }} />
+                      </colgroup>
                       <thead>
                         <tr>
-                          <th>Start</th>
-                          <th>End</th>
-                          <th>Importance</th>
-                          <th>Subtitle</th>
-                          <th>AI assessment</th>
-                          <th>Your Verdict</th>
+                          <ResizableTh colKey="start" {...itemResizerHandlers}>Start</ResizableTh>
+                          <ResizableTh colKey="end" {...itemResizerHandlers}>End</ResizableTh>
+                          <ResizableTh colKey="importance" {...itemResizerHandlers}>Importance</ResizableTh>
+                          <ResizableTh colKey="subtitle" {...itemResizerHandlers}>Subtitle</ResizableTh>
+                          <ResizableTh colKey="aiAssessment" title={AI_ASSESSMENT_HINT} {...itemResizerHandlers}>
+                            AI assessment
+                            <ColInfoIcon text={AI_ASSESSMENT_HINT} />
+                          </ResizableTh>
+                          <ResizableTh colKey="verdict" title={YOUR_VERDICT_HINT} {...itemResizerHandlers}>
+                            Your Verdict
+                            <ColInfoIcon text={YOUR_VERDICT_HINT} />
+                          </ResizableTh>
                         </tr>
                       </thead>
                       <tbody>
@@ -305,11 +343,14 @@ export function ProjectPanel({
                             onPointerDown={(e) => beginChipDrag(projectItemReference(item), e)}
                             onClick={() => setOpenItemId(item.id)}
                           >
-                            <td className="details-table__cell--nowrap-exempt">{formatClock(item.startMs)}</td>
-                            <td className="details-table__cell--nowrap-exempt">{formatClock(item.endMs)}</td>
+                            <td className="details-table__cell--nowrap-exempt" title={formatClock(item.startMs)}>{formatClock(item.startMs)}</td>
+                            <td className="details-table__cell--nowrap-exempt" title={formatClock(item.endMs)}>{formatClock(item.endMs)}</td>
                             <td>{item.importanceScore ?? <span className="results-placeholder">—</span>}</td>
-                            <td>{item.subtitleText || <em>Visual only</em>}</td>
-                            <td>
+                            <td title={item.subtitleText || undefined}>{item.subtitleText || <em>Visual only</em>}</td>
+                            <td
+                              className="details-table__cell--nowrap-exempt"
+                              title={item.summary || 'Not researched yet — no assessment to preview.'}
+                            >
                               {item.summary ? (
                                 <span className={`verdict-badge verdict-badge--${item.shouldTranscreate ? 'change' : 'no-change'}`}>
                                   {item.shouldTranscreate ? 'needs change' : 'fine as-is'}
@@ -318,7 +359,11 @@ export function ProjectPanel({
                                 <span className="results-placeholder">not researched</span>
                               )}
                             </td>
-                            <td onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                            <td
+                              className="details-table__cell--nowrap-exempt"
+                              onClick={(e) => e.stopPropagation()}
+                              onPointerDown={(e) => e.stopPropagation()}
+                            >
                               <select
                                 className="action-picker"
                                 style={{ color: actionColor(item.action), fontWeight: 600 }}

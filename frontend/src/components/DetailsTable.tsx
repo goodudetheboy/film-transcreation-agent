@@ -6,10 +6,11 @@ import { provenanceLabel, provenanceModifier } from '../utils/detailRowProvenanc
 import { detailRowReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
 import { useResizableColumns } from '../utils/useResizableColumns';
-import { InfoIcon, TrashIcon } from './icons';
+import { TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
 import { DetailRowView } from './DetailRowView';
 import { ResizableTh } from './ResizableTh';
+import { ColInfoIcon } from './ColInfoIcon';
 
 export interface DetailsTableProps {
   film: Film;
@@ -40,16 +41,6 @@ const MIN_COL_WIDTH = 60;
 const MAX_COL_WIDTH = 640;
 
 const NEW_ROW_DEFAULT_SPAN_MS = 2000;
-
-/** Small info-icon tooltip trigger — visible affordance that a header has
- * more context on hover, since a bare `title` attribute gives no visual cue. */
-function ColInfoIcon({ text }: { text: string }) {
-  return (
-    <span className="details-table__col-info" title={text}>
-      <InfoIcon width={12} height={12} />
-    </span>
-  );
-}
 
 const SEGMENT_DESCRIPTION_HINT =
   "What's happening on screen during this moment — the visual/narrative context for the localizer, beyond just the dialogue.";
