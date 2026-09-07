@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BUILTIN_COLUMN_LABELS } from '../api/apiClient.types';
-import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
+import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction, Rubric, RubricScore } from '../api/apiClient.types';
 import { runTrendResearch, updateItem, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { Modal } from './Modal';
@@ -26,6 +26,17 @@ function describeAge(publishedDate: string): string {
 
 function scoreTier(score: number): 'low' | 'mid' | 'high' {
   return score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low';
+}
+
+// The store already tags every score write with who made it (see
+// projectItemStore.ts/researchChatAgent.ts's `updatedBy`) — this was never
+// surfaced in the UI, so a score set by the chat tool and one set by hand
+// via "Edit score" looked identical, with no way to tell whether the agent
+// might overwrite a manual edit on its next run.
+function scoreSourceLabel(updatedBy: RubricScore['updatedBy']): string {
+  if (updatedBy === 'user') return 'you';
+  if (updatedBy === 'chat-agent') return 'chat agent';
+  return 'research pass';
 }
 
 function assessmentColor(shouldTranscreate: boolean | null): string {
@@ -237,6 +248,11 @@ function ScoreBlock({
         <p className="finding-card__rubric">
           {rubric.name}
           <span className="finding-card__weight">weight {rubric.weight}</span>
+          {existing && (
+            <span className="finding-card__weight" title={new Date(existing.updatedAt).toLocaleString()}>
+              · set by {scoreSourceLabel(existing.updatedBy)}
+            </span>
+          )}
         </p>
         {existing ? (
           <span className={`score-circle score-circle--${scoreTier(existing.score)}`}>
