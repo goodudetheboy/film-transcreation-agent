@@ -4,11 +4,6 @@ export interface DraftRubric {
   name: string;
   description: string;
   weight: number;
-  /** Whether this rubric's concern is tied to socially-current content (slang, memes,
-   * viral references) that the Trend Agent should search live sources for. Optional
-   * only because older/local draft state may predate this field — treat missing as
-   * false everywhere it's read. */
-  trendEligible?: boolean;
 }
 
 export interface RubricsEditorProps {
@@ -70,15 +65,6 @@ export function RubricsEditor({ rubrics, onAdd, onChange, onRemove, onGenerateDe
             value={rubric.description}
             onChange={(e) => onChange(i, { description: e.target.value })}
           />
-
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={rubric.trendEligible ?? false}
-              onChange={(e) => onChange(i, { trendEligible: e.target.checked })}
-            />
-            🔥 Trend-eligible — let the Trend Agent search live sources for this
-          </label>
         </div>
       ))}
       <div style={{ display: 'flex', gap: 8 }}>

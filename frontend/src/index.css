@@ -1642,6 +1642,27 @@ textarea {
   border-bottom: none;
 }
 
+/* The Details track's label swaps to a flag + "Details" once a project is
+   selected (see FilmWorkspaceView.tsx) — stacked rather than inline because
+   the label gutter is only 64px wide, too narrow for a flag icon sized for
+   an inline list row (.list-row__flag) to read as anything but a speck next
+   to the text. */
+.scrubber-labels__flag-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.scrubber-labels__flag {
+  font-size: 20px;
+  line-height: 1;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
 .scrubber-viewport {
   flex: 1;
   min-width: 0;
@@ -4307,6 +4328,14 @@ textarea {
   color: var(--text-dim);
 }
 
+/* Same pending=warning/accepted=success/rejected=danger/need-research=accent
+   mapping as actionColor.ts everywhere else this action shows up (the items
+   table's verdict select, ProjectItemView, the scrub bar's Details track). */
+.project-card__stat--pending {
+  color: var(--warning);
+  border-color: var(--warning-dim);
+}
+
 .project-card__stat--accepted {
   color: var(--success);
   border-color: var(--success-dim);
@@ -4318,8 +4347,8 @@ textarea {
 }
 
 .project-card__stat--research {
-  color: var(--warning);
-  border-color: var(--warning-dim);
+  color: var(--accent);
+  border-color: var(--accent-dim);
 }
 
 /* ---------- Country select (searchable dropdown with flags) ---------- */

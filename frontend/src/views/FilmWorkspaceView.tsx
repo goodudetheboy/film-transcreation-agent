@@ -626,9 +626,10 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           onSelectionChange={setVideoSelection}
           detailsLabel={
             selectedProject ? (
-              <>
-                <Flag code={countryCode(selectedProject.country)} className="list-row__flag" /> Details
-              </>
+              <span className="scrubber-labels__flag-stack">
+                <Flag code={countryCode(selectedProject.country)} className="scrubber-labels__flag" />
+                Details
+              </span>
             ) : (
               'Details'
             )

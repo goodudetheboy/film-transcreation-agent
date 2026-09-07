@@ -26,7 +26,7 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 function emptyRubric(): DraftRubric {
-  return { name: '', description: '', weight: 3, trendEligible: false };
+  return { name: '', description: '', weight: 3 };
 }
 
 /**
@@ -92,10 +92,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
 
   async function handleGenerateDefaultRubrics() {
     const defaults = await getDefaultRubrics(passcode);
-    setRubrics((prev) => [
-      ...prev,
-      ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight, trendEligible: d.trendEligible })),
-    ]);
+    setRubrics((prev) => [...prev, ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight }))]);
   }
 
   function goNext() {
