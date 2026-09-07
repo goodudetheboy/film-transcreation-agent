@@ -63,6 +63,7 @@ function toolStepLabel(name: string, args: Record<string, unknown>): ReactNode {
   if (name === 'search_web') return <><SearchIcon /> Searching the web via Parallel…</>;
   if (name === 'update_rubric_score') return <><PencilIcon /> Updating a rubric score…</>;
   if (name === 'propose_replacement') return <><LightbulbIcon /> Proposing a replacement…</>;
+  if (name === 'update_assessment') return <><PencilIcon /> Updating the AI assessment…</>;
   if (name === 'describe_video_segment') return <>Looking at {formatClock(Number(args.startMs))}–{formatClock(Number(args.endMs))}…</>;
   return <>Calling {name}…</>;
 }
@@ -106,6 +107,28 @@ function formatMutationResult(name: string, result: Record<string, unknown>, rub
             <div className="field">
               <label>New importance score</label>
               <p>{importanceScore.toFixed(1)}</p>
+            </div>
+          )}
+        </>
+      ),
+    };
+  }
+  if (name === 'update_assessment') {
+    const { shouldTranscreate, summary } = result as { shouldTranscreate?: unknown; summary?: unknown };
+    if (typeof shouldTranscreate !== 'boolean') return null;
+    return {
+      summary: `Set AI Assessment to "${shouldTranscreate ? 'Needs Change' : 'Fine As-Is'}"`,
+      title: 'AI Assessment updated',
+      body: (
+        <>
+          <div className="field">
+            <label>AI Assessment</label>
+            <p>{shouldTranscreate ? 'Needs Change' : 'Fine As-Is'}</p>
+          </div>
+          {typeof summary === 'string' && summary && (
+            <div className="field">
+              <label>Executive reason</label>
+              <p>{summary}</p>
             </div>
           )}
         </>

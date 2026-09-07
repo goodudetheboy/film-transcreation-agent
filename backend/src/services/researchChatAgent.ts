@@ -120,6 +120,20 @@ const PROPOSE_REPLACEMENT_DECL = {
   },
 };
 
+const UPDATE_ASSESSMENT_DECL = {
+  name: 'update_assessment',
+  description:
+    "Set the AI Assessment (whether this line needs a change to land in the target country) and the Executive reason for the currently open project item. Use this to record a verdict — with your reasoning — independent of proposing a concrete replacement; propose_replacement already sets the assessment to 'needs change' on its own, so only call this separately when you're recording a 'fine as-is' verdict, or updating the reasoning without a replacement draft. Never use this to change an item's accepted/rejected/pending/need-research status; that stays a human-only decision.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      shouldTranscreate: { type: Type.BOOLEAN, description: 'true = needs change to land in the target country, false = fine as-is.' },
+      summary: { type: Type.STRING, description: "1-2 sentences: the executive reason behind this verdict." },
+    },
+    required: ['shouldTranscreate', 'summary'],
+  },
+};
+
 const SEARCH_WEB_DECL = {
   name: 'search_web',
   description:
@@ -153,13 +167,22 @@ const DESCRIBE_VIDEO_SEGMENT_DECL = {
 };
 
 const CHAT_TOOLS = [
-  { functionDeclarations: [UPDATE_RUBRIC_SCORE_DECL, PROPOSE_REPLACEMENT_DECL, SEARCH_WEB_DECL, DESCRIBE_VIDEO_SEGMENT_DECL] },
+  {
+    functionDeclarations: [
+      UPDATE_RUBRIC_SCORE_DECL,
+      PROPOSE_REPLACEMENT_DECL,
+      UPDATE_ASSESSMENT_DECL,
+      SEARCH_WEB_DECL,
+      DESCRIBE_VIDEO_SEGMENT_DECL,
+    ],
+  },
 ];
 
 const SYSTEM_INSTRUCTION = `You are the Research Agent's interactive assistant in a film localization
 triage tool. You're chatting with a human localizer about one project. When a
 specific item (script line + scene) is open, you can use your tools to
-update that item's rubric scores live, propose a concrete replacement,
+update that item's rubric scores live, propose a concrete replacement, set
+the AI Assessment (needs change / fine as-is) with its executive reason,
 search the web via Parallel for evidence you're missing, or look at a short
 slice of the actual video footage when you need to know what's visibly
 happening on screen. Keep replies concise and conversational. Never call a
@@ -258,6 +281,23 @@ export async function executeTool(
       itemPatch: {
         itemId: ctx.itemId,
         patch: { suggestedReplacement: updated.suggestedReplacement, shouldTranscreate: true },
+      },
+    };
+  }
+
+  if (call.name === 'update_assessment') {
+    if (!ctx.itemId) return { response: NO_ITEM_OPEN_ERROR };
+    const args = call.args as { shouldTranscreate: boolean; summary: string };
+    const updated = await deps.projectItemStore.updateItem(ctx.projectId, ctx.itemId, {
+      shouldTranscreate: args.shouldTranscreate,
+      summary: args.summary,
+    });
+    if (!updated) return { response: { error: 'item not found' } };
+    return {
+      response: { ok: true, shouldTranscreate: updated.shouldTranscreate, summary: updated.summary },
+      itemPatch: {
+        itemId: ctx.itemId,
+        patch: { shouldTranscreate: updated.shouldTranscreate, summary: updated.summary },
       },
     };
   }

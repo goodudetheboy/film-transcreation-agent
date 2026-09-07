@@ -84,6 +84,15 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
   const selectedProject = projectId ? filmProjects.find((p) => p.id === projectId) : undefined;
+  // `selectedProject` alone persists across tab switches (it's derived from
+  // `projectId`, not `tab`), but ProjectPanel only feeds `itemStatusByRow`
+  // while it's mounted — and clears it to `{}` on unmount (see its own
+  // cleanup effect) so a stale project's coloring doesn't linger elsewhere.
+  // The scrub bar's Details track must key off actually being on the
+  // Project tab, not just a project being selected, or navigating back to
+  // the film-level Details tab leaves the track project-scoped against a
+  // now-empty itemStatusByRow (flag label, but no blocks at all).
+  const viewingProject = tab === 'project' && Boolean(selectedProject);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [itemStatusByRow, setItemStatusByRow] = useState<Record<string, ProjectItemAction>>({});
 
@@ -617,7 +626,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       <div className="workspace__scrubber-area" style={{ height: scrubberHeight }}>
         <VideoScrubber
           entries={film.subtitle?.entries ?? []}
-          detailRows={selectedProject ? rows.filter((r) => r.id in itemStatusByRow) : rows}
+          detailRows={viewingProject ? rows.filter((r) => r.id in itemStatusByRow) : rows}
           durationMs={durationMs}
           currentTimeMs={currentTimeMs}
           onSeek={handleSeek}
@@ -625,7 +634,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           selection={videoSelection}
           onSelectionChange={setVideoSelection}
           detailsLabel={
-            selectedProject ? (
+            viewingProject && selectedProject ? (
               <span className="scrubber-labels__flag-stack">
                 <Flag code={countryCode(selectedProject.country)} className="scrubber-labels__flag" />
                 Details

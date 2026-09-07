@@ -106,6 +106,53 @@ describe('createResearchChatAgent runTurn', () => {
     expect(updatedItem?.scores[0]).toMatchObject({ rubricId: rubric.id, score: 8, updatedBy: 'chat-agent' });
   });
 
+  it('update_assessment sets shouldTranscreate/summary and emits item_patched', async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, item, session } = await buildDeps();
+    const generateContentStream = vi
+      .fn()
+      .mockResolvedValueOnce(
+        streamOf([
+          {
+            candidates: [
+              {
+                content: {
+                  parts: [
+                    {
+                      functionCall: {
+                        name: 'update_assessment',
+                        args: { shouldTranscreate: false, summary: 'Reads fine locally, no change needed.' },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(streamOf([{ candidates: [{ content: { parts: [{ text: 'Marked as fine as-is.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
+    const events = await collect(agent.runTurn({ session, userText: 'what do you think?', itemId: item.id }));
+
+    expect(events.map((e) => e.type)).toEqual(['tool_call', 'tool_result', 'item_patched', 'text_delta', 'turn_done']);
+    expect(events[1]).toMatchObject({
+      type: 'tool_result',
+      name: 'update_assessment',
+      result: { ok: true, shouldTranscreate: false, summary: 'Reads fine locally, no change needed.' },
+    });
+    expect(events[2]).toMatchObject({
+      type: 'item_patched',
+      itemId: item.id,
+      patch: { shouldTranscreate: false, summary: 'Reads fine locally, no change needed.' },
+    });
+
+    const updatedItem = await projectItemStore.getItem('proj-a', item.id);
+    expect(updatedItem?.shouldTranscreate).toBe(false);
+    expect(updatedItem?.summary).toBe('Reads fine locally, no change needed.');
+  });
+
   it('a multi-round tool-calling turn (two sequential tool calls) persists turns after every round', async () => {
     const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, rubric, item, session } = await buildDeps();
     const generateContentStream = vi
