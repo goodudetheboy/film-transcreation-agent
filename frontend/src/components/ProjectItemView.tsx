@@ -451,7 +451,7 @@ export function ProjectItemView({
 
             <div className="overview-card__section">
               <div className="field">
-                <label>AI verdict</label>
+                <label>AI Assessment</label>
                 <div className="verdict-toggle">
                   <button
                     type="button"
