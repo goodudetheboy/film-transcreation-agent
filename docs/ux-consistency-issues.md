@@ -9,7 +9,9 @@ reading.
 
 Ordered roughly by fix-cost-vs-impact, cheapest/highest-impact first.
 
-- [ ] **1. Chat suggestion chips don't adapt to whether an item is open.**
+- [x] **1. Chat suggestion chips don't adapt to whether an item is open.**
+  Fixed 2026-09-07 (commit `78799be`): chips now split into `ITEM_QUICK_PROMPTS`
+  / `GENERAL_QUICK_PROMPTS` in `ResearchChatPanel.tsx`, keyed on `itemId`.
   The general project-level "Session" chat and an item-scoped chat render the
   identical suggestion chips ("Propose a replacement line.", "Search the web
   to check how this reads there.", etc.), but the general session has no item
@@ -21,7 +23,11 @@ Ordered roughly by fix-cost-vs-impact, cheapest/highest-impact first.
   chips (or the tools behind them) when no item is open; show a different
   empty-state / chip set for the general session.
 
-- [ ] **2. The general session chat never says it has no item context.**
+- [x] **2. The general session chat never says it has no item context.**
+  Fixed 2026-09-07 (commit `78799be`): a persistent line under the session
+  title now states what the session is scoped to (the line's subtitle, or
+  "General project chat — ..." with what it can/can't do), always visible,
+  not just surfaced after a failed tool call.
   Same root cause as #1. The agent's own reply text says "for any of the
   rubrics you see listed for **the current item**" inside a chat that has no
   current item — nothing in the UI flags that this chat is scoped
