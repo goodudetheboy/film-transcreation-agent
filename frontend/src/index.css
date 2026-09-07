@@ -4075,14 +4075,22 @@ textarea {
 .mention-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--accent-dim);
+  max-width: 100%;
+  border: 1px solid var(--accent-hover);
   border-radius: var(--radius-pill);
-  background: var(--accent-dim);
-  color: var(--accent);
+  /* Solid accent, not --accent-dim — a user message bubble's own background
+     *is* --accent-dim, so a --accent-dim chip on it was nearly invisible
+     (distinguishable only by its equally-dim border). Solid + --accent-on
+     text reads clearly on both the user bubble and the model bubble's
+     --panel-2 background. */
+  background: var(--accent);
+  color: var(--accent-on);
   font-size: var(--text-caption-size);
   font-weight: 600;
   padding: 2px 10px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   user-select: none;
 }
 

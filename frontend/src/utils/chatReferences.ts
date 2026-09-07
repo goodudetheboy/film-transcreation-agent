@@ -15,7 +15,7 @@ export type ChatReference =
 
 export type MessageSegment = { type: 'text'; value: string } | { type: 'chip'; ref: ChatReference };
 
-const MAX_LABEL_LENGTH = 40;
+const MAX_LABEL_LENGTH = 26;
 
 export function truncateLabel(label: string): string {
   const trimmed = label.trim();
