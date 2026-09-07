@@ -70,6 +70,12 @@ export interface RunTurnInput {
    * to look at. Resolved by the route from the Project doc (project.sourceFilmId)
    * before calling runTurn — the agent never re-fetches the Project itself. */
   filmId?: string;
+  /** The project's target country (project.country), same field the batch
+   * researchAgent.ts's own prompt is built with — resolved by the route
+   * alongside filmId above. Without this the model has no way to know which
+   * country it's localizing for at all, despite tool descriptions like
+   * search_web's referring to "the target country" as if it already did. */
+  country?: string;
   /** Aborted when the client disconnects (e.g. the user hits Stop) — wired through
    * to generateContentStream's own abortSignal and to the search_web tool's fetch,
    * so a stop actually halts the in-flight Gemini call/tool loop server-side, not
@@ -305,6 +311,11 @@ export async function executeTool(
 
 // ---- Real agent ---------------------------------------------------------
 
+function buildCountryContext(country: string | undefined): string {
+  if (!country) return '';
+  return `\n\nTARGET COUNTRY: ${country} — every judgment (rubric scores, replacement proposals, web searches) is about how something reads in ${country} specifically, not generically.`;
+}
+
 function buildItemContext(item: Awaited<ReturnType<ProjectItemStore['getItem']>>): string {
   if (!item) return '';
   return `\n\nCURRENT ITEM (id: ${item.id}):\nSubtitle: ${item.subtitleText || '(no dialogue in this span)'}\nScene: ${item.sceneDescription}\nExisting scores: ${JSON.stringify(item.scores)}`;
@@ -338,7 +349,7 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
   const fetchImpl = deps.fetchImpl ?? fetch;
 
   return {
-    async *runTurn({ session, userText, itemId, filmId, signal }) {
+    async *runTurn({ session, userText, itemId, filmId, country, signal }) {
       const now = () => new Date().toISOString();
       // Persisted history keeps `run` marker turns (role: 'system') so the frontend
       // timeline sees them — but those never go to Gemini as `contents`; the model
@@ -351,7 +362,7 @@ export function createResearchChatAgent(config: ResearchChatAgentConfig, deps: R
           itemId ? deps.projectItemStore.getItem(session.projectId, itemId) : undefined,
           buildRunsContext(deps.researchRunStore, session.projectId, session.turns),
         ]);
-        const systemInstruction = SYSTEM_INSTRUCTION + buildItemContext(item) + runsContext;
+        const systemInstruction = SYSTEM_INSTRUCTION + buildCountryContext(country) + buildItemContext(item) + runsContext;
 
         let done = false;
         let stopped = false;

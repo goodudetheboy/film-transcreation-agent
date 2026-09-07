@@ -2286,6 +2286,50 @@ textarea {
   min-height: 0;
 }
 
+/* Docked chat panel's own drag handle (Discovery in .workspace-details__chat,
+   Research in .project-panel__chat) — same visual as .workspace__divider,
+   just a standalone reusable class since it sits inside a flex row, not a
+   CSS grid column. */
+.chat-panel-divider {
+  flex: 0 0 auto;
+  width: 6px;
+  /* Cancels the flex row's own `gap` on both sides, same trick
+     .workspace__scrubber-divider uses on its axis — otherwise inserting this
+     as a third flex child stacks a full gap on either side of it on top of
+     the chat panel's own border-left/padding-left, doubling the visual
+     spacing between the table and the panel. */
+  margin: 0 calc(-1 * var(--space-loose));
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  touch-action: none;
+}
+
+.chat-panel-divider::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition: var(--transition-fast);
+}
+
+.chat-panel-divider:hover::after,
+.chat-panel-divider--dragging::after {
+  background: var(--accent);
+  width: 3px;
+}
+
+@media (max-width: 860px) {
+  .chat-panel-divider {
+    display: none;
+  }
+}
+
 .workspace__panel {
   background: var(--panel);
   border: 1px solid var(--border-strong);

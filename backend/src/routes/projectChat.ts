@@ -133,6 +133,7 @@ export function projectChatRoute(deps: ProjectChatRouteDeps): Router {
         userText: text,
         itemId: typeof itemId === 'string' ? itemId : undefined,
         filmId: project?.sourceFilmId,
+        country: project?.country,
         signal: controller.signal,
       })) {
         writeSSE(res, event);

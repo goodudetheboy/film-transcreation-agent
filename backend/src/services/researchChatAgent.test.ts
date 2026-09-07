@@ -66,6 +66,18 @@ describe('createResearchChatAgent runTurn', () => {
 
     expect(events).toEqual([{ type: 'text_delta', text: 'Hello there.' }, { type: 'turn_done' }]);
     expect(generateContentStream).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes the target country in the system instruction when passed', async () => {
+    const { projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber, session } = await buildDeps();
+    const generateContentStream = vi.fn(async () => streamOf([{ candidates: [{ content: { parts: [{ text: 'Sure.' }] } }] }]));
+    const genAI: ChatGenAIClient = { models: { generateContentStream } };
+
+    const agent = createResearchChatAgent(CONFIG, { genAI, projectItemStore, projectRubricStore, chatSessionStore, researchRunStore, filmStore, videoSegmentDescriber });
+    await collect(agent.runTurn({ session, userText: 'hi', country: 'Japan' }));
+
+    const call = generateContentStream.mock.calls[0][0] as { config: { systemInstruction: string } };
+    expect(call.config.systemInstruction).toContain('TARGET COUNTRY: Japan');
 
     const persisted = await chatSessionStore.getSession('proj-a', session.id);
     expect(persisted?.turns.map((t) => t.role)).toEqual(['user', 'model']);

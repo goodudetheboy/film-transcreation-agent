@@ -6,6 +6,7 @@ import type { EnrichedProject, ProjectItemAction } from '../api/apiClient.types'
 import { useFilmWorkspaceStore } from '../store/filmWorkspaceStore';
 import { toPlayableUrl } from '../utils/gsUrl';
 import { setLastWorkspacePath } from '../utils/lastWorkspace';
+import { CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
 import { TransportBar } from '../components/TransportBar';
 import { SubtitleDisplay } from '../components/SubtitleDisplay';
 import { VideoScrubber, type VideoSelection } from '../components/VideoScrubber';
@@ -16,6 +17,8 @@ import { ProjectPanel } from '../components/ProjectPanel';
 import { NewProjectModal } from '../components/NewProjectModal';
 import { ProjectCard } from '../components/ProjectCard';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { Flag } from '../components/Flag';
+import { countryCode } from '../data/countries';
 import { SparkleIcon, TrashIcon } from '../components/icons';
 
 export interface FilmWorkspaceViewProps {
@@ -79,6 +82,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filmProjects, setFilmProjects] = useState<EnrichedProject[]>([]);
+  const selectedProject = projectId ? filmProjects.find((p) => p.id === projectId) : undefined;
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [itemStatusByRow, setItemStatusByRow] = useState<Record<string, ProjectItemAction>>({});
 
@@ -90,6 +94,9 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
   const [scrubberHeight, setScrubberHeight] = useState(DEFAULT_SCRUBBER_HEIGHT);
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const scrubberDragStartRef = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const { width: chatPanelWidth, isDragging: isDraggingChatPanel, panelRef: chatPanelRef, dividerProps: chatPanelDividerProps } =
+    useResizableChatPanel(CHAT_PANEL_WIDTH_STORAGE_KEY);
 
   const { film, rows, columns, setFilm, setDetails, addRow, updateRow, removeRow, addColumn, reset } = useFilmWorkspaceStore();
 
@@ -419,7 +426,13 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           Details
         </button>
         <button type="button" className={`workspace-tabs__tab${tab === 'project' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('project')}>
-          Project
+          {selectedProject ? (
+            <>
+              Project: <Flag code={countryCode(selectedProject.country)} className="list-row__flag" /> {selectedProject.country}
+            </>
+          ) : (
+            'Project'
+          )}
         </button>
         <button type="button" className={`workspace-tabs__tab${tab === 'agents' ? ' workspace-tabs__tab--active' : ''}`} onClick={() => setTab('agents')}>
           Agent Status
@@ -464,7 +477,23 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
                 />
               </div>
 
-              <div className={`workspace-details__chat${discoveryOpen ? ' workspace-details__chat--open' : ''}`}>
+              {discoveryOpen && (
+                <div
+                  className={`chat-panel-divider${isDraggingChatPanel ? ' chat-panel-divider--dragging' : ''}`}
+                  onPointerDown={chatPanelDividerProps.onPointerDown}
+                  onPointerMove={chatPanelDividerProps.onPointerMove}
+                  onPointerUp={chatPanelDividerProps.onPointerUp}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize agent panel"
+                />
+              )}
+
+              <div
+                ref={chatPanelRef}
+                className={`workspace-details__chat${discoveryOpen ? ' workspace-details__chat--open' : ''}`}
+                style={discoveryOpen ? { flexBasis: chatPanelWidth } : undefined}
+              >
                 <DiscoveryChatPanel
                   filmId={film.id}
                   passcode={passcode}

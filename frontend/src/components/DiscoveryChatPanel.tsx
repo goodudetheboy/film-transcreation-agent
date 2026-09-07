@@ -796,7 +796,13 @@ export function DiscoveryChatPanel({
           {[...discoveryChatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
             const { jobIds } = collectRunRefs(s.turns);
-            const runStatuses = jobIds.map((id) => jobStatuses[id]).filter((v): v is DiscoveryJobStatus => v !== undefined);
+            // Prefer jobDetails (live via this panel's own streamDiscoveryJob
+            // subscription, populated the moment a run is kicked off — see the
+            // effect below) over the once-fetched jobStatuses snapshot, so a
+            // run kicked off this session updates the badge without a reload.
+            const runStatuses = jobIds
+              .map((id) => jobDetails[id]?.status ?? jobStatuses[id])
+              .filter((v): v is DiscoveryJobStatus => v !== undefined);
             const combined = combinedAgentStatus(s.status, runStatuses);
             return (
               <div

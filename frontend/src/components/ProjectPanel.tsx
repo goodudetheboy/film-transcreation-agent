@@ -16,6 +16,7 @@ import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/proje
 import { formatClock } from '../utils/timeFormat';
 import { projectItemReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
+import { CHAT_PANEL_WIDTH_STORAGE_KEY, useResizableChatPanel } from '../utils/useResizableChatPanel';
 import type { VideoSelection } from './VideoScrubber';
 import { DetailRowPicker } from './DetailRowPicker';
 import { RubricsEditor } from './RubricsEditor';
@@ -74,6 +75,8 @@ export function ProjectPanel({
   const [showAddDetails, setShowAddDetails] = useState(false);
   const [addSelection, setAddSelection] = useState<Set<string>>(new Set());
   const [agentsOpen, setAgentsOpen] = useState(false);
+  const { width: chatPanelWidth, isDragging: isDraggingChatPanel, panelRef: chatPanelRef, dividerProps: chatPanelDividerProps } =
+    useResizableChatPanel(CHAT_PANEL_WIDTH_STORAGE_KEY);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
 
   const {
@@ -357,7 +360,23 @@ export function ProjectPanel({
           )}
         </div>
 
-        <div className={`project-panel__chat${agentsOpen ? ' project-panel__chat--open' : ''}`}>
+        {agentsOpen && (
+          <div
+            className={`chat-panel-divider${isDraggingChatPanel ? ' chat-panel-divider--dragging' : ''}`}
+            onPointerDown={chatPanelDividerProps.onPointerDown}
+            onPointerMove={chatPanelDividerProps.onPointerMove}
+            onPointerUp={chatPanelDividerProps.onPointerUp}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize agent panel"
+          />
+        )}
+
+        <div
+          ref={chatPanelRef}
+          className={`project-panel__chat${agentsOpen ? ' project-panel__chat--open' : ''}`}
+          style={agentsOpen ? { flexBasis: chatPanelWidth } : undefined}
+        >
           <ResearchChatPanel
             projectId={project.id}
             passcode={passcode}

@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listDiscoveryAgentSessions } from '../api/discoveryChatApiClient';
-import { listDiscoveryJobs } from '../api/filmsApiClient';
-import { listChatSessions, listResearchRuns } from '../api/projectsApiClient';
-import type { ChatSession, DiscoveryAgentSession, EnrichedProject, ResearchRun } from '../api/apiClient.types';
+import { listDiscoveryJobs, streamDiscoveryJob } from '../api/filmsApiClient';
+import { listChatSessions, listResearchRuns, streamResearchRunUpdates } from '../api/projectsApiClient';
+import type { ChatSession, ChatSessionStatus, DiscoveryAgentSession, DiscoveryChatSessionStatus, EnrichedProject, ResearchRun } from '../api/apiClient.types';
 import { countryCode } from '../data/countries';
 import { Flag } from './Flag';
 import { Modal } from './Modal';
 import { MicroscopeIcon, SearchIcon } from './icons';
-import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
+import { collectRunRefs, combinedAgentStatus, type RunLikeStatus } from '../utils/agentRunStatus';
 
 export interface FilmAgentsTabProps {
   filmId: string;
@@ -18,21 +18,30 @@ export interface FilmAgentsTabProps {
   onOpenResearch: (projectId: string, sessionId?: string, autoCreate?: 'agent' | 'session') => void;
 }
 
-interface AgentRow {
+/** Pre-combine shape — everything needed to compute a row's displayed status
+ * except the live status patches, which arrive later and shouldn't force a
+ * refetch of the session list itself. */
+interface RawAgentRow {
   kind: 'discovery' | 'research';
   id: string;
   name: string;
   projectId?: string;
   projectCountry?: string;
   projectLabel?: string;
+  chatStatus: DiscoveryChatSessionStatus | ChatSessionStatus;
+  jobIds: string[];
+  runIds: string[];
+  updatedAt: string;
+  lastMessagePreview: string | undefined;
+}
+
+interface AgentRow extends RawAgentRow {
   /** Already-combined status — the session's own chat-stream status folded
    * together with the status of any Discovery/Research Run it kicked off, via
    * combinedAgentStatus. Not just the raw session status: a session can read
    * "done" on its chat reply while the batch Run it started is still crunching
    * in the background, which is exactly the ambiguity this combines away. */
   status: 'running' | 'done' | 'error';
-  updatedAt: string;
-  lastMessagePreview: string | undefined;
 }
 
 type TypeFilter = 'all' | 'discovery' | 'research';
@@ -48,11 +57,23 @@ function lastTextPreview(session: DiscoveryAgentSession | ChatSession): string |
 }
 
 export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onOpenResearch }: FilmAgentsTabProps) {
-  const [rows, setRows] = useState<AgentRow[] | null>(null);
+  const [rawRows, setRawRows] = useState<RawAgentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickingProject, setPickingProject] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
+
+  // Snapshot statuses from the one-shot fetch below, keyed by jobId/runId —
+  // read by the live-subscription effect to decide what's worth subscribing
+  // to (an already-terminal job/run needs no subscription) and as the
+  // fallback value for anything the subscription hasn't patched yet.
+  const initialStatusByIdRef = useRef<Map<string, RunLikeStatus>>(new Map());
+  // Patches from the per-job/run SSE streams below — starts empty and fills
+  // in as events arrive, so a badge computed from combinedAgentStatus() keeps
+  // updating (running -> done) without a page reload, the same way the
+  // in-thread run cards in DiscoveryChatPanel/ResearchChatPanel already do.
+  const [liveStatusById, setLiveStatusById] = useState<Record<string, RunLikeStatus>>({});
+  const subscribedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -72,41 +93,40 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
         const fulfilledProjects = researchSettled.filter(
           (r): r is PromiseFulfilledResult<ProjectSessionsAndRuns> => r.status === 'fulfilled',
         );
-        const jobStatusById = new Map(discoveryJobs.map((j) => [j.id, j.status]));
-        const runStatusById = new Map(fulfilledProjects.flatMap((r) => r.value.runs.map((run) => [run.id, run.status] as const)));
+        initialStatusByIdRef.current = new Map([
+          ...discoveryJobs.map((j) => [j.id, j.status] as const),
+          ...fulfilledProjects.flatMap((r) => r.value.runs.map((run) => [run.id, run.status] as const)),
+        ]);
+        subscribedIdsRef.current = new Set();
+        setLiveStatusById({});
 
-        const discoveryRows: AgentRow[] = discoverySessions.map((s) => {
-          const { jobIds } = collectRunRefs(s.turns);
-          const runStatuses = jobIds.map((id) => jobStatusById.get(id)).filter((v): v is NonNullable<typeof v> => v !== undefined);
-          return {
-            kind: 'discovery',
+        const discoveryRows: RawAgentRow[] = discoverySessions.map((s) => ({
+          kind: 'discovery',
+          id: s.id,
+          name: s.name ?? `Agent #${s.agentNumber}`,
+          chatStatus: s.status,
+          jobIds: collectRunRefs(s.turns).jobIds,
+          runIds: [],
+          updatedAt: s.updatedAt,
+          lastMessagePreview: lastTextPreview(s),
+        }));
+        const researchRows: RawAgentRow[] = fulfilledProjects.flatMap((r) =>
+          r.value.sessions.map((s) => ({
+            kind: 'research' as const,
             id: s.id,
-            name: s.name ?? `Agent #${s.agentNumber}`,
-            status: combinedAgentStatus(s.status, runStatuses),
+            name: s.name ?? `Session ${s.sessionNumber}`,
+            projectId: r.value.p.id,
+            projectCountry: r.value.p.country,
+            projectLabel: r.value.p.note ? `${r.value.p.country} — ${r.value.p.note}` : r.value.p.country,
+            chatStatus: s.status,
+            jobIds: [],
+            runIds: collectRunRefs(s.turns).runIds,
             updatedAt: s.updatedAt,
             lastMessagePreview: lastTextPreview(s),
-          };
-        });
-        const researchRows: AgentRow[] = fulfilledProjects
-          .flatMap((r) =>
-            r.value.sessions.map((s) => {
-              const { runIds } = collectRunRefs(s.turns);
-              const runStatuses = runIds.map((id) => runStatusById.get(id)).filter((v): v is NonNullable<typeof v> => v !== undefined);
-              return {
-                kind: 'research' as const,
-                id: s.id,
-                name: s.name ?? `Session ${s.sessionNumber}`,
-                projectId: r.value.p.id,
-                projectCountry: r.value.p.country,
-                projectLabel: r.value.p.note ? `${r.value.p.country} — ${r.value.p.note}` : r.value.p.country,
-                status: combinedAgentStatus(s.status, runStatuses),
-                updatedAt: s.updatedAt,
-                lastMessagePreview: lastTextPreview(s),
-              };
-            }),
-          );
+          })),
+        );
 
-        setRows([...discoveryRows, ...researchRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+        setRawRows([...discoveryRows, ...researchRows].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'failed to load agents');
       }
@@ -115,6 +135,45 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
       cancelled = true;
     };
   }, [filmId, passcode, projects]);
+
+  // Subscribe to every non-terminal job/run's own resumable stream so its
+  // status keeps updating live — same primitive (streamDiscoveryJob/
+  // streamResearchRunUpdates) the chat panels already use for their in-thread
+  // run cards, just applied across every row here instead of only the active
+  // session's. An already-`done`/`error` job needs no subscription; each
+  // stream also closes itself once it reaches a terminal status.
+  useEffect(() => {
+    if (!rawRows) return;
+    for (const row of rawRows) {
+      const ids = row.kind === 'discovery' ? row.jobIds : row.runIds;
+      for (const id of ids) {
+        const status = initialStatusByIdRef.current.get(id);
+        if (!status || status === 'done' || status === 'error') continue;
+        if (subscribedIdsRef.current.has(id)) continue;
+        subscribedIdsRef.current.add(id);
+        if (row.kind === 'discovery') {
+          streamDiscoveryJob(filmId, id, passcode, (event) => {
+            setLiveStatusById((prev) => ({ ...prev, [id]: event.job.status }));
+          });
+        } else {
+          streamResearchRunUpdates(row.projectId!, id, passcode, (event) => {
+            setLiveStatusById((prev) => ({ ...prev, [id]: event.run.status }));
+          });
+        }
+      }
+    }
+  }, [rawRows, filmId, passcode]);
+
+  const rows = useMemo<AgentRow[] | null>(() => {
+    if (rawRows === null) return null;
+    return rawRows.map((r) => {
+      const ids = r.kind === 'discovery' ? r.jobIds : r.runIds;
+      const statuses = ids
+        .map((id) => liveStatusById[id] ?? initialStatusByIdRef.current.get(id))
+        .filter((v): v is RunLikeStatus => v !== undefined);
+      return { ...r, status: combinedAgentStatus(r.chatStatus, statuses) };
+    });
+  }, [rawRows, liveStatusById]);
 
   const filteredRows = useMemo(() => {
     if (rows === null) return null;

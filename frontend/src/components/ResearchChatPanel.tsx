@@ -777,7 +777,14 @@ export function ResearchChatPanel({
           {[...chatSessions].reverse().map((s) => {
             const lastText = [...s.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
             const { runIds } = collectRunRefs(s.turns);
-            const linkedRunStatuses = runIds.map((id) => runStatuses[id]).filter((v): v is ResearchRunStatus => v !== undefined);
+            // Prefer runDetails (live via this panel's own
+            // streamResearchRunUpdates subscription, populated the moment a
+            // run is kicked off — see the effect below) over the once-fetched
+            // runStatuses snapshot, so a run kicked off this session updates
+            // the badge without a reload.
+            const linkedRunStatuses = runIds
+              .map((id) => runDetails[id]?.status ?? runStatuses[id])
+              .filter((v): v is ResearchRunStatus => v !== undefined);
             const combined = combinedAgentStatus(s.status, linkedRunStatuses);
             return (
               <div

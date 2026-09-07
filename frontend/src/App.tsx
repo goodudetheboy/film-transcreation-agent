@@ -4,6 +4,7 @@ import { PasscodeGate } from './components/PasscodeGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
 import { useTheme } from './utils/useTheme';
+import { useTestMode } from './utils/useTestMode';
 import { ProjectsLibraryView } from './views/ProjectsLibraryView';
 import { StartScreen } from './views/StartScreen';
 import { FilmPreparingView } from './views/FilmPreparingView';
@@ -18,7 +19,7 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 
 function App() {
   const [passcode, setPasscode] = useState<string | null>(null);
-  const [testMode, setTestMode] = useState(true);
+  const [testMode, setTestMode] = useTestMode();
   const [theme, setTheme] = useTheme();
   // Re-renders on every navigation so the "Current Workspace" tab's target
   // (read fresh from localStorage below) stays up to date as the user moves
