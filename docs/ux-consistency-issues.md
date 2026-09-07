@@ -9,6 +9,14 @@ reading.
 
 Ordered roughly by fix-cost-vs-impact, cheapest/highest-impact first.
 
+**Status: all 8 items resolved as of 2026-09-07** — 6 fixed and shipped
+(1, 2, 3, 4, 7, 8), 2 researched and closed with no change needed because
+they didn't hold up against the actual code (5, 6). Every item below
+records what was found, not just what was originally suspected — several
+original black-box observations turned out to be testing artifacts once
+checked against source, and are corrected in place rather than silently
+fixed.
+
 - [x] **1. Chat suggestion chips don't adapt to whether an item is open.**
   Fixed 2026-09-07 (commit `78799be`): chips now split into `ITEM_QUICK_PROMPTS`
   / `GENERAL_QUICK_PROMPTS` in `ResearchChatPanel.tsx`, keyed on `itemId`.
@@ -65,41 +73,73 @@ Ordered roughly by fix-cost-vs-impact, cheapest/highest-impact first.
   named as such. Principle: **Explainable AI** — "show the real drivers" /
   give the user enough to act on, not a bare label.
 
-- [ ] **5. Discovery (film-level) and Research (project-level) runs get very
-  different status treatment for comparable work.**
-  Film import shows a full-screen animated hero with a labeled stepper
-  (video → subtitle → discovery → finalize → ready). A project's Research
-  run — comparably long AI work — only ever shows as a small "done" dot in a
-  session list, nothing shown while it's actually running. Principle:
-  **Agent Status & Monitoring** — "match the tier to the stakes, not to the
-  event." Fix: give Research runs an equivalent lightweight in-progress
-  indicator (doesn't need the full hero treatment, just *something* live).
+- [x] **5. Discovery (film-level) and Research (project-level) runs get very
+  different status treatment for comparable work.** — **Did not hold up;
+  no change made (2026-09-07).**
+  Original claim (from black-box testing) was that Research runs show
+  nothing while running. Code research found this false: `ResearchRunCard`
+  in `ResearchChatPanel.tsx` renders `isRunning && <p className="results-status"
+  role="status">{completedBatches}/{totalBatches} batches complete…</p>`,
+  the exact same `.results-status` class (pulsing accent dot via
+  `animation: pulse`) that `DiscoveryRunCard` in `DiscoveryChatPanel.tsx`
+  uses for its own "Working…" text — and Research's version is actually
+  *more* informative (a live batch count vs. Discovery's plain "Working…").
+  The session-library-list badges and the Agent Status tab
+  (`FilmAgentsTab.tsx`) fold Discovery and Research rows into one `rows`
+  list and render both through the identical `status-badge`/
+  `status-dot--running` classes via one shared `combinedAgentStatus()` util
+  — confirmed by reading the code, not assumed. The one real asymmetry is
+  that film import additionally gets a one-time, full-screen hero
+  (`FilmPreparingView.tsx`) before any workspace exists to show ambient
+  status in — which the aiux principle's own wording ("match the tier to
+  the stakes, not to the event") argues is the *correct* call, not an
+  inconsistency: there's nothing else on screen to look at yet, unlike a
+  Research run kicked off from inside an already-open workspace. Closing
+  this without a change — the earlier finding was a testing-timing miss
+  (likely caught between an already-finished mock run and the next check),
+  not a real gap.
 
-- [ ] **6. Two different disclosure philosophies for similarly complex data.**
-  New Project uses an explicit 4-step wizard (Project Info → Selected Details
-  → Rubrics → Confirmation). The Item Detail view, showing comparably dense
-  data (reasoning, suggested change, 6 rubric scores), instead shows
-  everything at once with individual per-rubric "Show details" toggles.
-  Principle: **Progressive Disclosure** — pick one philosophy and apply it
-  consistently to "is this a step or an inline expand."
+- [x] **6. Two different disclosure philosophies for similarly complex data.**
+  — **Did not hold up; no change made (2026-09-07).**
+  Research before implementing: the item detail's per-rubric "Show
+  details" toggle already implements the aiux principle correctly —
+  score + short reasoning are always visible (the necessary part), evidence
+  + sources are hidden behind one click (the "rare, for the curious" part),
+  exactly matching "hide the rare, never the necessary" and "cap the depth
+  at two layers." The New Project wizard is a genuinely different task
+  shape (ordered, dependent inputs: country before rubrics) where a
+  multi-step wizard is the *correct* pattern per aiux-guided-learning's own
+  "start simple, gradually introduce complexity." Forcing these two
+  independently-correct patterns into one shared "philosophy" would make at
+  least one of them worse, not more consistent — closing without a change.
 
-- [ ] **7. Rubric scores have two editors (chat tool + manual "Edit score")
+- [x] **7. Rubric scores have two editors (chat tool + manual "Edit score")
   with no ownership indicator.**
-  `update_rubric_score` (chat) and the inline "Edit score" button write to
-  the same field, and nothing shows who last touched it or warns if the agent
-  might overwrite a manual edit on its next run. Principle: **Mixed-Initiative
-  Control** — "one owner per region, and show it." Fix: a small "edited by
-  you" / "set by agent" label near the score, or a timestamp + source.
+  Fixed 2026-09-07 (commit `6f6fd51`). Research found the data already
+  existed: every score write is tagged `updatedBy: 'batch-agent' |
+  'chat-agent' | 'user'` in the store (`projectItemStore.ts`,
+  `researchChatAgent.ts`, `routes/projects.ts`), just never rendered.
+  Added "· set by you / chat agent / research pass" next to each rubric's
+  weight badge in `ProjectItemView.tsx`, with the full timestamp as a hover
+  tooltip. Verified against real data: the one rubric I'd edited via chat
+  during items 1-2 testing correctly showed "set by chat agent" while its
+  untouched siblings showed "set by research pass."
 
-- [ ] **8. Autonomy defaults are high at the two most expensive moments,
+- [x] **8. Autonomy defaults are high at the two most expensive moments,
   manual everywhere else.**
-  "Run Discovery agent on import" and "Kick off agentic research on project
-  creation" both default to checked — full auto-run at video captioning and
-  the research pass, the two priciest operations. Everywhere else (inside an
-  item) nothing happens without an explicit chat message or click. Principle:
-  **Autonomy Spectrum** — "default low, earn the rest." Not necessarily wrong
-  for a demo tool, but worth a deliberate decision rather than an accident of
-  what got built first.
+  Fixed 2026-09-07 (commit `d0e765b`). Research surfaced a sharper version
+  of this than the original framing: `NewProjectModal.tsx`'s "Kick off
+  agentic research on project creation?" checkbox doesn't just start a
+  research run — per its own code comment, it's the one path in the app
+  where results skip the accept/discard review step every other run goes
+  through, and that consequence was disclosed only in a source comment, not
+  in the UI. Added a one-line hint under both this checkbox and
+  `ImportFilmForm.tsx`'s Discovery-agent checkbox stating what actually
+  happens in each state (checked/unchecked), so consent is informed at the
+  point of the decision per aiux-autonomy-spectrum, without changing either
+  default — unchecking either would make a fresh import/project look empty
+  and broken for a demo, which is a worse outcome than a well-disclosed
+  default.
 
 ## Also noted, not part of the consistency list above
 
