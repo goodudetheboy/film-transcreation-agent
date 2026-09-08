@@ -4648,26 +4648,50 @@ textarea {
   margin: 0;
 }
 
-.account-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--space-default);
+.account-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-snug);
 }
 
+/* Overrides .content-card's default column layout — full-width rows, not
+   square tiles, so identity/badges/quotas/actions all sit on one line and
+   only wrap on narrow viewports. */
 .account-card {
-  gap: 8px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-loose);
+}
+
+.account-card__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 160px;
 }
 
 .account-card__quotas {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  flex: 0 0 auto;
+}
+
+.account-card__meta {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .account-card__actions {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .admin-form {

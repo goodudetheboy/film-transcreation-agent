@@ -308,20 +308,19 @@ export function AdminView() {
           {accounts !== null && accounts.length === 0 && <p className="results-placeholder">No accounts yet.</p>}
 
           {accounts !== null && accounts.length > 0 && (
-            <div className="account-grid">
+            <div className="account-list">
               {accounts.map((a) => (
                 <div className="content-card account-card" key={a.uid}>
-                  <div className="content-card__top">
-                    <div className="content-card__body">
-                      <p className="content-card__primary">{a.label}</p>
-                      <p className="content-card__secondary">{a.email}</p>
-                    </div>
-                    <div className="content-card__badges">
-                      <span className={`status-badge status-badge--${a.role === 'admin' ? 'done' : 'pending'}`}>{a.role}</span>
-                      <span className={`status-badge status-badge--${a.disabled ? 'error' : 'done'}`}>
-                        {a.disabled ? 'disabled' : 'enabled'}
-                      </span>
-                    </div>
+                  <div className="account-card__identity">
+                    <p className="content-card__primary">{a.label}</p>
+                    <p className="content-card__secondary">{a.email}</p>
+                  </div>
+
+                  <div className="content-card__badges">
+                    <span className={`status-badge status-badge--${a.role === 'admin' ? 'done' : 'pending'}`}>{a.role}</span>
+                    <span className={`status-badge status-badge--${a.disabled ? 'error' : 'done'}`}>
+                      {a.disabled ? 'disabled' : 'enabled'}
+                    </span>
                   </div>
 
                   <div className="account-card__quotas">
@@ -332,7 +331,7 @@ export function AdminView() {
                     </span>
                   </div>
 
-                  <p className="content-card__caption">
+                  <p className="account-card__meta">
                     {a.callCount24h} call{a.callCount24h === 1 ? '' : 's'} in the last 24h · {formatLastActive(a)}
                     {a.lastEndpoint ? ` (${a.lastEndpoint})` : ''}
                   </p>
