@@ -318,6 +318,44 @@ textarea {
   border-color: var(--border-strong);
 }
 
+.header-settings {
+  position: relative;
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  min-width: 160px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-modal);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: var(--text-caption-size);
+}
+
+.account-menu__item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -4529,4 +4567,123 @@ textarea {
   flex: 0 0 auto;
   border-radius: 3px;
   box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+/* ---------- Admin dashboard (AdminView.tsx) ---------- */
+
+.admin-killswitch-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-default);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-default) var(--space-loose);
+}
+
+.admin-killswitch-card--on {
+  border-color: var(--danger);
+  background: var(--danger-dim);
+}
+
+.admin-killswitch-card--on .content-card__primary {
+  color: var(--danger);
+}
+
+.admin-killswitch-card__status {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.admin-killswitch-card__status .status-dot {
+  margin-top: 6px;
+  color: var(--success);
+}
+
+.admin-killswitch-card--on .status-dot {
+  color: var(--danger);
+}
+
+.admin-stats {
+  display: flex;
+  gap: var(--space-default);
+}
+
+.admin-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  padding: 8px 16px;
+  min-width: 84px;
+}
+
+.admin-stat__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.admin-stat__label {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-default);
+}
+
+.section-heading-row .section-heading {
+  margin: 0;
+}
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-default);
+}
+
+.account-card {
+  gap: 8px;
+}
+
+.account-card__quotas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.account-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-default);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-default);
+}
+
+.admin-form__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }

@@ -41,21 +41,36 @@ describe('AdminView', () => {
     vi.mocked(adminApiClient.listActivity).mockResolvedValue([]);
   });
 
-  it('renders the fetched accounts in the table', async () => {
+  it('renders the fetched accounts as cards, including their quotas', async () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([fakeAccount()]);
-    render(<AdminView />);
+    const { container } = render(<AdminView />);
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
+    const quotaPills = [...container.querySelectorAll('.account-card__quotas .project-card__stat')].map((el) => el.textContent);
+    expect(quotaPills).toEqual(['5 films', '5 projects', '2 concurrent']);
   });
 
-  it('submits the provision form with the entered payload and prepends the new account', async () => {
+  it('shows account/enabled/admin summary stats', async () => {
+    vi.mocked(adminApiClient.listAccounts).mockResolvedValue([
+      fakeAccount({ uid: 'u1', label: 'Alice', role: 'admin' }),
+      fakeAccount({ uid: 'u2', label: 'Carol', disabled: true }),
+    ]);
+    const { container } = render(<AdminView />);
+
+    await screen.findByText('Carol');
+    const stats = [...container.querySelectorAll('.admin-stat')].map((el) => el.textContent);
+    expect(stats).toEqual(['2accounts', '1enabled', '1admin']);
+  });
+
+  it('opens the provision modal, submits it with the entered payload, and prepends the new account', async () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([]);
     const created = fakeAccount({ uid: 'u2', email: 'bob@example.com', label: 'Bob', role: 'admin' });
     vi.mocked(adminApiClient.createAccount).mockResolvedValue(created);
     render(<AdminView />);
 
     await screen.findByText(/no accounts yet/i);
+    await userEvent.click(screen.getByRole('button', { name: /\+ provision account/i }));
 
     await userEvent.type(screen.getByLabelText(/email/i), 'bob@example.com');
     await userEvent.type(screen.getByLabelText(/^password$/i), 'hunter2');
@@ -74,6 +89,36 @@ describe('AdminView', () => {
     );
     expect(await screen.findByText('Bob')).toBeInTheDocument();
     expect(screen.getByText(/account created for bob@example.com/i)).toBeInTheDocument();
+    // Modal itself closed after a successful submit.
+    expect(screen.queryByLabelText(/^password$/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the edit modal pre-filled with the account, and saves changes', async () => {
+    vi.mocked(adminApiClient.listAccounts).mockResolvedValue([fakeAccount()]);
+    const updated = fakeAccount({ label: 'Alice B.', quotas: { maxFilms: 9, maxProjects: 5, maxConcurrentAgentRuns: 2 } });
+    vi.mocked(adminApiClient.updateAccount).mockResolvedValue(updated);
+    render(<AdminView />);
+
+    await screen.findByText('Alice');
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+
+    expect(screen.getByLabelText(/^label$/i)).toHaveValue('Alice');
+    expect(screen.getByLabelText(/max films/i)).toHaveValue(5);
+
+    await userEvent.clear(screen.getByLabelText(/^label$/i));
+    await userEvent.type(screen.getByLabelText(/^label$/i), 'Alice B.');
+    await userEvent.clear(screen.getByLabelText(/max films/i));
+    await userEvent.type(screen.getByLabelText(/max films/i), '9');
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() =>
+      expect(adminApiClient.updateAccount).toHaveBeenCalledWith('u1', {
+        label: 'Alice B.',
+        role: 'user',
+        quotas: { maxFilms: 9, maxProjects: 5, maxConcurrentAgentRuns: 2 },
+      }),
+    );
+    expect(await screen.findByText('Alice B.')).toBeInTheDocument();
   });
 
   it('requires going through the confirm modal before the killswitch toggle calls the API', async () => {

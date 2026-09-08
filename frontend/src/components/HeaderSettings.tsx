@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import type { Theme } from '../utils/useTheme';
-import { GearIcon } from './icons';
+import { GearIcon, SignOutIcon, UserIcon } from './icons';
 
 export interface HeaderSettingsProps {
+  email: string;
   testMode: boolean;
   onTestModeChange: (value: boolean) => void;
   theme: Theme;
@@ -12,38 +13,77 @@ export interface HeaderSettingsProps {
 }
 
 export function HeaderSettings({
+  email,
   testMode,
   onTestModeChange,
   theme,
   onThemeChange,
 }: HeaderSettingsProps) {
-  const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!menuOpen) return;
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
+    function handlePointerDown(e: PointerEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open]);
+    window.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [menuOpen]);
 
   return (
-    <div className="header-settings">
+    <div className="header-settings" ref={rootRef}>
       <button
         type="button"
-        className={`header-settings__trigger${open ? ' header-settings__trigger--active' : ''}`}
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
+        className={`header-settings__trigger${menuOpen ? ' header-settings__trigger--active' : ''}`}
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        onClick={() => setMenuOpen((v) => !v)}
       >
-        <GearIcon />
-        Settings
+        <UserIcon />
+        {email.split('@')[0] || email}
       </button>
-      {open && (
+      {menuOpen && (
+        <div className="account-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            className="account-menu__item"
+            onClick={() => {
+              setMenuOpen(false);
+              setSettingsOpen(true);
+            }}
+          >
+            <GearIcon />
+            Settings
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="account-menu__item"
+            onClick={() => {
+              setMenuOpen(false);
+              signOut(auth);
+            }}
+          >
+            <SignOutIcon />
+            Sign out
+          </button>
+        </div>
+      )}
+      {settingsOpen && (
         <div
           className="modal-backdrop"
           data-testid="modal-backdrop"
-          onClick={() => setOpen(false)}
+          onClick={() => setSettingsOpen(false)}
         >
           <div
             className="modal"
@@ -58,7 +98,7 @@ export function HeaderSettings({
                 type="button"
                 className="modal__close"
                 aria-label="Close"
-                onClick={() => setOpen(false)}
+                onClick={() => setSettingsOpen(false)}
               >
                 ×
               </button>
@@ -82,9 +122,6 @@ export function HeaderSettings({
                 <option value="light">Light</option>
               </select>
             </div>
-            <button type="button" className="btn btn--ghost" onClick={() => signOut(auth)}>
-              Sign out
-            </button>
           </div>
         </div>
       )}

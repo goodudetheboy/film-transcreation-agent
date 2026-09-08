@@ -72,6 +72,7 @@ function App() {
         </nav>
         <div className="menu-bar__spacer" />
         <HeaderSettings
+          email={user.email ?? ''}
           testMode={testMode}
           onTestModeChange={setTestMode}
           theme={theme}

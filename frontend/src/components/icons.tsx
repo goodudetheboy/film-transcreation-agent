@@ -43,6 +43,25 @@ export function GearIcon(props: IconProps) {
   );
 }
 
+export function UserIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="8" r="3.8" />
+      <path d="M4.5 20.2c1.4-3.9 4.4-6 7.5-6s6.1 2.1 7.5 6" />
+    </Icon>
+  );
+}
+
+export function SignOutIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+      <path d="M16 16l4-4-4-4" />
+      <path d="M20 12H9" />
+    </Icon>
+  );
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <Icon {...props}>
