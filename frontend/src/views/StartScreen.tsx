@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { deleteFilm, listFilms } from '../api/filmsApiClient';
+import { listProjects } from '../api/projectsApiClient';
 import type { Film } from '../api/apiClient.types';
 import { TrashIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -8,6 +9,11 @@ import { ConfirmModal } from '../components/ConfirmModal';
 export interface StartScreenProps {
   passcode: string;
 }
+
+const FILM_STATUS_LABELS: Record<Film['status'], string> = {
+  processing: 'Processing…',
+  processed: 'Processed',
+};
 
 /**
  * The fullscreen landing screen once logged in — a real screen, not a modal,
@@ -19,6 +25,7 @@ export function StartScreen({ passcode }: StartScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Film | null>(null);
+  const [projectCountByFilmId, setProjectCountByFilmId] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +35,23 @@ export function StartScreen({ passcode }: StartScreenProps) {
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'failed to load films');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [passcode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listProjects(passcode)
+      .then((projects) => {
+        if (cancelled) return;
+        const counts: Record<string, number> = {};
+        for (const p of projects) counts[p.sourceFilmId] = (counts[p.sourceFilmId] ?? 0) + 1;
+        setProjectCountByFilmId(counts);
+      })
+      .catch(() => {
+        // Non-fatal — the library still works without the project-count chip.
       });
     return () => {
       cancelled = true;
@@ -80,10 +104,19 @@ export function StartScreen({ passcode }: StartScreenProps) {
                       <p className="content-card__primary">{f.title}</p>
                       <p className="content-card__caption">
                         {f.subtitle ? `${f.subtitle.entries.length} subtitle line${f.subtitle.entries.length === 1 ? '' : 's'}` : 'No subtitle'}
+                        {' · '}
+                        {projectCountByFilmId[f.id]
+                          ? `${projectCountByFilmId[f.id]} project${projectCountByFilmId[f.id] === 1 ? '' : 's'}`
+                          : 'No projects yet'}
                       </p>
                     </div>
                     <div className="content-card__badges">
-                      <span className={`status-badge status-badge--${f.status === 'processed' ? 'done' : 'running'}`}>{f.status}</span>
+                      <div className="project-card__status-group">
+                        <span className="project-card__status-label">Status</span>
+                        <span className={`status-badge status-badge--${f.status === 'processed' ? 'done' : 'running'}`}>
+                          {FILM_STATUS_LABELS[f.status]}
+                        </span>
+                      </div>
                     </div>
                   </Link>
                   <button

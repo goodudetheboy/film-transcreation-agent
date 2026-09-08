@@ -4351,6 +4351,70 @@ textarea {
   border-color: var(--accent-dim);
 }
 
+.project-card__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  max-width: 320px;
+}
+
+.project-card__progress-bar {
+  flex: 1;
+  display: flex;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.project-card__progress-seg {
+  height: 100%;
+}
+
+.project-card__progress-seg--accepted {
+  background: var(--success);
+}
+
+.project-card__progress-seg--rejected {
+  background: var(--danger);
+}
+
+.project-card__progress-seg--research {
+  background: var(--accent);
+}
+
+.project-card__progress-seg--pending {
+  background: var(--warning);
+  opacity: 0.5;
+}
+
+.project-card__progress-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Labeled status pills (Stage / Agent) in the project row's side column — the
+   pill text alone ("done", "draft") reads as ambiguous once there are two
+   stacked side by side, so each gets a small caption naming what it measures. */
+.project-card__status-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-card__status-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+}
+
 /* ---------- Country select (searchable dropdown with flags) ---------- */
 
 .country-select {

@@ -4,9 +4,30 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { StartScreen } from './StartScreen';
 import * as filmsApiClient from '../api/filmsApiClient';
-import type { Film } from '../api/apiClient.types';
+import * as projectsApiClient from '../api/projectsApiClient';
+import type { EnrichedProject, Film } from '../api/apiClient.types';
 
 vi.mock('../api/filmsApiClient');
+vi.mock('../api/projectsApiClient');
+
+function fakeProject(overrides: Partial<EnrichedProject> = {}): EnrichedProject {
+  return {
+    id: 'p1',
+    name: 'Japan — Inside Out',
+    country: 'Japan',
+    sourceFilmId: 'f1',
+    note: '',
+    status: 'draft',
+    createdAt: '2026-08-25T00:00:00.000Z',
+    updatedAt: '2026-08-25T00:00:00.000Z',
+    pendingCount: 0,
+    acceptedCount: 0,
+    rejectedCount: 0,
+    needResearchCount: 0,
+    agentStatus: null,
+    ...overrides,
+  };
+}
 
 function fakeFilm(overrides: Partial<Film> = {}): Film {
   return {
@@ -39,6 +60,8 @@ describe('StartScreen', () => {
   beforeEach(() => {
     vi.mocked(filmsApiClient.listFilms).mockReset();
     vi.mocked(filmsApiClient.deleteFilm).mockReset();
+    vi.mocked(projectsApiClient.listProjects).mockReset();
+    vi.mocked(projectsApiClient.listProjects).mockResolvedValue([]);
   });
 
   it('shows a loading state, then the fetched films in the library half', async () => {
@@ -51,8 +74,24 @@ describe('StartScreen', () => {
 
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
     expect(await screen.findByText('Inside Out')).toBeInTheDocument();
-    expect(screen.getByText('1 subtitle line')).toBeInTheDocument();
-    expect(screen.getByText('processed')).toBeInTheDocument();
+    expect(screen.getByText(/1 subtitle line/)).toBeInTheDocument();
+    expect(screen.getByText('Processed')).toBeInTheDocument();
+  });
+
+  it('shows a project-count chip per film, derived from the projects list', async () => {
+    vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm(), fakeFilm({ id: 'f2', title: 'Your Body Count Is What?' })]);
+    vi.mocked(projectsApiClient.listProjects).mockResolvedValue([
+      fakeProject({ id: 'p1', sourceFilmId: 'f1' }),
+      fakeProject({ id: 'p2', sourceFilmId: 'f1' }),
+    ]);
+    render(
+      <MemoryRouter>
+        <StartScreen passcode="secret" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText(/2 projects/)).toBeInTheDocument();
+    expect(await screen.findByText(/no projects yet/i)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no films', async () => {
