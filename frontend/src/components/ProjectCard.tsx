@@ -1,5 +1,6 @@
-import type { EnrichedProject, ProjectLifecycleStatus, ResearchRunStatus } from '../api/apiClient.types';
+import type { EnrichedProject } from '../api/apiClient.types';
 import { countryCode } from '../data/countries';
+import { AGENT_RUN_LABELS, PROJECT_STAGE_LABELS } from '../utils/statusLabels';
 import { Flag } from './Flag';
 
 export interface ProjectCardProps {
@@ -11,20 +12,6 @@ export interface ProjectCardProps {
    * (where the film title is already the page you're on). Defaults to shown. */
   showName?: boolean;
 }
-
-const STAGE_LABELS: Record<ProjectLifecycleStatus, string> = {
-  draft: 'Draft',
-  in_progress: 'In progress',
-  completed: 'Completed',
-  abandoned: 'Abandoned',
-};
-
-const AGENT_LABELS: Record<ResearchRunStatus, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  done: 'Done',
-  error: 'Error',
-};
 
 /** A full-width row — same data (country, agent/project status, item counts)
  * as the old grid card, laid out like the Agent Status list's rows instead of
@@ -88,14 +75,14 @@ export function ProjectCard({ project, onOpen, showName = true }: ProjectCardPro
       <div className="list-row__side">
         <div className="project-card__status-group">
           <span className="project-card__status-label">Stage</span>
-          <span className={`status-badge status-badge--${project.status}`}>{STAGE_LABELS[project.status]}</span>
+          <span className={`status-badge status-badge--${project.status}`}>{PROJECT_STAGE_LABELS[project.status]}</span>
         </div>
         <div className="project-card__status-group">
           <span className="project-card__status-label">Agent</span>
           {project.agentStatus ? (
             <span className={`status-badge status-badge--${project.agentStatus}`}>
               {project.agentStatus === 'running' && <span className="status-dot status-dot--running" />}
-              {AGENT_LABELS[project.agentStatus]}
+              {AGENT_RUN_LABELS[project.agentStatus]}
             </span>
           ) : (
             <span className="status-badge">No runs yet</span>

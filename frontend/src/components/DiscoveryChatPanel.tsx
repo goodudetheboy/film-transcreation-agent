@@ -30,6 +30,7 @@ import { formatClock } from '../utils/timeFormat';
 import { useResizableColumns } from '../utils/useResizableColumns';
 import { detailRowReference, type ChatReference } from '../utils/chatReferences';
 import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
+import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -826,7 +827,7 @@ export function DiscoveryChatPanel({
                   <TrashIcon />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className={`status-badge status-badge--${combined}`}>{combined}</span>
+                  <span className={`status-badge status-badge--${combined}`}>{AGENT_RUN_LABELS[combined]}</span>
                   <span className="chat-panel__library-item-name">{s.name ?? `Agent #${s.agentNumber}`}</span>
                 </div>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}

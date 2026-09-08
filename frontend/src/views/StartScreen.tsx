@@ -5,15 +5,11 @@ import { listProjects } from '../api/projectsApiClient';
 import type { Film } from '../api/apiClient.types';
 import { TrashIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { FILM_STATUS_LABELS } from '../utils/statusLabels';
 
 export interface StartScreenProps {
   passcode: string;
 }
-
-const FILM_STATUS_LABELS: Record<Film['status'], string> = {
-  processing: 'Processing…',
-  processed: 'Processed',
-};
 
 /**
  * The fullscreen landing screen once logged in — a real screen, not a modal,

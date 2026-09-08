@@ -8,6 +8,7 @@ import { Flag } from './Flag';
 import { Modal } from './Modal';
 import { MicroscopeIcon, SearchIcon } from './icons';
 import { collectRunRefs, combinedAgentStatus, type RunLikeStatus } from '../utils/agentRunStatus';
+import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 
 export interface FilmAgentsTabProps {
   filmId: string;
@@ -300,7 +301,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
 
               <div className="list-row__side">
                 <span className={`status-badge status-badge--${row.status}`}>
-                  <span className={`status-dot${row.status === 'running' ? ' status-dot--running' : ''}`} /> {row.status}
+                  <span className={`status-dot${row.status === 'running' ? ' status-dot--running' : ''}`} /> {AGENT_RUN_LABELS[row.status]}
                 </span>
                 <span className="list-row__meta">{new Date(row.updatedAt).toLocaleString()}</span>
               </div>

@@ -21,6 +21,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { Flag } from '../components/Flag';
 import { countryCode } from '../data/countries';
 import { SparkleIcon, TrashIcon } from '../components/icons';
+import { FILM_STATUS_LABELS } from '../utils/statusLabels';
 
 export interface FilmWorkspaceViewProps {
   passcode: string;
@@ -407,7 +408,12 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           <h1 className="page-header__title">{film.title}</h1>
         </div>
         <div className="page-header__actions">
-          <span className={`status-badge status-badge--${film.status === 'processed' ? 'done' : 'running'}`}>{film.status}</span>
+          <div className="project-card__status-group">
+            <span className="project-card__status-label">Status</span>
+            <span className={`status-badge status-badge--${film.status === 'processed' ? 'done' : 'running'}`}>
+              {FILM_STATUS_LABELS[film.status]}
+            </span>
+          </div>
           <button
             type="button"
             className="btn btn--ghost"

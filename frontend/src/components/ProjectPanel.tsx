@@ -14,6 +14,7 @@ import { listDetails } from '../api/filmsApiClient';
 import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction } from '../api/apiClient.types';
 import { useProjectWorkspaceStore, type ProjectItemFilter } from '../store/projectWorkspaceStore';
 import { actionColor } from '../utils/actionColor';
+import { PROJECT_STAGE_LABELS } from '../utils/statusLabels';
 import { formatClock } from '../utils/timeFormat';
 import { projectItemReference } from '../utils/chatReferences';
 import { beginChipDrag } from '../utils/chipDragDrop';
@@ -253,7 +254,7 @@ export function ProjectPanel({
               Project: <Flag code={countryCode(project.country)} /> {project.country}
             </p>
             <div className="project-panel__badges">
-              <span className={`status-badge status-badge--${project.status}`}>{project.status}</span>
+              <span className={`status-badge status-badge--${project.status}`}>{PROJECT_STAGE_LABELS[project.status]}</span>
             </div>
           </div>
           <div className="project-panel__actions">

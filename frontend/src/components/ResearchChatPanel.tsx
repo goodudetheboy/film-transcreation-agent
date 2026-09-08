@@ -20,6 +20,7 @@ import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { projectItemReference, type ChatReference } from '../utils/chatReferences';
 import { formatClock } from '../utils/timeFormat';
 import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
+import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
 import { ConfirmModal } from './ConfirmModal';
@@ -948,7 +949,7 @@ export function ResearchChatPanel({
                   <TrashIcon />
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className={`status-badge status-badge--${combined}`}>{combined}</span>
+                  <span className={`status-badge status-badge--${combined}`}>{AGENT_RUN_LABELS[combined]}</span>
                   <span className="chat-panel__library-item-name">{s.name ?? `Session ${s.sessionNumber}`}</span>
                 </div>
                 {lastText && <span className="chat-panel__library-item-preview">{lastText}</span>}
