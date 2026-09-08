@@ -2,6 +2,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { uploadVideoFile } from '../filmsApiClient';
 
+vi.mock('firebase/auth', () => ({
+  getAuth: () => ({ currentUser: { getIdToken: async () => 'test-id-token' } }),
+  onAuthStateChanged: vi.fn(),
+  signInWithEmailAndPassword: vi.fn(),
+}));
+
 function makeFile(sizeBytes = 10): File {
   return new File([new Uint8Array(sizeBytes)], 'clip.mp4', { type: 'video/mp4' });
 }
@@ -11,17 +17,18 @@ describe('uploadVideoFile', () => {
     const fetchImpl = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      json: vi.fn().mockResolvedValue({ videoUrl: 'http://x/mock-uploads/a.mp4?passcode=p' }),
+      json: vi.fn().mockResolvedValue({ videoUrl: 'http://x/mock-uploads/a.mp4' }),
     });
 
-    const result = await uploadVideoFile(makeFile(), { passcode: 'p', testMode: true }, { fetchImpl, baseUrl: 'http://x' });
+    const result = await uploadVideoFile(makeFile(), { testMode: true }, { fetchImpl, baseUrl: 'http://x' });
 
-    expect(result).toEqual({ videoUrl: 'http://x/mock-uploads/a.mp4?passcode=p' });
+    expect(result).toEqual({ videoUrl: 'http://x/mock-uploads/a.mp4' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0];
-    expect(url).toBe('http://x/api/films/upload-video?passcode=p');
+    expect(url).toBe('http://x/api/films/upload-video');
     expect(init.method).toBe('POST');
     expect(init.body).toBeInstanceOf(FormData);
+    expect(init.headers).toEqual({ Authorization: 'Bearer test-id-token' });
   });
 
   it('real mode calls init, PUTs directly to the session URL, then calls finalize to confirm completion', async () => {
@@ -29,8 +36,8 @@ describe('uploadVideoFile', () => {
     const fetchImpl = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
       if (url === 'http://x/api/films/upload-video/init') {
         expect(init.method).toBe('POST');
+        expect(init.headers).toEqual({ 'Content-Type': 'application/json', Authorization: 'Bearer test-id-token' });
         expect(JSON.parse(init.body as string)).toEqual({
-          passcode: 'p',
           filename: 'clip.mp4',
           contentType: 'video/mp4',
           size: 10,
@@ -50,14 +57,14 @@ describe('uploadVideoFile', () => {
       }
       if (url === 'http://x/api/films/upload-video/finalize') {
         expect(init.method).toBe('POST');
-        expect(JSON.parse(init.body as string)).toEqual({ passcode: 'p', videoUrl: 'gs://bucket/s1.mp4', testMode: false });
+        expect(JSON.parse(init.body as string)).toEqual({ videoUrl: 'gs://bucket/s1.mp4', testMode: false });
         return { ok: true, status: 200, json: vi.fn().mockResolvedValue({ ok: true, size: 10 }) };
       }
       throw new Error(`unexpected fetch to ${url}`);
     });
 
     const onProgress = vi.fn();
-    const result = await uploadVideoFile(file, { passcode: 'p', testMode: false }, { fetchImpl, baseUrl: 'http://x' }, onProgress);
+    const result = await uploadVideoFile(file, { testMode: false }, { fetchImpl, baseUrl: 'http://x' }, onProgress);
 
     expect(result).toEqual({ videoUrl: 'gs://bucket/s1.mp4' });
     expect(onProgress).toHaveBeenCalledWith(1);
@@ -71,7 +78,7 @@ describe('uploadVideoFile', () => {
     });
 
     await expect(
-      uploadVideoFile(makeFile(), { passcode: 'p', testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
+      uploadVideoFile(makeFile(), { testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
     ).rejects.toThrow(/video exceeds the upload limit/);
   });
 
@@ -94,7 +101,7 @@ describe('uploadVideoFile', () => {
     });
 
     await expect(
-      uploadVideoFile(makeFile(), { passcode: 'p', testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
+      uploadVideoFile(makeFile(), { testMode: false }, { fetchImpl, baseUrl: 'http://x' }),
     ).rejects.toThrow(/video upload has not finished yet/);
   });
 });

@@ -12,7 +12,6 @@ import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 
 export interface FilmAgentsTabProps {
   filmId: string;
-  passcode: string;
   /** This film's own projects (already filtered by sourceFilmId upstream). */
   projects: EnrichedProject[];
   onOpenDiscovery: (agentId?: string, autoCreate?: 'agent' | 'session') => void;
@@ -57,7 +56,7 @@ function lastTextPreview(session: DiscoveryAgentSession | ChatSession): string |
   return [...session.turns].reverse().find((t) => t.parts.some((p) => p.text))?.parts.find((p) => p.text)?.text;
 }
 
-export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onOpenResearch }: FilmAgentsTabProps) {
+export function FilmAgentsTab({ filmId, projects, onOpenDiscovery, onOpenResearch }: FilmAgentsTabProps) {
   const [rawRows, setRawRows] = useState<RawAgentRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pickingProject, setPickingProject] = useState(false);
@@ -81,11 +80,11 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
     (async () => {
       try {
         const [discoverySessions, discoveryJobs, researchSettled] = await Promise.all([
-          listDiscoveryAgentSessions(filmId, passcode),
-          listDiscoveryJobs(filmId, passcode),
+          listDiscoveryAgentSessions(filmId),
+          listDiscoveryJobs(filmId),
           Promise.allSettled(
             projects.map((p) =>
-              Promise.all([listChatSessions(p.id, passcode), listResearchRuns(p.id, passcode)]).then(([sessions, runs]) => ({ p, sessions, runs })),
+              Promise.all([listChatSessions(p.id), listResearchRuns(p.id)]).then(([sessions, runs]) => ({ p, sessions, runs })),
             ),
           ),
         ]);
@@ -135,7 +134,7 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
     return () => {
       cancelled = true;
     };
-  }, [filmId, passcode, projects]);
+  }, [filmId, projects]);
 
   // Subscribe to every non-terminal job/run's own resumable stream so its
   // status keeps updating live — same primitive (streamDiscoveryJob/
@@ -153,17 +152,17 @@ export function FilmAgentsTab({ filmId, passcode, projects, onOpenDiscovery, onO
         if (subscribedIdsRef.current.has(id)) continue;
         subscribedIdsRef.current.add(id);
         if (row.kind === 'discovery') {
-          streamDiscoveryJob(filmId, id, passcode, (event) => {
+          streamDiscoveryJob(filmId, id, (event) => {
             setLiveStatusById((prev) => ({ ...prev, [id]: event.job.status }));
           });
         } else {
-          streamResearchRunUpdates(row.projectId!, id, passcode, (event) => {
+          streamResearchRunUpdates(row.projectId!, id, (event) => {
             setLiveStatusById((prev) => ({ ...prev, [id]: event.run.status }));
           });
         }
       }
     }
-  }, [rawRows, filmId, passcode]);
+  }, [rawRows, filmId]);
 
   const rows = useMemo<AgentRow[] | null>(() => {
     if (rawRows === null) return null;

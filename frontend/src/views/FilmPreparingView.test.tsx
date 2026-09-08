@@ -43,7 +43,7 @@ function renderAtNew() {
   render(
     <MemoryRouter initialEntries={['/films/new/preparing']}>
       <Routes>
-        <Route path="/films/:id/preparing" element={<FilmPreparingView passcode="secret" testMode={true} />} />
+        <Route path="/films/:id/preparing" element={<FilmPreparingView testMode={true} />} />
       </Routes>
     </MemoryRouter>,
   );

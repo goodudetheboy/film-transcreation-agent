@@ -2,14 +2,19 @@ import express, { type Express, Router } from 'express';
 import cors from 'cors';
 import { healthRoute } from './routes/health.js';
 import { configRoute } from './routes/config.js';
-import { verifyPasscodeRoute } from './routes/verifyPasscode.js';
 import { projectsRoute } from './routes/projects.js';
 import { projectChatRoute } from './routes/projectChat.js';
 import { discoveryChatRoute } from './routes/discoveryChat.js';
 import { filmsRoute } from './routes/films.js';
-import { passcodeMiddleware } from './middleware/passcode.js';
+import { adminRoute, type FirebaseUserAdmin } from './routes/admin.js';
+import { firebaseAuthMiddleware, type VerifyIdToken } from './middleware/firebaseAuth.js';
+import { killswitchMiddleware } from './middleware/killswitch.js';
+import { callLoggingMiddleware } from './middleware/callLogging.js';
 import { rateLimitMiddleware } from './middleware/rateLimit.js';
 import { loadConfig, type Config } from './config/env.js';
+import { createInMemoryAccountStore, type AccountStore } from './services/accountStore.js';
+import { createInMemoryApiCallLogStore, type ApiCallLogStore } from './services/apiCallLogStore.js';
+import { createInMemoryKillswitchStore, type KillswitchStore } from './services/killswitchStore.js';
 import type { ResearchAgent } from './services/researchAgent.js';
 import { createMockResearchAgent } from './services/mockResearchAgent.js';
 import type { TrendAgent } from './services/trendAgent.js';
@@ -61,6 +66,15 @@ export interface AppDeps {
   eventBus?: DiscoveryEventBus;
   videoBucketUploader?: VideoBucketUploader;
   videoSegmentDescriber?: VideoSegmentDescriber;
+  accountStore?: AccountStore;
+  apiCallLogStore?: ApiCallLogStore;
+  killswitchStore?: KillswitchStore;
+  /** Verifies a Firebase ID token — defaults to rejecting everything, since a
+   * real verifier needs a real Firebase project (server.ts provides it via
+   * firebase-admin). Tests inject a fake, same convention as researchAgent
+   * defaulting to notConfiguredResearchAgent below. */
+  verifyIdToken?: VerifyIdToken;
+  firebaseUserAdmin?: FirebaseUserAdmin;
 }
 
 const notConfiguredResearchAgent: ResearchAgent = {
@@ -98,6 +112,25 @@ const notConfiguredDiscoveryChatAgent: DiscoveryChatAgent = {
 const notConfiguredVideoSegmentDescriber: VideoSegmentDescriber = {
   async describeVideoSegment() {
     throw new Error('videoSegmentDescriber not provided to createApp()');
+  },
+};
+
+const notConfiguredVerifyIdToken: VerifyIdToken = async () => {
+  throw new Error('verifyIdToken not provided to createApp()');
+};
+
+const notConfiguredFirebaseUserAdmin: FirebaseUserAdmin = {
+  async createUser() {
+    throw new Error('firebaseUserAdmin not provided to createApp()');
+  },
+  async setCustomUserClaims() {
+    throw new Error('firebaseUserAdmin not provided to createApp()');
+  },
+  async updateUser() {
+    throw new Error('firebaseUserAdmin not provided to createApp()');
+  },
+  async deleteUser() {
+    throw new Error('firebaseUserAdmin not provided to createApp()');
   },
 };
 
@@ -154,6 +187,11 @@ export function createApp(deps: AppDeps = {}): Express {
     deps.mockDiscoveryChatAgent ??
     createMockDiscoveryChatAgent({ filmStore, detailRowsStore, discoveryJobStore, discoveryChatSessionStore, eventBus, videoSegmentDescriber });
   const videoBucketUploader = deps.videoBucketUploader ?? notConfiguredVideoBucketUploader;
+  const accountStore = deps.accountStore ?? createInMemoryAccountStore();
+  const apiCallLogStore = deps.apiCallLogStore ?? createInMemoryApiCallLogStore();
+  const killswitchStore = deps.killswitchStore ?? createInMemoryKillswitchStore();
+  const verifyIdToken = deps.verifyIdToken ?? notConfiguredVerifyIdToken;
+  const firebaseUserAdmin = deps.firebaseUserAdmin ?? notConfiguredFirebaseUserAdmin;
 
   const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({
     filmStore,
@@ -168,16 +206,32 @@ export function createApp(deps: AppDeps = {}): Express {
   app.use(cors());
   app.use(express.json());
 
-  // Health check stays unguarded — Cloud Run's probe shouldn't need a passcode.
+  // Health check stays unguarded — Cloud Run's probe shouldn't need auth.
   app.use(healthRoute());
 
-  // Rate limit runs before the passcode check, so brute-force passcode guessing
-  // still gets counted and blocked (see docs/adr/0005).
+  // A <video> tag's GET can't carry an Authorization header — mock-uploaded
+  // clips (test mode only, never real film data) stay unauthenticated for the
+  // same reason they used to ride a passcode query param instead of the real
+  // gate. Mounted before firebaseAuth, same tier as the health check.
+  app.use('/mock-uploads', express.static(config.mockUploadsDir));
+
+  // Rate limit runs before auth, so a flood of bad tokens still gets counted
+  // and blocked (see docs/adr/0005).
   const guarded = Router();
   guarded.use(rateLimitMiddleware({ windowMs: config.rateLimitWindowMs, max: config.rateLimitMax }));
-  guarded.use(passcodeMiddleware(config.sharedPasscode));
-  guarded.use(verifyPasscodeRoute());
+  guarded.use(firebaseAuthMiddleware({ verifyIdToken, accountStore }));
+  guarded.use(killswitchMiddleware(killswitchStore));
+  guarded.use(callLoggingMiddleware(apiCallLogStore));
   guarded.use(configRoute({ defaultRubrics: DEFAULT_RUBRICS }));
+  guarded.use(
+    '/api/admin',
+    adminRoute({
+      accountStore,
+      apiCallLogStore,
+      killswitchStore,
+      firebaseUserAdmin,
+    }),
+  );
   guarded.use(
     projectsRoute({
       projectStore,
@@ -190,6 +244,8 @@ export function createApp(deps: AppDeps = {}): Express {
       trendAgent,
       mockTrendAgent,
       eventBus: researchRunEventBus,
+      filmStore,
+      discoveryJobStore,
     }),
   );
   guarded.use(
@@ -210,9 +266,6 @@ export function createApp(deps: AppDeps = {}): Express {
       mockDiscoveryChatAgent,
     }),
   );
-  // Serves mock-mode uploaded video bytes back over HTTP. Sits behind the same
-  // passcode gate as everything else in `guarded` (passcodeMiddleware runs first).
-  guarded.use('/mock-uploads', express.static(config.mockUploadsDir));
   guarded.use(
     filmsRoute({
       filmStore,
@@ -221,6 +274,7 @@ export function createApp(deps: AppDeps = {}): Express {
       projectStore,
       projectRubricStore,
       projectItemStore,
+      researchRunStore,
       defaultRubrics: DEFAULT_RUBRICS,
       videoBucketUploader,
       maxVideoUploadBytes: config.maxVideoUploadBytes,

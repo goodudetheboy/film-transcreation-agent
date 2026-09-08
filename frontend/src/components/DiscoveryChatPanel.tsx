@@ -43,7 +43,6 @@ import { MessageWithReferences } from './MessageWithReferences';
 
 export interface DiscoveryChatPanelProps {
   filmId: string;
-  passcode: string;
   testMode: boolean;
   columns: ColumnDoc[];
   /** Deep-link from the global Agents tab — opens this specific session's
@@ -89,7 +88,6 @@ const RESULT_MAX_COL_WIDTH = 640;
  * another pass" for a later run. */
 function KickoffForm({
   filmId,
-  passcode,
   testMode,
   agentNumber,
   columns,
@@ -97,7 +95,6 @@ function KickoffForm({
   onCancel,
 }: {
   filmId: string;
-  passcode: string;
   testMode: boolean;
   agentNumber: number;
   columns: ColumnDoc[];
@@ -127,14 +124,13 @@ function KickoffForm({
     setError(null);
     try {
       const job = await createDiscoveryJob(filmId, {
-        passcode,
         agentNumber,
         name: name.trim() || undefined,
         specialInstruction,
         targetColumns: selectedColumns,
         testMode,
       });
-      const session = await logDiscoveryRun(filmId, activeDiscoveryChatSessionId, { passcode, jobId: job.id });
+      const session = await logDiscoveryRun(filmId, activeDiscoveryChatSessionId, { jobId: job.id });
       onCreated(session);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'failed to kick off agent');
@@ -577,7 +573,6 @@ function DiscoveryToolCallCard({ name, args, result }: { name: string; args: Rec
 
 export function DiscoveryChatPanel({
   filmId,
-  passcode,
   testMode,
   columns,
   initialAgentId,
@@ -616,20 +611,20 @@ export function DiscoveryChatPanel({
 
   useEffect(() => {
     let cancelled = false;
-    listDiscoveryAgentSessions(filmId, passcode).then((sessions) => {
+    listDiscoveryAgentSessions(filmId).then((sessions) => {
       if (!cancelled) setDiscoveryChatSessions(sessions);
     });
     // The film-wide job status list, joined against each session's own `run`
     // marker turns below — same "session status alone doesn't mean the batch
     // Run finished" gap FilmAgentsTab.tsx fixes, applied to this switcher list.
-    listDiscoveryJobs(filmId, passcode).then((jobs) => {
+    listDiscoveryJobs(filmId).then((jobs) => {
       if (!cancelled) setJobStatuses(Object.fromEntries(jobs.map((j) => [j.id, j.status])));
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filmId, passcode]);
+  }, [filmId]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
@@ -666,12 +661,12 @@ export function DiscoveryChatPanel({
     const toSubscribe = [...new Set(jobIds)].filter((jobId) => !subscribedJobIdsRef.current.has(jobId));
     for (const jobId of toSubscribe) {
       subscribedJobIdsRef.current.add(jobId);
-      streamDiscoveryJob(filmId, jobId, passcode, (event) => {
+      streamDiscoveryJob(filmId, jobId, (event) => {
         setJobDetails((prev) => ({ ...prev, [jobId]: event.job }));
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSession, filmId, passcode]);
+  }, [activeSession, filmId]);
 
   function removeCandidatesFromJob(jobId: string, tempIds: string[]) {
     const idSet = new Set(tempIds);
@@ -685,24 +680,24 @@ export function DiscoveryChatPanel({
   }
 
   async function handleMergeCandidate(jobId: string, tempId: string) {
-    const row = await mergeDiscoveryResult(filmId, jobId, tempId, passcode);
+    const row = await mergeDiscoveryResult(filmId, jobId, tempId);
     addRow(row);
     removeCandidateFromJob(jobId, tempId);
   }
 
   async function handleDiscardCandidate(jobId: string, tempId: string) {
-    await discardDiscoveryResult(filmId, jobId, tempId, passcode);
+    await discardDiscoveryResult(filmId, jobId, tempId);
     removeCandidateFromJob(jobId, tempId);
   }
 
   async function handleBulkMergeCandidates(jobId: string, tempIds: string[]) {
-    const rows = await bulkMergeDiscoveryResults(filmId, jobId, tempIds, passcode);
+    const rows = await bulkMergeDiscoveryResults(filmId, jobId, tempIds);
     for (const row of rows) addRow(row);
     removeCandidatesFromJob(jobId, tempIds);
   }
 
   async function handleBulkDiscardCandidates(jobId: string, tempIds: string[]) {
-    await bulkDiscardDiscoveryResults(filmId, jobId, tempIds, passcode);
+    await bulkDiscardDiscoveryResults(filmId, jobId, tempIds);
     removeCandidatesFromJob(jobId, tempIds);
   }
 
@@ -710,7 +705,7 @@ export function DiscoveryChatPanel({
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteDiscoveryAgentSession(filmId, deleteTarget.id, passcode);
+      await deleteDiscoveryAgentSession(filmId, deleteTarget.id);
       removeDiscoveryChatSession(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err) {
@@ -722,20 +717,20 @@ export function DiscoveryChatPanel({
 
   async function handleRenameAgent(name: string) {
     if (!activeSession) return;
-    const session = await renameDiscoveryAgentSession(filmId, activeSession.id, { passcode, name });
+    const session = await renameDiscoveryAgentSession(filmId, activeSession.id, { name });
     upsertDiscoveryChatSession(session);
   }
 
   async function handleCreateAgent() {
     const nextAgentNumber = Math.max(0, ...discoveryChatSessions.map((s) => s.agentNumber)) + 1;
-    const session = await createDiscoveryAgentSession(filmId, { passcode, name: `Agent #${nextAgentNumber}` });
+    const session = await createDiscoveryAgentSession(filmId, { name: `Agent #${nextAgentNumber}` });
     upsertDiscoveryChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(true);
   }
 
   async function handleCreateSession() {
-    const session = await createDiscoveryAgentSession(filmId, { passcode, name: 'Session' });
+    const session = await createDiscoveryAgentSession(filmId, { name: 'Session' });
     upsertDiscoveryChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(false);
@@ -750,7 +745,7 @@ export function DiscoveryChatPanel({
   async function handleSend(text: string) {
     let session = activeSession;
     if (!session) {
-      session = await createDiscoveryAgentSession(filmId, { passcode });
+      session = await createDiscoveryAgentSession(filmId, {});
       upsertDiscoveryChatSession(session);
     }
 
@@ -764,7 +759,7 @@ export function DiscoveryChatPanel({
       await sendDiscoveryChatMessage(
         filmId,
         session.id,
-        { passcode, text, testMode },
+        { text, testMode },
         (event) => {
           setLiveEvents((prev) => [...prev, event]);
           applyDiscoveryChatEvent(event);
@@ -774,7 +769,7 @@ export function DiscoveryChatPanel({
         { signal: controller.signal },
       );
     } finally {
-      const sessions = await listDiscoveryAgentSessions(filmId, passcode);
+      const sessions = await listDiscoveryAgentSessions(filmId);
       setDiscoveryChatSessions(sessions);
       setLiveEvents([]);
       setPendingUserText(null);
@@ -970,7 +965,6 @@ export function DiscoveryChatPanel({
         <Modal title="Kick off Discover agent to find new lines?" onClose={() => setShowKickoffForm(false)} className="kickoff-modal">
           <KickoffForm
             filmId={filmId}
-            passcode={passcode}
             testMode={testMode}
             agentNumber={activeSession.agentNumber}
             columns={columns}

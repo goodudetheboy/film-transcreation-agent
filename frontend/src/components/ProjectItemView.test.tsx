@@ -49,7 +49,6 @@ describe('ProjectItemView', () => {
     render(
       <ProjectItemView
         projectId="proj-1"
-        passcode="secret"
         testMode={true}
         item={fakeItem()}
         rubrics={RUBRICS}
@@ -84,7 +83,6 @@ describe('ProjectItemView', () => {
     render(
       <ProjectItemView
         projectId="proj-1"
-        passcode="secret"
         testMode={true}
         item={item}
         rubrics={RUBRICS}
@@ -109,7 +107,6 @@ describe('ProjectItemView', () => {
     render(
       <ProjectItemView
         projectId="proj-1"
-        passcode="secret"
         testMode={true}
         item={fakeItem()}
         rubrics={RUBRICS}
@@ -154,7 +151,6 @@ describe('ProjectItemView', () => {
     render(
       <ProjectItemView
         projectId="proj-1"
-        passcode="secret"
         testMode={true}
         item={fakeItem({ trendSuggestions: null })}
         rubrics={[trendEligibleRubric]}
@@ -174,7 +170,7 @@ describe('ProjectItemView', () => {
     expect(projectsApiClient.runTrendResearch).toHaveBeenCalledWith(
       'proj-1',
       'item-1',
-      { passcode: 'secret', testMode: true },
+      { testMode: true },
     );
     expect(onScorePatched).toHaveBeenCalledWith('item-1', updatedItem);
   });

@@ -68,7 +68,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
 
@@ -86,7 +86,7 @@ describe('StartScreen', () => {
     ]);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
 
@@ -98,7 +98,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([]);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
     expect(await screen.findByText(/no films yet/i)).toBeInTheDocument();
@@ -108,7 +108,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.listFilms).mockRejectedValue(new Error('request failed with status 401'));
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
     expect(await screen.findByText(/401/)).toBeInTheDocument();
@@ -118,7 +118,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([]);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
     expect(await screen.findByText('Import a new film')).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.deleteFilm).mockResolvedValue(undefined);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
     await screen.findByText('Inside Out');
@@ -139,7 +139,7 @@ describe('StartScreen', () => {
     expect(await screen.findByText(/delete this film/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
-    expect(filmsApiClient.deleteFilm).toHaveBeenCalledWith('f1', 'secret');
+    expect(filmsApiClient.deleteFilm).toHaveBeenCalledWith('f1');
     expect(await screen.findByText(/no films yet/i)).toBeInTheDocument();
   });
 
@@ -147,7 +147,7 @@ describe('StartScreen', () => {
     vi.mocked(filmsApiClient.listFilms).mockResolvedValue([fakeFilm()]);
     render(
       <MemoryRouter>
-        <StartScreen passcode="secret" />
+        <StartScreen />
       </MemoryRouter>,
     );
     await screen.findByText('Inside Out');

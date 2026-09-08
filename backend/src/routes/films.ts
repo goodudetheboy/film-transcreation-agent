@@ -17,6 +17,9 @@ import { parseSubtitleFile } from '../services/subtitleParser.js';
 import { subtitleTextForRange } from '../services/subtitleOverlap.js';
 import { simulateDelay } from '../services/testDelay.js';
 import { guessExtension, type VideoBucketUploader } from '../services/videoBucketUploader.js';
+import type { Account } from '../services/accountTypes.js';
+import { assertWithinFilmQuota, assertWithinProjectQuota, assertWithinRunQuota } from '../services/quota.js';
+import type { ResearchRunStore } from '../services/researchRunStore.js';
 
 export interface FilmsRouteDeps {
   filmStore: FilmStore;
@@ -25,6 +28,7 @@ export interface FilmsRouteDeps {
   projectStore: ProjectStore;
   projectRubricStore: ProjectRubricStore;
   projectItemStore: ProjectItemStore;
+  researchRunStore: ResearchRunStore;
   defaultRubrics: CreateRubricInput[];
   videoBucketUploader: VideoBucketUploader;
   maxVideoUploadBytes: number;
@@ -54,6 +58,10 @@ function toJobSummary(job: DiscoveryJob) {
 function toPublicJob(job: DiscoveryJob) {
   const { conversationHistory: _c, ...publicJob } = job;
   return publicJob;
+}
+
+function ownsFilm(account: Account, film: { ownerUid: string }): boolean {
+  return account.role === 'admin' || film.ownerUid === account.uid;
 }
 
 export function filmsRoute(deps: FilmsRouteDeps): Router {
@@ -112,11 +120,11 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
           await simulateDelay({ minMs: 800, maxMs: 1500 }, deps.mockDelayScale);
           keepFile = true;
 
-          // A <video> GET can't carry a passcode header/body — ride along as a query
-          // param, same lookup passcodeMiddleware already used to authorize this POST.
-          const passcode = req.body?.passcode ?? req.query?.passcode ?? '';
+          // /mock-uploads is mounted unauthenticated (see app.ts) — a <video>
+          // tag's GET can't carry an Authorization header, and this is only
+          // ever a test-mode clip, never real film data.
           const origin = `${req.protocol}://${req.get('host')}`;
-          const videoUrl = `${origin}/mock-uploads/${file.filename}?passcode=${encodeURIComponent(String(passcode))}`;
+          const videoUrl = `${origin}/mock-uploads/${file.filename}`;
 
           res.status(200).json({ videoUrl });
           return;
@@ -303,11 +311,18 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       return;
     }
 
+    const quota = await assertWithinFilmQuota({ filmStore: deps.filmStore }, req.account!);
+    if (!quota.ok) {
+      res.status(403).json({ error: quota.error });
+      return;
+    }
+
     const film = await deps.filmStore.createFilm({
       title,
       videoUrl,
       subtitle: { fileUrl: subtitleUrl, format: subtitleFormat, entries: subtitleEntries },
       runDiscoveryOnCreate: Boolean(runDiscovery),
+      ownerUid: req.account!.uid,
     });
 
     res.status(201).json(film);
@@ -357,13 +372,15 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   // ---- Films ---------------------------------------------------------------
 
-  router.get('/api/films', async (_req, res) => {
-    res.status(200).json(await deps.filmStore.listFilms());
+  router.get('/api/films', async (req, res) => {
+    const films = await deps.filmStore.listFilms();
+    const visible = req.account!.role === 'admin' ? films : films.filter((f) => f.ownerUid === req.account!.uid);
+    res.status(200).json(visible);
   });
 
   router.get('/api/films/:id', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -371,6 +388,11 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
   });
 
   router.delete('/api/films/:id', async (req, res) => {
+    const film = await deps.filmStore.getFilm(req.params.id);
+    if (!film || !ownsFilm(req.account!, film)) {
+      res.status(404).json({ error: 'film not found' });
+      return;
+    }
     const deleted = await deps.filmStore.deleteFilm(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'film not found' });
@@ -383,7 +405,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.get('/api/films/:id/details', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -396,7 +418,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.post('/api/films/:id/details', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -418,7 +440,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.patch('/api/films/:id/details/:rowId', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -459,7 +481,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.post('/api/films/:id/columns', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -476,7 +498,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.post('/api/films/:id/discovery-jobs', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -492,6 +514,15 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
     }
     if (agentNumber !== undefined && typeof agentNumber !== 'number') {
       res.status(400).json({ error: 'agentNumber must be a number' });
+      return;
+    }
+
+    const runQuota = await assertWithinRunQuota(
+      { filmStore: deps.filmStore, projectStore: deps.projectStore, discoveryJobStore: deps.discoveryJobStore, researchRunStore: deps.researchRunStore },
+      req.account!,
+    );
+    if (!runQuota.ok) {
+      res.status(403).json({ error: runQuota.error });
       return;
     }
 
@@ -670,7 +701,7 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
   // unconditionally" the way the old create-project route worked.
   router.post('/api/films/:id/projects', async (req, res) => {
     const film = await deps.filmStore.getFilm(req.params.id);
-    if (!film) {
+    if (!film || !ownsFilm(req.account!, film)) {
       res.status(404).json({ error: 'film not found' });
       return;
     }
@@ -685,11 +716,18 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
       return;
     }
 
+    const quota = await assertWithinProjectQuota({ projectStore: deps.projectStore }, req.account!);
+    if (!quota.ok) {
+      res.status(403).json({ error: quota.error });
+      return;
+    }
+
     const project = await deps.projectStore.createProject({
       name: `${country} — ${film.title}`,
       country,
       sourceFilmId: film.id,
       note: typeof note === 'string' ? note : undefined,
+      ownerUid: req.account!.uid,
     });
 
     const rubricInputs: CreateRubricInput[] =

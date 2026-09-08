@@ -6,10 +6,6 @@ import { ProjectCard } from '../components/ProjectCard';
 import { countryCode } from '../data/countries';
 import { Flag } from '../components/Flag';
 
-export interface ProjectsLibraryViewProps {
-  passcode: string;
-}
-
 /** Groups the flat project list by target country, matching the wireframe's
  * "Project Library grouped by country" layout. */
 function groupByCountry(projects: EnrichedProject[]): Array<[string, EnrichedProject[]]> {
@@ -22,14 +18,14 @@ function groupByCountry(projects: EnrichedProject[]): Array<[string, EnrichedPro
   return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
-export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
+export function ProjectsLibraryView() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<EnrichedProject[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    listProjects(passcode)
+    listProjects()
       .then((p) => {
         if (!cancelled) setProjects(p);
       })
@@ -39,7 +35,7 @@ export function ProjectsLibraryView({ passcode }: ProjectsLibraryViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [passcode]);
+  }, []);
 
   return (
     <div className="app-body-inner">

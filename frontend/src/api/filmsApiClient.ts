@@ -12,7 +12,7 @@ import type {
   SubtitleEntry,
 } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
-import { resolveBaseUrl, describeError, throwOnError, type ApiClientOptions } from './httpHelpers';
+import { resolveBaseUrl, describeError, throwOnError, authHeaders, type ApiClientOptions } from './httpHelpers';
 import { uploadFileResumable } from './resumableUpload';
 
 export type { ApiClientOptions };
@@ -20,7 +20,6 @@ export type { ApiClientOptions };
 // ---- Uploads --------------------------------------------------------------
 
 export interface UploadOptions {
-  passcode: string;
   testMode: boolean;
 }
 
@@ -42,7 +41,7 @@ export interface UploadOptions {
  */
 export async function uploadVideoFile(
   file: File,
-  { passcode, testMode }: UploadOptions,
+  { testMode }: UploadOptions,
   options: ApiClientOptions = {},
   onProgress?: (fraction: number) => void,
 ): Promise<{ videoUrl: string }> {
@@ -54,8 +53,9 @@ export async function uploadVideoFile(
     form.append('video', file);
     form.append('testMode', String(testMode));
 
-    const res = await fetchImpl(`${baseUrl}/api/films/upload-video?passcode=${encodeURIComponent(passcode)}`, {
+    const res = await fetchImpl(`${baseUrl}/api/films/upload-video`, {
       method: 'POST',
+      headers: await authHeaders(),
       body: form,
     });
     await throwOnError(res);
@@ -64,8 +64,8 @@ export async function uploadVideoFile(
 
   const initRes = await fetchImpl(`${baseUrl}/api/films/upload-video/init`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passcode, filename: file.name, contentType: file.type, size: file.size, testMode }),
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ filename: file.name, contentType: file.type, size: file.size, testMode }),
   });
   await throwOnError(initRes);
   const { uploadUrl, videoUrl } = (await initRes.json()) as { uploadUrl: string; videoUrl: string };
@@ -74,8 +74,8 @@ export async function uploadVideoFile(
 
   const finalizeRes = await fetchImpl(`${baseUrl}/api/films/upload-video/finalize`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ passcode, videoUrl, testMode }),
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+    body: JSON.stringify({ videoUrl, testMode }),
   });
   await throwOnError(finalizeRes);
 
@@ -91,7 +91,7 @@ export interface UploadSubtitleResult {
 /** Uploads a local .srt/.vtt file and returns its gs:// URI plus the parsed cues. */
 export async function uploadSubtitleFile(
   file: File,
-  { passcode, testMode }: UploadOptions,
+  { testMode }: UploadOptions,
   options: ApiClientOptions = {},
 ): Promise<UploadSubtitleResult> {
   const baseUrl = resolveBaseUrl(options);
@@ -101,8 +101,9 @@ export async function uploadSubtitleFile(
   form.append('subtitle', file);
   form.append('testMode', String(testMode));
 
-  const res = await fetchImpl(`${baseUrl}/api/films/upload-subtitle?passcode=${encodeURIComponent(passcode)}`, {
+  const res = await fetchImpl(`${baseUrl}/api/films/upload-subtitle`, {
     method: 'POST',
+    headers: await authHeaders(),
     body: form,
   });
   await throwOnError(res);
@@ -112,7 +113,6 @@ export async function uploadSubtitleFile(
 // ---- Film creation & prep --------------------------------------------------
 
 export interface CreateFilmPayload {
-  passcode: string;
   title: string;
   videoUrl: string;
   subtitleUrl: string;
@@ -128,7 +128,7 @@ export async function createFilm(payload: CreateFilmPayload, options: ApiClientO
 
   const res = await fetchImpl(`${baseUrl}/api/films`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -138,14 +138,13 @@ export async function createFilm(payload: CreateFilmPayload, options: ApiClientO
 /** Streams a film's prep progress — replays history then follows live until ready/error. */
 export async function streamFilmPrep(
   filmId: string,
-  passcode: string,
   onEvent: (event: FilmPrepStreamEvent) => void,
   options: ApiClientOptions = {},
 ): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/prep-status?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/prep-status`, { headers: await authHeaders() });
   if (!res.ok) {
     const detail = await describeError(res);
     onEvent({ type: 'prep_update', prep: { stage: 'error', videoDone: true, subtitleDone: true, discoveryJobId: null, discoveryDone: false, finalizeDone: false, log: [], errorMessage: detail || `request failed with status ${res.status}` } });
@@ -157,30 +156,31 @@ export async function streamFilmPrep(
 
 // ---- Films ------------------------------------------------------------------
 
-export async function listFilms(passcode: string, options: ApiClientOptions = {}): Promise<Film[]> {
+export async function listFilms(options: ApiClientOptions = {}): Promise<Film[]> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as Film[];
 }
 
-export async function getFilm(id: string, passcode: string, options: ApiClientOptions = {}): Promise<Film> {
+export async function getFilm(id: string, options: ApiClientOptions = {}): Promise<Film> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${id}?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${id}`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as Film;
 }
 
-export async function deleteFilm(filmId: string, passcode: string, options: ApiClientOptions = {}): Promise<void> {
+export async function deleteFilm(filmId: string, options: ApiClientOptions = {}): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}?passcode=${encodeURIComponent(passcode)}`, {
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}`, {
     method: 'DELETE',
+    headers: await authHeaders(),
   });
   await throwOnError(res);
 }
@@ -189,20 +189,19 @@ export async function deleteFilm(filmId: string, passcode: string, options: ApiC
 
 export async function listDetails(
   filmId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<{ rows: DetailRow[]; columns: ColumnDoc[] }> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as { rows: DetailRow[]; columns: ColumnDoc[] };
 }
 
 export async function addDetailRow(
   filmId: string,
-  payload: { passcode: string; startMs: number; endMs: number; values?: Partial<DetailRowValues> },
+  payload: { startMs: number; endMs: number; values?: Partial<DetailRowValues> },
   options: ApiClientOptions = {},
 ): Promise<DetailRow> {
   const baseUrl = resolveBaseUrl(options);
@@ -210,7 +209,7 @@ export async function addDetailRow(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -220,7 +219,7 @@ export async function addDetailRow(
 export async function updateDetailRow(
   filmId: string,
   rowId: string,
-  payload: { passcode: string; startMs?: number; endMs?: number; values?: Partial<DetailRowValues> },
+  payload: { startMs?: number; endMs?: number; values?: Partial<DetailRowValues> },
   options: ApiClientOptions = {},
 ): Promise<DetailRow> {
   const baseUrl = resolveBaseUrl(options);
@@ -228,7 +227,7 @@ export async function updateDetailRow(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details/${rowId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -238,21 +237,21 @@ export async function updateDetailRow(
 export async function deleteDetailRow(
   filmId: string,
   rowId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details/${rowId}?passcode=${encodeURIComponent(passcode)}`, {
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/details/${rowId}`, {
     method: 'DELETE',
+    headers: await authHeaders(),
   });
   await throwOnError(res);
 }
 
 export async function addColumn(
   filmId: string,
-  payload: { passcode: string; name: string; description?: string },
+  payload: { name: string; description?: string },
   options: ApiClientOptions = {},
 ): Promise<ColumnDoc> {
   const baseUrl = resolveBaseUrl(options);
@@ -260,7 +259,7 @@ export async function addColumn(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/columns`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -270,7 +269,6 @@ export async function addColumn(
 // ---- Discovery agent passes -----------------------------------------------------
 
 export interface CreateDiscoveryJobPayload {
-  passcode: string;
   agentNumber?: number;
   name?: string;
   specialInstruction: string;
@@ -288,7 +286,7 @@ export async function createDiscoveryJob(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -297,13 +295,12 @@ export async function createDiscoveryJob(
 
 export async function listDiscoveryJobs(
   filmId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DiscoveryJobSummary[]> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as DiscoveryJobSummary[];
 }
@@ -311,13 +308,12 @@ export async function listDiscoveryJobs(
 export async function getDiscoveryJob(
   filmId: string,
   jobId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DiscoveryJob> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as DiscoveryJob;
 }
@@ -326,7 +322,6 @@ export async function getDiscoveryJob(
 export async function streamDiscoveryJob(
   filmId: string,
   jobId: string,
-  passcode: string,
   onEvent: (event: DiscoveryJobStreamEvent) => void,
   options: ApiClientOptions = {},
 ): Promise<void> {
@@ -334,7 +329,8 @@ export async function streamDiscoveryJob(
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/stream?passcode=${encodeURIComponent(passcode)}`,
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/stream`,
+    { headers: await authHeaders() },
   );
   if (!res.ok || !res.body) return;
   await parseSSEStream<DiscoveryJobStreamEvent>(res, onEvent, (event) => event.job.status === 'done' || event.job.status === 'error');
@@ -343,7 +339,7 @@ export async function streamDiscoveryJob(
 export async function commentOnDiscoveryJob(
   filmId: string,
   jobId: string,
-  payload: { passcode: string; comment: string },
+  payload: { comment: string },
   options: ApiClientOptions = {},
 ): Promise<DiscoveryJob> {
   const baseUrl = resolveBaseUrl(options);
@@ -351,7 +347,7 @@ export async function commentOnDiscoveryJob(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/comment`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -362,15 +358,14 @@ export async function mergeDiscoveryResult(
   filmId: string,
   jobId: string,
   resultRowId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DetailRow> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/${resultRowId}/add?passcode=${encodeURIComponent(passcode)}`,
-    { method: 'POST' },
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/${resultRowId}/add`,
+    { method: 'POST', headers: await authHeaders() },
   );
   await throwOnError(res);
   return (await res.json()) as DetailRow;
@@ -380,15 +375,14 @@ export async function discardDiscoveryResult(
   filmId: string,
   jobId: string,
   resultRowId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/${resultRowId}?passcode=${encodeURIComponent(passcode)}`,
-    { method: 'DELETE' },
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/${resultRowId}`,
+    { method: 'DELETE', headers: await authHeaders() },
   );
   await throwOnError(res);
 }
@@ -399,15 +393,14 @@ export async function bulkMergeDiscoveryResults(
   filmId: string,
   jobId: string,
   tempIds: string[],
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DetailRow[]> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-add?passcode=${encodeURIComponent(passcode)}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tempIds }) },
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-add`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ tempIds }) },
   );
   await throwOnError(res);
   return (await res.json()) as DetailRow[];
@@ -419,15 +412,14 @@ export async function bulkDiscardDiscoveryResults(
   filmId: string,
   jobId: string,
   tempIds: string[],
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-discard?passcode=${encodeURIComponent(passcode)}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tempIds }) },
+    `${baseUrl}/api/films/${filmId}/discovery-jobs/${jobId}/results/bulk-discard`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', ...(await authHeaders()) }, body: JSON.stringify({ tempIds }) },
   );
   await throwOnError(res);
 }
@@ -435,7 +427,6 @@ export async function bulkDiscardDiscoveryResults(
 // ---- Bridge to Project (Research) --------------------------------------------
 
 export interface CreateProjectFromFilmPayload {
-  passcode: string;
   country: string;
   note?: string;
   /** Explicit selection only — never every DetailRow unconditionally, see docs/adr/0025. */
@@ -453,7 +444,7 @@ export async function createProjectFromFilm(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/projects`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);

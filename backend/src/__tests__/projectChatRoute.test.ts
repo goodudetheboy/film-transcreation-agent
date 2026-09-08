@@ -3,8 +3,7 @@ import request from 'supertest';
 import { createApp } from '../app.js';
 import { createInMemoryFilmStore } from '../services/filmStore.js';
 import { createInMemoryDetailRowsStore } from '../services/detailRowsStore.js';
-
-const TEST_PASSCODE = 'test-passcode';
+import { testAuthDeps, bearer, TEST_ADMIN } from './testAuth.js';
 
 function parseEvents(text: string) {
   return text
@@ -16,7 +15,13 @@ function parseEvents(text: string) {
 async function seedAppAndProject() {
   const filmStore = createInMemoryFilmStore();
   const detailRowsStore = createInMemoryDetailRowsStore();
-  const film = await filmStore.createFilm({ title: 'Inside Out', videoUrl: 'http://example.com/v.mp4', subtitle: null, runDiscoveryOnCreate: false });
+  const film = await filmStore.createFilm({
+    title: 'Inside Out',
+    videoUrl: 'http://example.com/v.mp4',
+    subtitle: null,
+    runDiscoveryOnCreate: false,
+    ownerUid: TEST_ADMIN.uid,
+  });
   const row = await detailRowsStore.addRow(film.id, {
     startMs: 0,
     endMs: 1000,
@@ -24,63 +29,76 @@ async function seedAppAndProject() {
     values: { segmentDescription: 'scene' },
     provenance: { type: 'user-marked' },
   });
-  const app = createApp({ config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 }, filmStore, detailRowsStore });
+  const app = createApp({ ...testAuthDeps(), config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000 }, filmStore, detailRowsStore });
   const created = await request(app)
     .post(`/api/films/${film.id}/projects`)
-    .send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [row.id] });
+    .set(bearer(TEST_ADMIN.uid))
+    .send({ country: 'Japan', detailRowIds: [row.id] });
   return { app, project: created.body.project as { id: string }, items: created.body.items as Array<{ id: string }> };
 }
 
 describe('POST /api/projects/:id/chat-sessions and GET variants', () => {
   it('creates, lists, and fetches a chat session', async () => {
     const { app, project } = await seedAppAndProject();
-    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE, name: 'Session A' });
+    const created = await request(app)
+      .post(`/api/projects/${project.id}/chat-sessions`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Session A' });
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ name: 'Session A', sessionNumber: 1, status: 'idle', turns: [] });
 
-    const list = await request(app).get(`/api/projects/${project.id}/chat-sessions?passcode=${TEST_PASSCODE}`);
+    const list = await request(app).get(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
     expect(list.body).toHaveLength(1);
 
-    const fetched = await request(app).get(`/api/projects/${project.id}/chat-sessions/${created.body.id}?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app)
+      .get(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
+      .set(bearer(TEST_ADMIN.uid));
     expect(fetched.status).toBe(200);
     expect(fetched.body.id).toBe(created.body.id);
   });
 
   it('returns 404 for an unknown project on create, and an unknown session on fetch', async () => {
     const { app, project } = await seedAppAndProject();
-    expect((await request(app).post('/api/projects/does-not-exist/chat-sessions').send({ passcode: TEST_PASSCODE })).status).toBe(404);
-    expect((await request(app).get(`/api/projects/${project.id}/chat-sessions/does-not-exist?passcode=${TEST_PASSCODE}`)).status).toBe(404);
+    expect((await request(app).post('/api/projects/does-not-exist/chat-sessions').set(bearer(TEST_ADMIN.uid))).status).toBe(404);
+    expect(
+      (await request(app).get(`/api/projects/${project.id}/chat-sessions/does-not-exist`).set(bearer(TEST_ADMIN.uid))).status,
+    ).toBe(404);
   });
 });
 
 describe('PATCH /api/projects/:id/chat-sessions/:sessionId', () => {
   it('renames a chat session', async () => {
     const { app, project } = await seedAppAndProject();
-    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     const renamed = await request(app)
       .patch(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
-      .send({ passcode: TEST_PASSCODE, name: 'Renamed session' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Renamed session' });
 
     expect(renamed.status).toBe(200);
     expect(renamed.body.name).toBe('Renamed session');
 
-    const fetched = await request(app).get(`/api/projects/${project.id}/chat-sessions/${created.body.id}?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app)
+      .get(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
+      .set(bearer(TEST_ADMIN.uid));
     expect(fetched.body.name).toBe('Renamed session');
   });
 
   it('rejects an empty name and 404s for an unknown session', async () => {
     const { app, project } = await seedAppAndProject();
-    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const created = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     const empty = await request(app)
       .patch(`/api/projects/${project.id}/chat-sessions/${created.body.id}`)
-      .send({ passcode: TEST_PASSCODE, name: '   ' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: '   ' });
     expect(empty.status).toBe(400);
 
     const missing = await request(app)
       .patch(`/api/projects/${project.id}/chat-sessions/does-not-exist`)
-      .send({ passcode: TEST_PASSCODE, name: 'X' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'X' });
     expect(missing.status).toBe(404);
   });
 });
@@ -88,16 +106,18 @@ describe('PATCH /api/projects/:id/chat-sessions/:sessionId', () => {
 describe('POST /api/projects/:id/chat-sessions/:sessionId/research-runs', () => {
   it('files a run marker turn for an existing research run belonging to this project', async () => {
     const { app, project } = await seedAppAndProject();
-    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
     const runRes = await request(app)
       .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, testMode: true, mode: 'need-research' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ testMode: true, mode: 'need-research' });
     const events = parseEvents(runRes.text);
     const runId = (events.find((e) => e.type === 'progress') as { runId: string }).runId;
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, runId });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ runId });
 
     expect(res.status).toBe(200);
     expect(res.body.turns).toEqual([{ role: 'system', parts: [{ run: { runId } }], ts: expect.any(String) }]);
@@ -105,20 +125,22 @@ describe('POST /api/projects/:id/chat-sessions/:sessionId/research-runs', () => 
 
   it('returns 404 for an unknown run or an unknown session', async () => {
     const { app, project } = await seedAppAndProject();
-    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     expect(
       (
         await request(app)
           .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/research-runs`)
-          .send({ passcode: TEST_PASSCODE, runId: 'does-not-exist' })
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ runId: 'does-not-exist' })
       ).status,
     ).toBe(404);
     expect(
       (
         await request(app)
           .post(`/api/projects/${project.id}/chat-sessions/does-not-exist/research-runs`)
-          .send({ passcode: TEST_PASSCODE, runId: 'does-not-exist' })
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ runId: 'does-not-exist' })
       ).status,
     ).toBe(404);
   });
@@ -127,21 +149,24 @@ describe('POST /api/projects/:id/chat-sessions/:sessionId/research-runs', () => 
 describe('POST /api/projects/:id/chat-sessions/:sessionId/messages', () => {
   it('streams a tool-calling turn from the mock agent by default (testMode), and item_patched reflects a real store write', async () => {
     const { app, project, items } = await seedAppAndProject();
-    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/messages`)
-      .send({ passcode: TEST_PASSCODE, text: 'what do you think of this line?', itemId: items[0].id });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ text: 'what do you think of this line?', itemId: items[0].id });
 
     const events = parseEvents(res.text);
     expect(events.some((e) => e.type === 'text_delta')).toBe(true);
     expect(events.at(-1)).toEqual({ type: 'turn_done' });
 
-    const fetchedSession = await request(app).get(`/api/projects/${project.id}/chat-sessions/${session.body.id}?passcode=${TEST_PASSCODE}`);
+    const fetchedSession = await request(app)
+      .get(`/api/projects/${project.id}/chat-sessions/${session.body.id}`)
+      .set(bearer(TEST_ADMIN.uid));
     expect(fetchedSession.body.status).toBe('idle');
     expect(fetchedSession.body.turns.length).toBeGreaterThan(0);
 
-    const fetchedItem = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    const fetchedItem = await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid));
     const patchedItem = fetchedItem.body.find((i: { id: string }) => i.id === items[0].id);
     // The mock chat agent's canned tool call only fires when a rubric exists — this
     // project was created with the DEFAULT_RUBRICS fallback, so at least one does.
@@ -150,24 +175,33 @@ describe('POST /api/projects/:id/chat-sessions/:sessionId/messages', () => {
 
   it('returns 400 when text is missing, and 404 for an unknown session', async () => {
     const { app, project } = await seedAppAndProject();
-    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     expect(
-      (await request(app).post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/messages`).send({ passcode: TEST_PASSCODE })).status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/messages`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(400);
     expect(
-      (await request(app).post(`/api/projects/${project.id}/chat-sessions/does-not-exist/messages`).send({ passcode: TEST_PASSCODE, text: 'hi' }))
-        .status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/chat-sessions/does-not-exist/messages`)
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ text: 'hi' })
+      ).status,
     ).toBe(404);
   });
 
   it('the real (non-test-mode) agent path fails cleanly when researchChatAgent was not configured', async () => {
     const { app, project, items } = await seedAppAndProject();
-    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).send({ passcode: TEST_PASSCODE });
+    const session = await request(app).post(`/api/projects/${project.id}/chat-sessions`).set(bearer(TEST_ADMIN.uid));
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/chat-sessions/${session.body.id}/messages`)
-      .send({ passcode: TEST_PASSCODE, text: 'hi', testMode: false, itemId: items[0].id });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ text: 'hi', testMode: false, itemId: items[0].id });
 
     const events = parseEvents(res.text);
     expect(events.at(-1)).toMatchObject({ type: 'error', message: expect.stringContaining('not provided') });

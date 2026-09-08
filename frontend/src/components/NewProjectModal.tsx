@@ -10,7 +10,6 @@ import { Flag } from './Flag';
 
 export interface NewProjectModalProps {
   filmId: string;
-  passcode: string;
   testMode: boolean;
   onCreated: (project: Project) => void;
   onClose: () => void;
@@ -36,7 +35,7 @@ function emptyRubric(): DraftRubric {
  * whoever opened this (the Film workspace's Project tab, or the Library after
  * picking a film) — there's no film picker here.
  */
-export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose }: NewProjectModalProps) {
+export function NewProjectModal({ filmId, testMode, onCreated, onClose }: NewProjectModalProps) {
   const [step, setStep] = useState<Step>('info');
   const [film, setFilm] = useState<Film | null>(null);
   const [rows, setRows] = useState<DetailRow[]>([]);
@@ -54,7 +53,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getFilm(filmId, passcode), listDetails(filmId, passcode)])
+    Promise.all([getFilm(filmId), listDetails(filmId)])
       .then(([f, details]) => {
         if (cancelled) return;
         setFilm(f);
@@ -67,7 +66,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
     return () => {
       cancelled = true;
     };
-  }, [filmId, passcode]);
+  }, [filmId]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -91,7 +90,7 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
   }
 
   async function handleGenerateDefaultRubrics() {
-    const defaults = await getDefaultRubrics(passcode);
+    const defaults = await getDefaultRubrics();
     setRubrics((prev) => [...prev, ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight }))]);
   }
 
@@ -113,7 +112,6 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
     try {
       const validRubrics = rubrics.filter((r) => r.name.trim() !== '' && r.description.trim() !== '');
       const { project, items } = await createProjectFromFilm(filmId, {
-        passcode,
         country,
         note: note.trim() || undefined,
         detailRowIds: [...selectedRowIds],
@@ -127,17 +125,17 @@ export function NewProjectModal({ filmId, passcode, testMode, onCreated, onClose
         // onCreated: the workspace panel's own listChatSessions on mount
         // picks up the session, and the resumable research-runs stream picks
         // up live progress for the run card inside it.
-        createChatSession(project.id, { passcode }).then((session) => {
+        createChatSession(project.id, {}).then((session) => {
           void streamResearchRun(
             project.id,
             // autoApply — this is the one-time default pass, which the user
             // already opted into via the checkbox below; unlike every other
             // research run, its results skip the accept/discard review step
             // and land on the items directly.
-            { passcode, testMode, mode: 'custom', itemIds: items.map((i) => i.id), autoApply: true },
+            { testMode, mode: 'custom', itemIds: items.map((i) => i.id), autoApply: true },
             (event) => {
               if (event.type === 'progress') {
-                void logResearchRun(project.id, session.id, { passcode, runId: event.runId });
+                void logResearchRun(project.id, session.id, { runId: event.runId });
               }
             },
           );

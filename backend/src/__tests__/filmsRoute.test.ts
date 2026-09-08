@@ -7,12 +7,10 @@ import { createApp } from '../app.js';
 import { createInMemoryFilmStore } from '../services/filmStore.js';
 import { createInMemoryDetailRowsStore } from '../services/detailRowsStore.js';
 import { createInMemoryDiscoveryJobStore } from '../services/discoveryJobStore.js';
-import { createFilmPrepPipeline } from '../services/filmPrepPipeline.js';
 import { createDiscoveryEventBus } from '../services/discoveryEventBus.js';
 import type { DiscoveryAgent } from '../services/discoveryAgent.js';
 import type { CreateFilmInput } from '../services/filmTypes.js';
-
-const TEST_PASSCODE = 'test-passcode';
+import { testAuthDeps, bearer, TEST_ADMIN } from './testAuth.js';
 
 const SUBTITLE_ENTRIES = [{ id: 'e1', index: 0, startMs: 0, endMs: 2000, text: 'Hello there' }];
 
@@ -45,8 +43,8 @@ function buildApp(
   const mockDiscoveryAgent = overrides.mockDiscoveryAgent ?? noResultsAgent();
 
   const app = createApp({
+    ...testAuthDeps(),
     config: {
-      sharedPasscode: TEST_PASSCODE,
       rateLimitWindowMs: 60_000,
       rateLimitMax: 1000,
       mockDelayScale: 0.001,
@@ -75,8 +73,8 @@ function buildApp(
 async function createFilm(app: ReturnType<typeof buildApp>['app'], overrides: Record<string, unknown> = {}) {
   return request(app)
     .post('/api/films')
+    .set(bearer(TEST_ADMIN.uid))
     .send({
-      passcode: TEST_PASSCODE,
       title: 'New Film',
       videoUrl: 'gs://bucket/v.mp4',
       subtitleUrl: 'gs://bucket/subtitles/x.srt',
@@ -122,7 +120,7 @@ describe('POST /api/films', () => {
     let stage = created.body.prep.stage;
     for (let i = 0; i < 20 && stage !== 'ready'; i++) {
       await new Promise((r) => setTimeout(r, 20));
-      const fetched = await request(app).get(`/api/films/${filmId}?passcode=${TEST_PASSCODE}`);
+      const fetched = await request(app).get(`/api/films/${filmId}`).set(bearer(TEST_ADMIN.uid));
       stage = fetched.body.prep.stage;
     }
     expect(stage).toBe('ready');
@@ -137,7 +135,8 @@ describe('POST /api/films/upload-subtitle', () => {
     });
 
     const res = await request(app)
-      .post(`/api/films/upload-subtitle?passcode=${TEST_PASSCODE}`)
+      .post('/api/films/upload-subtitle')
+      .set(bearer(TEST_ADMIN.uid))
       .field('testMode', 'true')
       .attach(
         'subtitle',
@@ -155,7 +154,8 @@ describe('POST /api/films/upload-subtitle', () => {
   it('rejects a file that is not .srt or .vtt', async () => {
     const { app } = buildApp();
     const res = await request(app)
-      .post(`/api/films/upload-subtitle?passcode=${TEST_PASSCODE}`)
+      .post('/api/films/upload-subtitle')
+      .set(bearer(TEST_ADMIN.uid))
       .attach('subtitle', Buffer.from('hi'), { filename: 'notes.txt', contentType: 'text/plain' });
     expect(res.status).toBe(400);
   });
@@ -163,7 +163,8 @@ describe('POST /api/films/upload-subtitle', () => {
   it('rejects a file with no parseable cues', async () => {
     const { app } = buildApp();
     const res = await request(app)
-      .post(`/api/films/upload-subtitle?passcode=${TEST_PASSCODE}`)
+      .post('/api/films/upload-subtitle')
+      .set(bearer(TEST_ADMIN.uid))
       .attach('subtitle', Buffer.from('not a subtitle file'), { filename: 'clip.srt', contentType: 'text/plain' });
     expect(res.status).toBe(400);
   });
@@ -172,25 +173,33 @@ describe('POST /api/films/upload-subtitle', () => {
 describe('GET/DELETE /api/films', () => {
   it('lists and fetches a seeded film, then deletes it', async () => {
     const { app } = buildApp({
-      seedFilms: [{ title: 'Seeded', videoUrl: 'gs://bucket/v.mp4', subtitle: { fileUrl: 'gs://bucket/x.srt', format: 'srt', entries: SUBTITLE_ENTRIES }, runDiscoveryOnCreate: false }],
+      seedFilms: [
+        {
+          title: 'Seeded',
+          videoUrl: 'gs://bucket/v.mp4',
+          subtitle: { fileUrl: 'gs://bucket/x.srt', format: 'srt', entries: SUBTITLE_ENTRIES },
+          runDiscoveryOnCreate: false,
+          ownerUid: TEST_ADMIN.uid,
+        },
+      ],
     });
 
-    const list = await request(app).get(`/api/films?passcode=${TEST_PASSCODE}`);
+    const list = await request(app).get('/api/films').set(bearer(TEST_ADMIN.uid));
     expect(list.body).toHaveLength(1);
     const filmId = list.body[0].id;
 
-    const fetched = await request(app).get(`/api/films/${filmId}?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app).get(`/api/films/${filmId}`).set(bearer(TEST_ADMIN.uid));
     expect(fetched.body.title).toBe('Seeded');
 
-    const del = await request(app).delete(`/api/films/${filmId}?passcode=${TEST_PASSCODE}`);
+    const del = await request(app).delete(`/api/films/${filmId}`).set(bearer(TEST_ADMIN.uid));
     expect(del.status).toBe(204);
-    expect((await request(app).get(`/api/films?passcode=${TEST_PASSCODE}`)).body).toHaveLength(0);
+    expect((await request(app).get('/api/films').set(bearer(TEST_ADMIN.uid))).body).toHaveLength(0);
   });
 
   it('returns 404 for an unknown film id on get/delete', async () => {
     const { app } = buildApp();
-    expect((await request(app).get(`/api/films/nope?passcode=${TEST_PASSCODE}`)).status).toBe(404);
-    expect((await request(app).delete(`/api/films/nope?passcode=${TEST_PASSCODE}`)).status).toBe(404);
+    expect((await request(app).get('/api/films/nope').set(bearer(TEST_ADMIN.uid))).status).toBe(404);
+    expect((await request(app).delete('/api/films/nope').set(bearer(TEST_ADMIN.uid))).status).toBe(404);
   });
 });
 
@@ -206,21 +215,23 @@ describe('Details table routes', () => {
 
     const add = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, startMs: 0, endMs: 2000, values: { notes: 'check this' } });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ startMs: 0, endMs: 2000, values: { notes: 'check this' } });
     expect(add.status).toBe(201);
     expect(add.body.provenance).toEqual({ type: 'user-marked' });
     expect(add.body.subtitleText).toBe('Hello there');
     const rowId = add.body.id;
 
-    const list = await request(app).get(`/api/films/${filmId}/details?passcode=${TEST_PASSCODE}`);
+    const list = await request(app).get(`/api/films/${filmId}/details`).set(bearer(TEST_ADMIN.uid));
     expect(list.body.rows).toHaveLength(1);
 
     const patch = await request(app)
       .patch(`/api/films/${filmId}/details/${rowId}`)
-      .send({ passcode: TEST_PASSCODE, values: { gesture: 'nod' } });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ values: { gesture: 'nod' } });
     expect(patch.body.values).toMatchObject({ notes: 'check this', gesture: 'nod' });
 
-    const del = await request(app).delete(`/api/films/${filmId}/details/${rowId}?passcode=${TEST_PASSCODE}`);
+    const del = await request(app).delete(`/api/films/${filmId}/details/${rowId}`).set(bearer(TEST_ADMIN.uid));
     expect(del.status).toBe(204);
   });
 
@@ -229,7 +240,8 @@ describe('Details table routes', () => {
     const filmId = await seedFilmId(app);
     const res = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, startMs: 2000, endMs: 2000, values: {} });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ startMs: 2000, endMs: 2000, values: {} });
     expect(res.status).toBe(400);
   });
 
@@ -238,7 +250,8 @@ describe('Details table routes', () => {
     const filmId = await seedFilmId(app);
     const add = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, startMs: 10_000, endMs: 12_000, values: {} });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ startMs: 10_000, endMs: 12_000, values: {} });
     expect(add.status).toBe(201);
     expect(add.body.subtitleText).toBe('');
   });
@@ -255,7 +268,8 @@ describe('Details table routes', () => {
     const filmId = created.body.id;
     const add = await request(app)
       .post(`/api/films/${filmId}/details`)
-      .send({ passcode: TEST_PASSCODE, startMs: 0, endMs: 4000, values: {} });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ startMs: 0, endMs: 4000, values: {} });
     expect(add.status).toBe(201);
     expect(add.body.subtitleText).toBe('Hello there General Kenobi');
   });
@@ -265,7 +279,8 @@ describe('Details table routes', () => {
     const filmId = await seedFilmId(app);
     const res = await request(app)
       .post(`/api/films/${filmId}/columns`)
-      .send({ passcode: TEST_PASSCODE, name: 'Local Slang', description: 'Flag any regional slang the localizer should adapt.' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Local Slang', description: 'Flag any regional slang the localizer should adapt.' });
     expect(res.status).toBe(201);
     expect(res.body.key).toBe('local_slang');
     expect(res.body.description).toBe('Flag any regional slang the localizer should adapt.');
@@ -274,7 +289,7 @@ describe('Details table routes', () => {
   it('defaults description to an empty string when none is given', async () => {
     const { app } = buildApp();
     const filmId = await seedFilmId(app);
-    const res = await request(app).post(`/api/films/${filmId}/columns`).send({ passcode: TEST_PASSCODE, name: 'Local Slang' });
+    const res = await request(app).post(`/api/films/${filmId}/columns`).set(bearer(TEST_ADMIN.uid)).send({ name: 'Local Slang' });
     expect(res.status).toBe(201);
     expect(res.body.description).toBe('');
   });
@@ -292,11 +307,12 @@ describe('Discovery job routes', () => {
 
     const created = await request(app)
       .post(`/api/films/${filmId}/discovery-jobs`)
-      .send({ passcode: TEST_PASSCODE, specialInstruction: 'focus on jokes', targetColumns: ['segmentDescription'], testMode: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ specialInstruction: 'focus on jokes', targetColumns: ['segmentDescription'], testMode: true });
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ agentNumber: 1, passNumber: 1, status: 'queued' });
 
-    const list = await request(app).get(`/api/films/${filmId}/discovery-jobs?passcode=${TEST_PASSCODE}`);
+    const list = await request(app).get(`/api/films/${filmId}/discovery-jobs`).set(bearer(TEST_ADMIN.uid));
     expect(list.body).toHaveLength(1);
     expect(list.body[0].log).toBeUndefined(); // summary shape omits log/resultRows
   });
@@ -306,7 +322,8 @@ describe('Discovery job routes', () => {
     const filmId = await seedFilmId(app);
     const res = await request(app)
       .post(`/api/films/${filmId}/discovery-jobs`)
-      .send({ passcode: TEST_PASSCODE, targetColumns: [] });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ targetColumns: [] });
     expect(res.status).toBe(400);
   });
 
@@ -329,7 +346,7 @@ describe('Discovery job routes', () => {
       resultRows: [{ tempId: 't1', startMs: 0, endMs: 2000, subtitleText: 'Hello there', values: { segmentDescription: 'x' } }],
     });
 
-    const add = await request(app).post(`/api/films/${filmId}/discovery-jobs/${job.id}/results/t1/add`).send({ passcode: TEST_PASSCODE });
+    const add = await request(app).post(`/api/films/${filmId}/discovery-jobs/${job.id}/results/t1/add`).set(bearer(TEST_ADMIN.uid));
     expect(add.status).toBe(201);
     expect((await detailRowsStore.listRows(filmId))).toHaveLength(1);
 
@@ -345,7 +362,8 @@ describe('Discovery job routes', () => {
 
     const res = await request(app)
       .post(`/api/films/${filmId}/discovery-jobs/${job.id}/comment`)
-      .send({ passcode: TEST_PASSCODE, comment: 'look at the second half too' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ comment: 'look at the second half too' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('queued');
     expect(res.body.commentHistory).toHaveLength(1);
@@ -359,7 +377,8 @@ describe('Discovery job routes', () => {
 
     const res = await request(app)
       .post(`/api/films/${filmId}/discovery-jobs/${job.id}/comment`)
-      .send({ passcode: TEST_PASSCODE, comment: 'x' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ comment: 'x' });
     expect(res.status).toBe(409);
   });
 
@@ -369,7 +388,7 @@ describe('Discovery job routes', () => {
     const job = await discoveryJobStore.createJob({ filmId, specialInstruction: '', targetColumns: ['segmentDescription'], testMode: true });
     await discoveryJobStore.updateJob(filmId, job.id, { status: 'done' });
 
-    const res = await request(app).get(`/api/films/${filmId}/discovery-jobs/${job.id}/stream?passcode=${TEST_PASSCODE}`);
+    const res = await request(app).get(`/api/films/${filmId}/discovery-jobs/${job.id}/stream`).set(bearer(TEST_ADMIN.uid));
     expect(res.status).toBe(200);
     expect(res.text).toContain('"type":"job_update"');
     expect(res.text).toContain('"status":"done"');
@@ -401,7 +420,8 @@ describe('POST /api/films/:id/projects', () => {
 
     const res = await request(app)
       .post(`/api/films/${filmId}/projects`)
-      .send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [selectedRow.id] });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ country: 'Japan', detailRowIds: [selectedRow.id] });
     expect(res.status).toBe(201);
     expect(res.body.project).toMatchObject({ country: 'Japan', sourceFilmId: filmId, status: 'draft' });
     expect(res.body.items).toHaveLength(1);
@@ -412,7 +432,7 @@ describe('POST /api/films/:id/projects', () => {
       action: 'need-research',
     });
 
-    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics`).set(bearer(TEST_ADMIN.uid));
     expect(rubrics.body.length).toBeGreaterThan(0); // falls back to DEFAULT_RUBRICS
   });
 
@@ -430,15 +450,15 @@ describe('POST /api/films/:id/projects', () => {
 
     const res = await request(app)
       .post(`/api/films/${filmId}/projects`)
+      .set(bearer(TEST_ADMIN.uid))
       .send({
-        passcode: TEST_PASSCODE,
         country: 'Japan',
         detailRowIds: [row.id],
         rubrics: [{ name: 'Custom', description: 'a custom rubric', weight: 3 }],
       });
     expect(res.status).toBe(201);
 
-    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    const rubrics = await request(app).get(`/api/projects/${res.body.project.id}/rubrics`).set(bearer(TEST_ADMIN.uid));
     expect(rubrics.body).toEqual([expect.objectContaining({ name: 'Custom', trendEligible: false })]);
   });
 
@@ -455,14 +475,25 @@ describe('POST /api/films/:id/projects', () => {
     });
 
     expect(
-      (await request(app).post('/api/films/nope/projects').send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [row.id] }))
-        .status,
+      (
+        await request(app)
+          .post('/api/films/nope/projects')
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ country: 'Japan', detailRowIds: [row.id] })
+      ).status,
     ).toBe(404);
     expect(
-      (await request(app).post(`/api/films/${filmId}/projects`).send({ passcode: TEST_PASSCODE, detailRowIds: [row.id] })).status,
+      (
+        await request(app)
+          .post(`/api/films/${filmId}/projects`)
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ detailRowIds: [row.id] })
+      ).status,
     ).toBe(400);
     expect(
-      (await request(app).post(`/api/films/${filmId}/projects`).send({ passcode: TEST_PASSCODE, country: 'Japan' })).status,
+      (
+        await request(app).post(`/api/films/${filmId}/projects`).set(bearer(TEST_ADMIN.uid)).send({ country: 'Japan' })
+      ).status,
     ).toBe(400);
   });
 });
@@ -475,12 +506,13 @@ describe('POST /api/films/upload-video', () => {
       const fileBytes = Buffer.from('fake video bytes');
 
       const uploadRes = await request(app)
-        .post(`/api/films/upload-video?passcode=${TEST_PASSCODE}`)
+        .post('/api/films/upload-video')
+        .set(bearer(TEST_ADMIN.uid))
         .field('testMode', 'true')
         .attach('video', fileBytes, { filename: 'clip.mp4', contentType: 'video/mp4' });
 
       expect(uploadRes.status).toBe(200);
-      expect(uploadRes.body.videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4\?passcode=test-passcode$/);
+      expect(uploadRes.body.videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4$/);
 
       const url = new URL(uploadRes.body.videoUrl);
       const getRes = await request(app).get(url.pathname + url.search);
@@ -504,7 +536,8 @@ describe('POST /api/films/upload-video/init', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', contentType: 'video/mp4', size: 1000, testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ filename: 'clip.mp4', contentType: 'video/mp4', size: 1000, testMode: false });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -514,11 +547,11 @@ describe('POST /api/films/upload-video/init', () => {
     expect(createResumableUploadSession).toHaveBeenCalledWith({ filename: 'clip.mp4', contentType: 'video/mp4' });
   });
 
-  it('requires the passcode', async () => {
+  it('requires authentication', async () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: 'wrong', filename: 'clip.mp4', size: 1000, testMode: false });
+      .send({ filename: 'clip.mp4', size: 1000, testMode: false });
     expect(res.status).toBe(401);
   });
 
@@ -526,7 +559,8 @@ describe('POST /api/films/upload-video/init', () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 1000, testMode: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ filename: 'clip.mp4', size: 1000, testMode: true });
     expect(res.status).toBe(400);
   });
 
@@ -534,7 +568,8 @@ describe('POST /api/films/upload-video/init', () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: TEST_PASSCODE, size: 1000, testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ size: 1000, testMode: false });
     expect(res.status).toBe(400);
   });
 
@@ -542,7 +577,8 @@ describe('POST /api/films/upload-video/init', () => {
     const { app } = buildApp({ maxVideoUploadBytes: 1000 });
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 5000, testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ filename: 'clip.mp4', size: 5000, testMode: false });
     expect(res.status).toBe(413);
   });
 
@@ -554,7 +590,8 @@ describe('POST /api/films/upload-video/init', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/init')
-      .send({ passcode: TEST_PASSCODE, filename: 'clip.mp4', size: 1000, testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ filename: 'clip.mp4', size: 1000, testMode: false });
     expect(res.status).toBe(502);
   });
 });
@@ -568,7 +605,8 @@ describe('POST /api/films/upload-video/finalize', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true, size: 1000 });
@@ -583,7 +621,8 @@ describe('POST /api/films/upload-video/finalize', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
 
     expect(res.status).toBe(404);
   });
@@ -598,17 +637,18 @@ describe('POST /api/films/upload-video/finalize', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
 
     expect(res.status).toBe(413);
     expect(deleteObject).toHaveBeenCalledWith('gs://test-bucket/clip.mp4');
   });
 
-  it('requires the passcode', async () => {
+  it('requires authentication', async () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: 'wrong', videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
     expect(res.status).toBe(401);
   });
 
@@ -616,7 +656,8 @@ describe('POST /api/films/upload-video/finalize', () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: true });
     expect(res.status).toBe(400);
   });
 
@@ -624,7 +665,8 @@ describe('POST /api/films/upload-video/finalize', () => {
     const { app } = buildApp();
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'http://example.com/clip.mp4', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'http://example.com/clip.mp4', testMode: false });
     expect(res.status).toBe(400);
   });
 
@@ -636,7 +678,8 @@ describe('POST /api/films/upload-video/finalize', () => {
 
     const res = await request(app)
       .post('/api/films/upload-video/finalize')
-      .send({ passcode: TEST_PASSCODE, videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ videoUrl: 'gs://test-bucket/clip.mp4', testMode: false });
     expect(res.status).toBe(502);
   });
 });

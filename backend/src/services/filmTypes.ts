@@ -53,6 +53,10 @@ export interface Film {
   runDiscoveryOnCreate: boolean;
   prep: FilmPrep;
   status: FilmStatus;
+  /** The account that created this film (see docs/adr/0028) — the pre-existing
+   * shared workspace was backfilled to the admin account by
+   * scripts/bootstrap-admin.ts, every film created since carries its real owner. */
+  ownerUid: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -62,6 +66,7 @@ export interface CreateFilmInput {
   videoUrl: string;
   subtitle: FilmSubtitle | null;
   runDiscoveryOnCreate: boolean;
+  ownerUid: string;
 }
 
 /** The three wireframe-fixed columns — shared constants, not per-film documents. */

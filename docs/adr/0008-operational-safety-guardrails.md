@@ -1,6 +1,8 @@
 # 0008. Operational safety guardrails for the public demo
 
-Status: Accepted
+Status: Superseded by 0028 (real accounts + per-account quotas + killswitch) for the
+login/passcode-gate portion of this ADR. The other guardrails (rate limiting, input size
+caps, GCP budget alert, time-boxed deployment) are untouched.
 
 ## Context
 

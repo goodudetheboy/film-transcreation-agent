@@ -99,6 +99,8 @@ export interface Project {
   sourceFilmId: string;
   note: string;
   status: ProjectLifecycleStatus;
+  /** The account that created this project — see docs/adr/0028, mirrors Film.ownerUid. */
+  ownerUid: string;
   createdAt: string;
   updatedAt: string;
 }

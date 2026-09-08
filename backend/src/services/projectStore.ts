@@ -9,6 +9,7 @@ export interface CreateProjectInput {
   country: string;
   sourceFilmId: string;
   note?: string;
+  ownerUid: string;
 }
 
 /**
@@ -39,6 +40,7 @@ function newProject(input: CreateProjectInput, now: string): Project {
     sourceFilmId: input.sourceFilmId,
     note: input.note ?? '',
     status: 'draft',
+    ownerUid: input.ownerUid,
     createdAt: now,
     updatedAt: now,
   };

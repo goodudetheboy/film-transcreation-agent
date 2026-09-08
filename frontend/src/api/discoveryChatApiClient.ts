@@ -1,12 +1,12 @@
 import type { DiscoveryAgentSession, DiscoveryChatStreamEvent } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
-import { resolveBaseUrl, describeError, throwOnError, type ApiClientOptions } from './httpHelpers';
+import { resolveBaseUrl, describeError, throwOnError, authHeaders, type ApiClientOptions } from './httpHelpers';
 
 export type { ApiClientOptions };
 
 export async function createDiscoveryAgentSession(
   filmId: string,
-  payload: { passcode: string; name?: string },
+  payload: { name?: string },
   options: ApiClientOptions = {},
 ): Promise<DiscoveryAgentSession> {
   const baseUrl = resolveBaseUrl(options);
@@ -14,7 +14,7 @@ export async function createDiscoveryAgentSession(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -23,13 +23,12 @@ export async function createDiscoveryAgentSession(
 
 export async function listDiscoveryAgentSessions(
   filmId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DiscoveryAgentSession[]> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
-  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents?passcode=${encodeURIComponent(passcode)}`);
+  const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents`, { headers: await authHeaders() });
   await throwOnError(res);
   return (await res.json()) as DiscoveryAgentSession[];
 }
@@ -37,14 +36,14 @@ export async function listDiscoveryAgentSessions(
 export async function getDiscoveryAgentSession(
   filmId: string,
   agentId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<DiscoveryAgentSession> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}?passcode=${encodeURIComponent(passcode)}`,
+    `${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}`,
+    { headers: await authHeaders() },
   );
   await throwOnError(res);
   return (await res.json()) as DiscoveryAgentSession;
@@ -53,7 +52,7 @@ export async function getDiscoveryAgentSession(
 export async function renameDiscoveryAgentSession(
   filmId: string,
   agentId: string,
-  payload: { passcode: string; name: string },
+  payload: { name: string },
   options: ApiClientOptions = {},
 ): Promise<DiscoveryAgentSession> {
   const baseUrl = resolveBaseUrl(options);
@@ -61,7 +60,7 @@ export async function renameDiscoveryAgentSession(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -71,15 +70,14 @@ export async function renameDiscoveryAgentSession(
 export async function deleteDiscoveryAgentSession(
   filmId: string,
   agentId: string,
-  passcode: string,
   options: ApiClientOptions = {},
 ): Promise<void> {
   const baseUrl = resolveBaseUrl(options);
   const fetchImpl = options.fetchImpl ?? fetch;
 
   const res = await fetchImpl(
-    `${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}?passcode=${encodeURIComponent(passcode)}`,
-    { method: 'DELETE' },
+    `${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}`,
+    { method: 'DELETE', headers: await authHeaders() },
   );
   await throwOnError(res);
 }
@@ -91,7 +89,7 @@ export async function deleteDiscoveryAgentSession(
 export async function logDiscoveryRun(
   filmId: string,
   agentId: string,
-  payload: { passcode: string; jobId: string },
+  payload: { jobId: string },
   options: ApiClientOptions = {},
 ): Promise<DiscoveryAgentSession> {
   const baseUrl = resolveBaseUrl(options);
@@ -99,7 +97,7 @@ export async function logDiscoveryRun(
 
   const res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}/runs`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify(payload),
   });
   await throwOnError(res);
@@ -107,7 +105,6 @@ export async function logDiscoveryRun(
 }
 
 export interface SendDiscoveryChatMessagePayload {
-  passcode: string;
   text: string;
   testMode: boolean;
 }
@@ -129,7 +126,7 @@ export async function sendDiscoveryChatMessage(
   try {
     res = await fetchImpl(`${baseUrl}/api/films/${filmId}/discovery-agents/${agentId}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify(payload),
       signal: options.signal,
     });

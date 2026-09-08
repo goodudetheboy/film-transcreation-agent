@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+vi.mock('../../frontend/src/firebase', () => ({
+  auth: { currentUser: { getIdToken: async () => 'itest-admin-uid' } },
+}));
+
 import { createProjectFromFilm } from '../../frontend/src/api/filmsApiClient';
 import {
   listRubrics,
@@ -14,6 +18,7 @@ import {
 import { sendChatMessage } from '../../frontend/src/api/projectChatApiClient';
 import type { ChatStreamEvent, ResearchRunStreamEvent } from '../../frontend/src/api/apiClient.types';
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
+import { TEST_ADMIN, integrationAuthDeps } from './helpers/testAuth';
 import { fakeResearchAgent } from './helpers/fakeResearchAgent';
 import { fakeResearchChatAgent } from './helpers/fakeResearchChatAgent';
 import { fakeTrendAgent } from './helpers/fakeTrendAgent';
@@ -24,8 +29,6 @@ import { createInMemoryProjectRubricStore } from '../../backend/src/services/pro
 import { createInMemoryProjectItemStore } from '../../backend/src/services/projectItemStore';
 import { createInMemoryResearchRunStore } from '../../backend/src/services/researchRunStore';
 import { createInMemoryChatSessionStore } from '../../backend/src/services/chatSessionStore';
-
-const TEST_PASSCODE = 'integration-test-passcode';
 
 describe('frontend project APIs -> real backend -> faked research/chat agents', () => {
   let backend: TestBackend;
@@ -50,6 +53,7 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
       videoUrl: 'http://example.com/clip.mp4',
       subtitle: null,
       runDiscoveryOnCreate: false,
+      ownerUid: TEST_ADMIN.uid,
     });
     filmId = film.id;
     const row = await detailRowsStore.addRow(film.id, {
@@ -88,7 +92,8 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const researchChatAgent = fakeResearchChatAgent({ projectItemStore, projectRubricStore, chatSessionStore });
 
     backend = await startTestBackend({
-      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
+      ...integrationAuthDeps(),
+      config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
       filmStore,
       detailRowsStore,
       projectStore,
@@ -110,7 +115,7 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     // Only backend.researchAgent/researchChatAgent (injected above) are fake.
     const { project, items } = await createProjectFromFilm(
       filmId,
-      { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] },
+      { country: 'Japan', detailRowIds: [rowId] },
       { baseUrl: backend.url },
     );
 
@@ -120,13 +125,13 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     expect(items[0].subtitleText).toBe("I'm not eating that broccoli.");
     expect(items[0].action).toBe('need-research');
 
-    const rubrics = await listRubrics(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const rubrics = await listRubrics(project.id, { baseUrl: backend.url });
     expect(rubrics.length).toBeGreaterThan(0); // fell back to DEFAULT_RUBRICS
 
     const runEvents: ResearchRunStreamEvent[] = [];
     await streamResearchRun(
       project.id,
-      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' }, // testMode:false reaches the injected fake researchAgent
+      { testMode: false, mode: 'need-research' }, // testMode:false reaches the injected fake researchAgent
       (e) => runEvents.push(e),
       { baseUrl: backend.url },
     );
@@ -137,14 +142,14 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     expect(runId).toBeTruthy();
 
     // Staged, not applied — a human must accept the pending result first.
-    const staged = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const staged = await listItems(project.id, { baseUrl: backend.url });
     expect(staged[0].shouldTranscreate).toBeNull();
     expect(staged[0].summary).toBeNull();
     expect(staged[0].action).toBe('need-research');
 
-    await acceptResearchResult(project.id, runId, items[0].id, TEST_PASSCODE, { baseUrl: backend.url });
+    await acceptResearchResult(project.id, runId, items[0].id, { baseUrl: backend.url });
 
-    const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const afterRun = await listItems(project.id, { baseUrl: backend.url });
     expect(afterRun[0].shouldTranscreate).toBe(true);
     expect(afterRun[0].summary).toContain('does not translate to Japan');
     // The agent's result was just accepted for a fresh item — bumped from need-research to
@@ -154,12 +159,12 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     // Now open a chat session and send a message that triggers the fake chat
     // agent's canned tool call — confirms the SSE round trip AND that the
     // resulting ProjectItem write is real, visible via a fresh GET.
-    const session = await createChatSession(project.id, { passcode: TEST_PASSCODE }, { baseUrl: backend.url });
+    const session = await createChatSession(project.id, {}, { baseUrl: backend.url });
     const chatEvents: ChatStreamEvent[] = [];
     await sendChatMessage(
       project.id,
       session.id,
-      { passcode: TEST_PASSCODE, text: 'what do you think of this line?', testMode: false, itemId: items[0].id },
+      { text: 'what do you think of this line?', testMode: false, itemId: items[0].id },
       (e) => chatEvents.push(e),
       { baseUrl: backend.url },
     );
@@ -168,7 +173,7 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     expect(chatEvents.some((e) => e.type === 'item_patched')).toBe(true);
     expect(chatEvents.at(-1)).toEqual({ type: 'turn_done' });
 
-    const afterChat = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const afterChat = await listItems(project.id, { baseUrl: backend.url });
     const chatPatchedScore = afterChat[0].scores.find((s) => s.updatedBy === 'chat-agent');
     expect(chatPatchedScore).toMatchObject({ score: 7, updatedBy: 'chat-agent' });
   });
@@ -177,7 +182,7 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     // Seeded directly on the item/run docs (bypassing the fake agent's batch
     // shape) — this test is about the bulk routes/actions, not the research
     // pass itself, which the first test above already covers.
-    const { project } = await createProjectFromFilm(filmId, { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] }, { baseUrl: backend.url });
+    const { project } = await createProjectFromFilm(filmId, { country: 'Japan', detailRowIds: [rowId] }, { baseUrl: backend.url });
 
     const extraItems = await projectItemStoreRef.createItems(project.id, [
       { filmId, detailRowId: 'row-bulk-1', startMs: 0, endMs: 1000, subtitleText: 'one', sceneDescription: '', customValues: {} },
@@ -194,14 +199,14 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const run = await researchRunStoreRef.createRun({ projectId: project.id, mode: 'custom', itemIds: extraItems.map((i) => i.id), rubricIds: [], testMode: true });
     await researchRunStoreRef.updateRun(project.id, run.id, { status: 'done', pendingResults });
 
-    const accepted = await bulkAcceptResearchResults(project.id, run.id, [extraItems[0].id], TEST_PASSCODE, { baseUrl: backend.url });
+    const accepted = await bulkAcceptResearchResults(project.id, run.id, [extraItems[0].id], { baseUrl: backend.url });
     expect(accepted.map((i) => i.summary)).toEqual(['summary 0']);
 
-    await bulkDiscardResearchResults(project.id, run.id, [extraItems[1].id], TEST_PASSCODE, { baseUrl: backend.url });
+    await bulkDiscardResearchResults(project.id, run.id, [extraItems[1].id], { baseUrl: backend.url });
 
     const finalRun = await researchRunStoreRef.getRun(project.id, run.id);
     expect(finalRun?.pendingResults).toHaveLength(0);
-    const items = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const items = await listItems(project.id, { baseUrl: backend.url });
     expect(items.find((i) => i.id === extraItems[0].id)?.summary).toBe('summary 0');
     expect(items.find((i) => i.id === extraItems[1].id)?.summary).toBeNull();
   });
@@ -209,7 +214,7 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
   it('logs a bulk research run into a chat session as an inline run reference', async () => {
     const { project, items } = await createProjectFromFilm(
       filmId,
-      { passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: [rowId] },
+      { country: 'Japan', detailRowIds: [rowId] },
       { baseUrl: backend.url },
     );
     expect(items[0].action).toBe('need-research');
@@ -217,27 +222,30 @@ describe('frontend project APIs -> real backend -> faked research/chat agents', 
     const runEvents: ResearchRunStreamEvent[] = [];
     await streamResearchRun(
       project.id,
-      { passcode: TEST_PASSCODE, testMode: false, mode: 'need-research' },
+      { testMode: false, mode: 'need-research' },
       (e) => runEvents.push(e),
       { baseUrl: backend.url },
     );
     const runId = (runEvents.find((e) => e.type === 'progress') as { runId: string }).runId;
     expect(runId).toBeTruthy();
 
-    const session = await createChatSession(project.id, { passcode: TEST_PASSCODE }, { baseUrl: backend.url });
-    const updatedSession = await logResearchRun(project.id, session.id, { passcode: TEST_PASSCODE, runId }, { baseUrl: backend.url });
+    const session = await createChatSession(project.id, {}, { baseUrl: backend.url });
+    const updatedSession = await logResearchRun(project.id, session.id, { runId }, { baseUrl: backend.url });
 
     expect(updatedSession.turns).toEqual([{ role: 'system', parts: [{ run: { runId } }], ts: expect.any(String) }]);
   });
 
-  it('rejects project creation with an error when the passcode is wrong', async () => {
-    await expect(
-      createProjectFromFilm(
-        filmId,
-        { passcode: 'wrong', country: 'Japan', detailRowIds: [rowId] },
-        { baseUrl: backend.url },
-      ),
-    ).rejects.toThrow(/401/);
+  it('rejects project creation with an error when auth is missing/invalid', async () => {
+    // The file-wide firebase mock always resolves to the one valid
+    // 'itest-admin-uid' token, so a bad-auth assertion can't go through the
+    // normal apiClient path — this hits the real backend directly instead,
+    // which is fine: the point is testing the backend's real rejection.
+    const res = await fetch(`${backend.url}/api/films/${filmId}/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer wrong-token' },
+      body: JSON.stringify({ country: 'Japan', detailRowIds: [rowId] }),
+    });
+    expect(res.status).toBe(401);
   });
 });
 
@@ -255,6 +263,7 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
       videoUrl: 'http://example.com/clip2.mp4',
       subtitle: null,
       runDiscoveryOnCreate: false,
+      ownerUid: TEST_ADMIN.uid,
     });
     filmId = film.id;
     const row = await detailRowsStore.addRow(film.id, {
@@ -275,7 +284,8 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
     };
 
     backend = await startTestBackend({
-      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
+      ...integrationAuthDeps(),
+      config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
       filmStore,
       detailRowsStore,
       trendAgent: fakeTrendAgent([trendSuggestion]),
@@ -290,7 +300,6 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
     const { project, items } = await createProjectFromFilm(
       filmId,
       {
-        passcode: TEST_PASSCODE,
         country: 'Brazil',
         detailRowIds: [rowId],
         rubrics: [{ name: 'Slang', description: 'slang or memes tied to a moment', weight: 3, trendEligible: true }],
@@ -303,7 +312,7 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
     const updated = await runTrendResearch(
       project.id,
       items[0].id,
-      { passcode: TEST_PASSCODE, testMode: false },
+      { testMode: false },
       { baseUrl: backend.url },
     );
 
@@ -317,7 +326,7 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
       },
     ]);
 
-    const afterRun = await listItems(project.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const afterRun = await listItems(project.id, { baseUrl: backend.url });
     expect(afterRun[0].trendSuggestions).toEqual(updated.trendSuggestions);
   });
 
@@ -325,7 +334,6 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
     const { project, items } = await createProjectFromFilm(
       filmId,
       {
-        passcode: TEST_PASSCODE,
         country: 'Brazil',
         detailRowIds: [rowId],
         rubrics: [{ name: 'Wordplay', description: 'wordplay', weight: 3, trendEligible: false }],
@@ -334,7 +342,7 @@ describe('frontend project APIs -> real backend -> faked Trend Agent (manual, pe
     );
 
     await expect(
-      runTrendResearch(project.id, items[0].id, { passcode: TEST_PASSCODE, testMode: false }, { baseUrl: backend.url }),
+      runTrendResearch(project.id, items[0].id, { testMode: false }, { baseUrl: backend.url }),
     ).rejects.toThrow(/400/);
   });
 });

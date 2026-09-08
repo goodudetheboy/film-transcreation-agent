@@ -1,11 +1,10 @@
 import type { ChatStreamEvent } from './apiClient.types';
 import { parseSSEStream } from './sseStream';
-import { resolveBaseUrl, describeError, type ApiClientOptions } from './httpHelpers';
+import { resolveBaseUrl, describeError, authHeaders, type ApiClientOptions } from './httpHelpers';
 
 export type { ApiClientOptions };
 
 export interface SendChatMessagePayload {
-  passcode: string;
   text: string;
   testMode: boolean;
   /** Which item's detail panel this message was sent from, if any — see docs/adr/0025
@@ -29,7 +28,7 @@ export async function sendChatMessage(
   try {
     res = await fetchImpl(`${baseUrl}/api/projects/${projectId}/chat-sessions/${sessionId}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
       body: JSON.stringify(payload),
       signal: options.signal,
     });

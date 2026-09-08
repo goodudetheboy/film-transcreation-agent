@@ -9,7 +9,6 @@ import { withMinDuration } from '../utils/withMinDuration';
 import type { Film, FilmPrepStage } from '../api/apiClient.types';
 
 export interface FilmPreparingViewProps {
-  passcode: string;
   testMode: boolean;
 }
 
@@ -24,7 +23,7 @@ export interface FilmPreparingViewProps {
  * upload stages used to live on a separate `/films/new` page and why that
  * was undone.
  */
-export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps) {
+export function FilmPreparingView({ testMode }: FilmPreparingViewProps) {
   const { id: routeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { prep, applyEvent, reset } = useFilmPrepStore();
@@ -53,12 +52,12 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
 
     let cancelled = false;
 
-    getFilm(filmId, passcode)
+    getFilm(filmId)
       .then((film: Film) => {
         if (cancelled) return;
         setRunDiscoveryOnCreate(film.runDiscoveryOnCreate);
         applyEvent({ type: 'prep_update', prep: film.prep });
-        return streamFilmPrep(filmId, passcode, (event) => {
+        return streamFilmPrep(filmId, (event) => {
           if (!cancelled) applyEvent(event);
         });
       })
@@ -70,7 +69,7 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filmId, passcode]);
+  }, [filmId]);
 
   const displayStage = useStageDwell(prep?.stage ?? null);
   const canSubmit = title.trim() !== '' && videoFile !== null && subtitleFile !== null;
@@ -83,7 +82,7 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
       setPhaseLabel(STAGE_LABELS.video_uploading);
       setUploadProgress(testMode ? null : 0);
       const { videoUrl } = await withMinDuration(
-        uploadVideoFile(videoFile, { passcode, testMode }, undefined, setUploadProgress),
+        uploadVideoFile(videoFile, { testMode }, undefined, setUploadProgress),
         MIN_STAGE_DWELL_MS,
       );
       setUploadProgress(null);
@@ -91,13 +90,12 @@ export function FilmPreparingView({ passcode, testMode }: FilmPreparingViewProps
       setUploadStage('subtitle_uploading');
       setPhaseLabel(STAGE_LABELS.subtitle_uploading);
       const { subtitleUrl, format, entries } = await withMinDuration(
-        uploadSubtitleFile(subtitleFile, { passcode, testMode }),
+        uploadSubtitleFile(subtitleFile, { testMode }),
         MIN_STAGE_DWELL_MS,
       );
 
       setPhaseLabel('Creating your film…');
       const film = await createFilm({
-        passcode,
         title,
         videoUrl,
         subtitleUrl,

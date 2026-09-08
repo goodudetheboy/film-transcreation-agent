@@ -14,7 +14,6 @@ import { ColInfoIcon } from './ColInfoIcon';
 
 export interface DetailsTableProps {
   film: Film;
-  passcode: string;
   rows: DetailRow[];
   columns: ColumnDoc[];
   currentTimeMs: number;
@@ -49,7 +48,6 @@ const SOURCE_HINT = 'How this row was found — added by hand, discovered automa
 
 export function DetailsTable({
   film,
-  passcode,
   rows,
   columns,
   currentTimeMs,
@@ -97,7 +95,7 @@ export function DetailsTable({
     const rowId = deleteTargetId;
     setBusy(true);
     try {
-      await deleteDetailRow(film.id, rowId, passcode);
+      await deleteDetailRow(film.id, rowId);
       onRowDeleted(rowId);
       setDeleteTargetId(null);
     } catch (err) {
@@ -114,7 +112,7 @@ export function DetailsTable({
       const startMs = currentTimeMs;
       const cap = durationMs > 0 ? durationMs : startMs + NEW_ROW_DEFAULT_SPAN_MS;
       const endMs = Math.max(startMs + 1, Math.min(startMs + NEW_ROW_DEFAULT_SPAN_MS, cap));
-      const row = await addDetailRow(film.id, { passcode, startMs, endMs, values: {} });
+      const row = await addDetailRow(film.id, { startMs, endMs, values: {} });
       onRowAdded(row);
       setOpenRowId(row.id);
     } catch (err) {
@@ -140,7 +138,7 @@ export function DetailsTable({
     setBusy(true);
     setError(null);
     try {
-      const column = await addColumn(film.id, { passcode, name: newColumnName.trim(), description: newColumnDescription.trim() });
+      const column = await addColumn(film.id, { name: newColumnName.trim(), description: newColumnDescription.trim() });
       onColumnAdded(column);
       setShowAddColumnModal(false);
     } catch (err) {
@@ -155,7 +153,6 @@ export function DetailsTable({
     return (
       <DetailRowView
         film={film}
-        passcode={passcode}
         row={openRow}
         rows={rows}
         columns={columns}

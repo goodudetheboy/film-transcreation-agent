@@ -66,6 +66,7 @@ export function createFirestoreFilmStore(firestore: Firestore): FilmStore {
         runDiscoveryOnCreate: input.runDiscoveryOnCreate,
         prep: initialPrep(input.runDiscoveryOnCreate, now),
         status: 'processing',
+        ownerUid: input.ownerUid,
         createdAt: now,
         updatedAt: now,
       };
@@ -120,6 +121,7 @@ export function createInMemoryFilmStore(seedFilms: CreateFilmInput[] = []): Film
       runDiscoveryOnCreate: input.runDiscoveryOnCreate,
       prep: readyPrep(now),
       status: 'processed',
+      ownerUid: input.ownerUid,
       createdAt: now,
       updatedAt: now,
     };
@@ -139,6 +141,7 @@ export function createInMemoryFilmStore(seedFilms: CreateFilmInput[] = []): Film
         runDiscoveryOnCreate: input.runDiscoveryOnCreate,
         prep: initialPrep(input.runDiscoveryOnCreate, now),
         status: 'processing',
+        ownerUid: input.ownerUid,
         createdAt: now,
         updatedAt: now,
       };

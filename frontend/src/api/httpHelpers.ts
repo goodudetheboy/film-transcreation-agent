@@ -1,3 +1,5 @@
+import { auth } from '../firebase';
+
 /** Shared by projectsApiClient.ts and filmsApiClient.ts — both throw on a non-ok
  * response rather than emitting an error-shaped event (unlike apiClient.ts's SSE
  * endpoints, which have a different error-reporting convention). */
@@ -37,4 +39,13 @@ export async function throwOnError(res: Response): Promise<void> {
     const detail = await describeError(res);
     throw new Error(`request failed with status ${res.status}${detail ? `: ${detail}` : ''}`);
   }
+}
+
+/** Every authenticated request attaches the signed-in user's Firebase ID
+ * token this way instead of a passcode — there's no separate "verify" step,
+ * Firebase sign-in itself is the check. */
+export async function authHeaders(): Promise<Record<string, string>> {
+  const token = await auth.currentUser?.getIdToken();
+  if (!token) throw new Error('not signed in');
+  return { Authorization: `Bearer ${token}` };
 }

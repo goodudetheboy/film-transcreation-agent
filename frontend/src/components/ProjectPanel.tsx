@@ -34,7 +34,6 @@ import { countryCode } from '../data/countries';
 
 export interface ProjectPanelProps {
   projectId: string;
-  passcode: string;
   testMode: boolean;
   onSeek?: (ms: number) => void;
   /** Every item's review status, keyed by its source DetailRow id, so the
@@ -84,7 +83,6 @@ const YOUR_VERDICT_HINT =
  */
 export function ProjectPanel({
   projectId,
-  passcode,
   testMode,
   onSeek,
   onItemStatusByRow,
@@ -131,7 +129,7 @@ export function ProjectPanel({
     setOpenItemId(null);
     onItemStatusByRow?.({});
     let cancelled = false;
-    Promise.all([getProject(projectId, passcode), listRubrics(projectId, passcode), listItems(projectId, passcode)])
+    Promise.all([getProject(projectId), listRubrics(projectId), listItems(projectId)])
       .then(([p, r, i]) => {
         if (cancelled) return;
         setProject(p);
@@ -153,11 +151,11 @@ export function ProjectPanel({
 
   useEffect(() => {
     if (!project?.sourceFilmId) return;
-    listDetails(project.sourceFilmId, passcode).then((d) => {
+    listDetails(project.sourceFilmId).then((d) => {
       setFilmRows(d.rows);
       setFilmColumns(d.columns);
     });
-  }, [project?.sourceFilmId, passcode]);
+  }, [project?.sourceFilmId]);
 
   // Deep-link from the global Agents tab — open the Agents panel once.
   useEffect(() => {
@@ -185,26 +183,26 @@ export function ProjectPanel({
 
   async function handleActionChange(itemId: string, action: ProjectItemAction) {
     patchItem(itemId, { action });
-    await updateItemAction(projectId, itemId, { passcode, action });
+    await updateItemAction(projectId, itemId, { action });
   }
 
   async function handleAddDetails() {
     if (addSelection.size === 0) return;
-    const added = await addItems(projectId, { passcode, detailRowIds: [...addSelection] });
+    const added = await addItems(projectId, { detailRowIds: [...addSelection] });
     addItemsToStore(added);
     setAddSelection(new Set());
     setShowAddDetails(false);
   }
 
   async function handleAddRubric() {
-    const rubric = await createRubric(projectId, { passcode, name: '', description: '', weight: 3 });
+    const rubric = await createRubric(projectId, { name: '', description: '', weight: 3 });
     addRubric(rubric);
   }
 
   async function handleGenerateDefaultRubrics() {
-    const defaults = await getDefaultRubrics(passcode);
+    const defaults = await getDefaultRubrics();
     for (const d of defaults) {
-      const rubric = await createRubric(projectId, { passcode, ...d });
+      const rubric = await createRubric(projectId, d);
       addRubric(rubric);
     }
   }
@@ -226,7 +224,6 @@ export function ProjectPanel({
     return (
       <ProjectItemView
         projectId={project.id}
-        passcode={passcode}
         testMode={testMode}
         item={openItem}
         rubrics={rubrics}
@@ -395,13 +392,13 @@ export function ProjectPanel({
               onChange={async (i, patch) => {
                 const rubric = rubrics[i];
                 if (!rubric.id) return;
-                const updated = await updateRubric(projectId, rubric.id, { passcode, ...patch });
+                const updated = await updateRubric(projectId, rubric.id, patch);
                 updateRubricInPlace(updated);
               }}
               onRemove={async (i) => {
                 const rubric = rubrics[i];
                 if (!rubric.id) return;
-                await deleteRubric(projectId, rubric.id, passcode);
+                await deleteRubric(projectId, rubric.id);
                 removeRubric(rubric.id);
               }}
               onGenerateDefaults={handleGenerateDefaultRubrics}
@@ -428,7 +425,6 @@ export function ProjectPanel({
         >
           <ResearchChatPanel
             projectId={project.id}
-            passcode={passcode}
             testMode={testMode}
             items={allItems}
             initialSessionId={initialSessionId}

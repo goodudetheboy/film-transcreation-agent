@@ -194,14 +194,12 @@ function ScoreBlock({
   rubric,
   item,
   projectId,
-  passcode,
   onScorePatched,
 }: {
   index: number;
   rubric: Rubric;
   item: ProjectItem;
   projectId: string;
-  passcode: string;
   onScorePatched: ProjectItemViewProps['onScorePatched'];
 }) {
   const existing = item.scores.find((s) => s.rubricId === rubric.id);
@@ -228,7 +226,7 @@ function ScoreBlock({
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean);
-      const updated = await updateItemScore(projectId, item.id, rubric.id, { passcode, score, reasoning, evidence, sources });
+      const updated = await updateItemScore(projectId, item.id, rubric.id, { score, reasoning, evidence, sources });
       onScorePatched(item.id, updated);
       setEditing(false);
     } finally {
@@ -237,7 +235,7 @@ function ScoreBlock({
   }
 
   async function saveNote(next: string) {
-    const updated = await updateItemScore(projectId, item.id, rubric.id, { passcode, userNote: next });
+    const updated = await updateItemScore(projectId, item.id, rubric.id, { userNote: next });
     onScorePatched(item.id, updated);
   }
 
@@ -341,13 +339,11 @@ function ScoreBlock({
  * the parent when the project has at least one trend-eligible rubric configured. */
 function TrendResearchButton({
   projectId,
-  passcode,
   testMode,
   item,
   onScorePatched,
 }: {
   projectId: string;
-  passcode: string;
   testMode: boolean;
   item: ProjectItem;
   onScorePatched: ProjectItemViewProps['onScorePatched'];
@@ -359,7 +355,7 @@ function TrendResearchButton({
     setRunning(true);
     setError(null);
     try {
-      const updated = await runTrendResearch(projectId, item.id, { passcode, testMode });
+      const updated = await runTrendResearch(projectId, item.id, { testMode });
       onScorePatched(item.id, updated);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to find a trend-sourced alternative.');
@@ -380,7 +376,6 @@ function TrendResearchButton({
 
 export interface ProjectItemViewProps {
   projectId: string;
-  passcode: string;
   testMode: boolean;
   item: ProjectItem;
   rubrics: Rubric[];
@@ -412,7 +407,6 @@ export interface ProjectItemViewProps {
  */
 export function ProjectItemView({
   projectId,
-  passcode,
   testMode,
   item,
   rubrics,
@@ -442,18 +436,18 @@ export function ProjectItemView({
   }, [item.id]);
 
   async function saveShouldTranscreate(next: boolean | null) {
-    const updated = await updateItem(projectId, item.id, { passcode, shouldTranscreate: next });
+    const updated = await updateItem(projectId, item.id, { shouldTranscreate: next });
     onScorePatched(item.id, updated);
   }
 
   async function saveSummary(next: string) {
-    const updated = await updateItem(projectId, item.id, { passcode, summary: next || null });
+    const updated = await updateItem(projectId, item.id, { summary: next || null });
     onScorePatched(item.id, updated);
   }
 
   async function saveReplacement(patch: Partial<{ text: string; justification: string }>) {
     const current = item.suggestedReplacement ?? { text: '', justification: '' };
-    const updated = await updateItem(projectId, item.id, { passcode, suggestedReplacement: { ...current, ...patch } });
+    const updated = await updateItem(projectId, item.id, { suggestedReplacement: { ...current, ...patch } });
     onScorePatched(item.id, updated);
   }
 
@@ -595,7 +589,7 @@ export function ProjectItemView({
             </div>
 
             {rubrics.some((r) => r.trendEligible) && (
-              <TrendResearchButton projectId={projectId} passcode={passcode} testMode={testMode} item={item} onScorePatched={onScorePatched} />
+              <TrendResearchButton projectId={projectId} testMode={testMode} item={item} onScorePatched={onScorePatched} />
             )}
 
             {item.trendSuggestions?.map((t, ti) => (
@@ -615,7 +609,7 @@ export function ProjectItemView({
           </div>
 
           {rankedRubrics.map((rubric, i) => (
-            <ScoreBlock key={rubric.id} index={i} rubric={rubric} item={item} projectId={projectId} passcode={passcode} onScorePatched={onScorePatched} />
+            <ScoreBlock key={rubric.id} index={i} rubric={rubric} item={item} projectId={projectId} onScorePatched={onScorePatched} />
           ))}
         </div>
 
@@ -636,7 +630,7 @@ export function ProjectItemView({
           className={`project-item-view__chat${chatOpen ? ' project-item-view__chat--open' : ''}`}
           style={chatOpen ? { flexBasis: chatPanelWidth } : undefined}
         >
-          <ResearchChatPanel projectId={projectId} passcode={passcode} testMode={testMode} itemId={item.id} items={allItems} />
+          <ResearchChatPanel projectId={projectId} testMode={testMode} itemId={item.id} items={allItems} />
         </div>
       </div>
 

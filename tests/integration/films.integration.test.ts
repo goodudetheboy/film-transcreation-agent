@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+vi.mock('../../frontend/src/firebase', () => ({
+  auth: { currentUser: { getIdToken: async () => 'itest-admin-uid' } },
+}));
+
 import {
   bulkDiscardDiscoveryResults,
   bulkMergeDiscoveryResults,
@@ -13,6 +17,7 @@ import {
 } from '../../frontend/src/api/filmsApiClient';
 import type { DiscoveryJobStreamEvent, FilmPrepStreamEvent } from '../../frontend/src/api/apiClient.types';
 import { startTestBackend, type TestBackend } from './helpers/startTestBackend';
+import { integrationAuthDeps } from './helpers/testAuth';
 import { fakeDiscoveryAgent } from './helpers/fakeDiscoveryAgent';
 import { startFakeGcsResumableServer } from './helpers/fakeGcsResumableServer';
 import { createInMemoryFilmStore } from '../../backend/src/services/filmStore';
@@ -21,7 +26,6 @@ import { createInMemoryDiscoveryJobStore } from '../../backend/src/services/disc
 import { createDiscoveryEventBus } from '../../backend/src/services/discoveryEventBus';
 import { createDiscoveryQueueWorker, type DiscoveryQueueWorker } from '../../backend/src/services/discoveryQueueWorker';
 
-const TEST_PASSCODE = 'integration-test-passcode';
 const SRT = '1\n00:00:01,000 --> 00:00:04,000\nHello there.\n';
 
 describe('frontend filmsApiClient -> real backend -> faked discovery agent', () => {
@@ -40,7 +44,8 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
     const discoveryAgent = fakeDiscoveryAgent();
 
     backend = await startTestBackend({
-      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
+      ...integrationAuthDeps(),
+      config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
       filmStore,
       detailRowsStore,
       discoveryJobStore,
@@ -62,22 +67,23 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
     // No fetchImpl override anywhere in this file — real fetch, real TCP, real Express app.
     const { videoUrl } = await uploadVideoFile(
       new File([new Uint8Array([1, 2, 3])], 'clip.mp4', { type: 'video/mp4' }),
-      { passcode: TEST_PASSCODE, testMode: true },
+      { testMode: true },
       { baseUrl: backend.url },
     );
     // Mock mode saves to local disk and serves it back over HTTP — not GCS.
-    expect(videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4\?passcode=/);
+    // /mock-uploads is mounted unauthenticated (a <video> tag can't carry a bearer
+    // header), so no ?passcode= (or any) query string is appended anymore.
+    expect(videoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mock-uploads\/.+\.mp4$/);
 
     const { subtitleUrl, format, entries } = await uploadSubtitleFile(
       new File([SRT], 'clip.srt', { type: 'text/plain' }),
-      { passcode: TEST_PASSCODE, testMode: true },
+      { testMode: true },
       { baseUrl: backend.url },
     );
     expect(entries).toHaveLength(1);
 
     const film = await createFilm(
       {
-        passcode: TEST_PASSCODE,
         title: 'Integration Film',
         videoUrl,
         subtitleUrl,
@@ -91,13 +97,13 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
     expect(film.subtitle?.entries).toHaveLength(1);
 
     const events: FilmPrepStreamEvent[] = [];
-    await streamFilmPrep(film.id, TEST_PASSCODE, (e) => events.push(e), { baseUrl: backend.url });
+    await streamFilmPrep(film.id, (e) => events.push(e), { baseUrl: backend.url });
     expect(events.at(-1)?.prep.stage).toBe('ready');
 
     // ---- Kick off a discovery pass, drive the worker, merge its finding ----
     const job = await createDiscoveryJob(
       film.id,
-      { passcode: TEST_PASSCODE, specialInstruction: 'find something', targetColumns: ['segmentDescription'], testMode: true },
+      { specialInstruction: 'find something', targetColumns: ['segmentDescription'], testMode: true },
       { baseUrl: backend.url },
     );
     expect(job.status).toBe('queued');
@@ -105,15 +111,15 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
     expect(await worker.processOne()).toBe(true);
 
     const jobEvents: DiscoveryJobStreamEvent[] = [];
-    await streamDiscoveryJob(film.id, job.id, TEST_PASSCODE, (e) => jobEvents.push(e), { baseUrl: backend.url });
+    await streamDiscoveryJob(film.id, job.id, (e) => jobEvents.push(e), { baseUrl: backend.url });
     const finalJob = jobEvents.at(-1)!.job;
     expect(finalJob.status).toBe('done');
     expect(finalJob.resultRows).toHaveLength(1);
 
-    const mergedRow = await mergeDiscoveryResult(film.id, job.id, finalJob.resultRows[0].tempId, TEST_PASSCODE, { baseUrl: backend.url });
+    const mergedRow = await mergeDiscoveryResult(film.id, job.id, finalJob.resultRows[0].tempId, { baseUrl: backend.url });
     expect(mergedRow.provenance).toMatchObject({ type: 'agent-discovered' });
 
-    const details = await listDetails(film.id, TEST_PASSCODE, { baseUrl: backend.url });
+    const details = await listDetails(film.id, { baseUrl: backend.url });
     expect(details.rows).toHaveLength(1);
   });
 
@@ -136,10 +142,10 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
       ],
     });
 
-    const merged = await bulkMergeDiscoveryResults('bulk-film', job.id, ['b-1', 'b-2'], TEST_PASSCODE, { baseUrl: backend.url });
+    const merged = await bulkMergeDiscoveryResults('bulk-film', job.id, ['b-1', 'b-2'], { baseUrl: backend.url });
     expect(merged.map((r) => r.subtitleText).sort()).toEqual(['one', 'two']);
 
-    await bulkDiscardDiscoveryResults('bulk-film', job.id, ['b-3'], TEST_PASSCODE, { baseUrl: backend.url });
+    await bulkDiscardDiscoveryResults('bulk-film', job.id, ['b-3'], { baseUrl: backend.url });
 
     const finalJob = await discoveryJobStoreRef.getJob('bulk-film', job.id);
     expect(finalJob?.resultRows).toHaveLength(0);
@@ -147,22 +153,25 @@ describe('frontend filmsApiClient -> real backend -> faked discovery agent', () 
     expect(rows.map((r) => r.subtitleText).sort()).toEqual(['one', 'two']);
   });
 
-  it('rejects film creation with an error when the passcode is wrong', async () => {
-    await expect(
-      createFilm(
-        {
-          passcode: 'wrong',
-          title: 'X',
-          videoUrl: 'gs://bucket/x.mp4',
-          subtitleUrl: 'gs://bucket/x.srt',
-          subtitleFormat: 'srt',
-          subtitleEntries: [{ id: 'e1', index: 0, startMs: 0, endMs: 1000, text: 'hi' }],
-          runDiscovery: false,
-          testMode: true,
-        },
-        { baseUrl: backend.url },
-      ),
-    ).rejects.toThrow(/401/);
+  it('rejects film creation with an error when auth is missing/invalid', async () => {
+    // The file-wide firebase mock always resolves to the one valid
+    // 'itest-admin-uid' token, so a bad-auth assertion can't go through the
+    // normal apiClient path — this hits the real backend directly instead,
+    // which is fine: the point is testing the backend's real rejection.
+    const res = await fetch(`${backend.url}/api/films`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer wrong-token' },
+      body: JSON.stringify({
+        title: 'X',
+        videoUrl: 'gs://bucket/x.mp4',
+        subtitleUrl: 'gs://bucket/x.srt',
+        subtitleFormat: 'srt',
+        subtitleEntries: [{ id: 'e1', index: 0, startMs: 0, endMs: 1000, text: 'hi' }],
+        runDiscovery: false,
+        testMode: true,
+      }),
+    });
+    expect(res.status).toBe(401);
   });
 });
 
@@ -183,7 +192,8 @@ describe('frontend filmsApiClient -> real backend -> real chunked upload to a fa
     const getObjectSizeBytes = vi.fn().mockImplementation(async () => gcs.receivedBytes());
 
     const backend = await startTestBackend({
-      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
+      ...integrationAuthDeps(),
+      config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
       videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession, getObjectSizeBytes, deleteObject: vi.fn() },
     });
 
@@ -192,7 +202,7 @@ describe('frontend filmsApiClient -> real backend -> real chunked upload to a fa
       const bytes = new Uint8Array(9 * 1024 * 1024);
       const { videoUrl } = await uploadVideoFile(
         new File([bytes], 'big-clip.mp4', { type: 'video/mp4' }),
-        { passcode: TEST_PASSCODE, testMode: false },
+        { testMode: false },
         { baseUrl: backend.url },
       );
 
@@ -216,7 +226,8 @@ describe('frontend filmsApiClient -> real backend -> real chunked upload to a fa
     const getObjectSizeBytes = vi.fn().mockImplementation(async () => gcs.receivedBytes());
 
     const backend = await startTestBackend({
-      config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
+      ...integrationAuthDeps(),
+      config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000, mockDelayScale: 0.01 },
       videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession, getObjectSizeBytes, deleteObject: vi.fn() },
     });
 
@@ -224,7 +235,7 @@ describe('frontend filmsApiClient -> real backend -> real chunked upload to a fa
       const bytes = new Uint8Array(9 * 1024 * 1024);
       const { videoUrl } = await uploadVideoFile(
         new File([bytes], 'dropped-final.mp4', { type: 'video/mp4' }),
-        { passcode: TEST_PASSCODE, testMode: false },
+        { testMode: false },
         { baseUrl: backend.url },
       );
 

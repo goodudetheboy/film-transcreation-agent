@@ -24,7 +24,6 @@ import { SparkleIcon, TrashIcon } from '../components/icons';
 import { FILM_STATUS_LABELS } from '../utils/statusLabels';
 
 export interface FilmWorkspaceViewProps {
-  passcode: string;
   testMode: boolean;
 }
 
@@ -53,7 +52,7 @@ function clampLeftWidth(value: number, containerWidth: number): number {
   return Math.min(Math.max(value, MIN_LEFT), maxLeft);
 }
 
-export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps) {
+export function FilmWorkspaceView({ testMode }: FilmWorkspaceViewProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -124,7 +123,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     if (!id) return;
     let cancelled = false;
 
-    Promise.all([getFilm(id, passcode), listDetails(id, passcode)])
+    Promise.all([getFilm(id), listDetails(id)])
       .then(([f, details]) => {
         if (cancelled) return;
         setFilm(f);
@@ -138,12 +137,12 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, passcode]);
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    listProjects(passcode)
+    listProjects()
       .then((all) => {
         if (!cancelled) setFilmProjects(all.filter((p) => p.sourceFilmId === id));
       })
@@ -154,7 +153,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     return () => {
       cancelled = true;
     };
-  }, [id, passcode, showNewProjectModal]);
+  }, [id, showNewProjectModal]);
 
   useLayoutEffect(() => {
     const container = splitRef.current;
@@ -389,7 +388,7 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
     if (!film) return;
     setDeleting(true);
     try {
-      await deleteFilm(film.id, passcode);
+      await deleteFilm(film.id);
       navigate('/');
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'failed to delete film');
@@ -480,7 +479,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
 
                 <DetailsTable
                   film={film}
-                  passcode={passcode}
                   rows={rows}
                   columns={columns}
                   currentTimeMs={currentTimeMs}
@@ -512,7 +510,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               >
                 <DiscoveryChatPanel
                   filmId={film.id}
-                  passcode={passcode}
                   testMode={testMode}
                   columns={columns}
                   initialAgentId={pendingDeepLink?.target === 'discovery' ? pendingDeepLink.agentId : undefined}
@@ -553,7 +550,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
               ) : (
                 <ProjectPanel
                   projectId={projectId}
-                  passcode={passcode}
                   testMode={testMode}
                   onSeek={handleSeek}
                   onItemStatusByRow={setItemStatusByRow}
@@ -570,7 +566,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
           {tab === 'agents' && (
             <FilmAgentsTab
               filmId={film.id}
-              passcode={passcode}
               projects={filmProjects}
               onOpenDiscovery={openDiscoverySession}
               onOpenResearch={openResearchSession}
@@ -655,7 +650,6 @@ export function FilmWorkspaceView({ passcode, testMode }: FilmWorkspaceViewProps
       {showNewProjectModal && (
         <NewProjectModal
           filmId={film.id}
-          passcode={passcode}
           testMode={testMode}
           onCreated={(project) => {
             setShowNewProjectModal(false);

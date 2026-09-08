@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 import type { Theme } from '../utils/useTheme';
 import { GearIcon } from './icons';
 
@@ -80,6 +82,9 @@ export function HeaderSettings({
                 <option value="light">Light</option>
               </select>
             </div>
+            <button type="button" className="btn btn--ghost" onClick={() => signOut(auth)}>
+              Sign out
+            </button>
           </div>
         </div>
       )}

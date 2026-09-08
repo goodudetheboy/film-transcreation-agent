@@ -1,6 +1,5 @@
 export interface Config {
   port: number;
-  sharedPasscode: string;
   rateLimitWindowMs: number;
   rateLimitMax: number;
   googleCloudProject: string;
@@ -20,7 +19,6 @@ export interface Config {
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return {
     port: Number(env.PORT ?? 8787),
-    sharedPasscode: env.SHARED_PASSCODE ?? 'dev-passcode',
     rateLimitWindowMs: Number(env.RATE_LIMIT_WINDOW_MS ?? 60_000),
     rateLimitMax: Number(env.RATE_LIMIT_MAX ?? 1000),
     googleCloudProject: env.GOOGLE_CLOUD_PROJECT ?? 'silent-scholar-505618-u6',

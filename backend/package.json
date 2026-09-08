@@ -8,13 +8,15 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "test:research:manual": "tsx scripts/manual-research-test.ts"
+    "test:research:manual": "tsx scripts/manual-research-test.ts",
+    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.0",
     "@google-cloud/storage": "^8.0.1",
     "@google/genai": "^2.18.0",
     "cors": "^2.8.5",
+    "firebase-admin": "^14.3.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "^7.4.0",

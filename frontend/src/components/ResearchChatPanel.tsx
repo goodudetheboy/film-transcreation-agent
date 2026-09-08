@@ -32,7 +32,6 @@ import { MessageWithReferences } from './MessageWithReferences';
 
 export interface ResearchChatPanelProps {
   projectId: string;
-  passcode: string;
   testMode: boolean;
   /** Which item's panel this chat is docked in, if any — passed through to
    * every message so the tool-calling agent knows what to mutate. */
@@ -527,7 +526,6 @@ function ResearchRunCard({
  * instead of blocking on the whole batch. */
 function KickoffForm({
   projectId,
-  passcode,
   testMode,
   sessionId,
   items,
@@ -535,7 +533,6 @@ function KickoffForm({
   onCancel,
 }: {
   projectId: string;
-  passcode: string;
   testMode: boolean;
   sessionId: string;
   items: ProjectItem[];
@@ -573,12 +570,12 @@ function KickoffForm({
 
     streamResearchRun(
       projectId,
-      { passcode, testMode: useTestMode, mode, itemIds: mode === 'custom' ? [...selected] : undefined },
+      { testMode: useTestMode, mode, itemIds: mode === 'custom' ? [...selected] : undefined },
       (event) => {
         if (logged) return;
         if (event.type === 'progress') {
           logged = true;
-          logResearchRun(projectId, sessionId, { passcode, runId: event.runId })
+          logResearchRun(projectId, sessionId, { runId: event.runId })
             .then(onCreated)
             .catch((err) => setError(err instanceof Error ? err.message : 'failed to log the run into this session'))
             .finally(() => setSubmitting(false));
@@ -684,7 +681,6 @@ function KickoffForm({
 
 export function ResearchChatPanel({
   projectId,
-  passcode,
   testMode,
   itemId,
   items = [],
@@ -721,14 +717,14 @@ export function ResearchChatPanel({
 
   useEffect(() => {
     let cancelled = false;
-    listChatSessions(projectId, passcode).then((sessions) => {
+    listChatSessions(projectId).then((sessions) => {
       if (cancelled) return;
       setChatSessions(sessions);
     });
     // The project's run status list, joined against each session's own `run`
     // marker turns below — same "session status alone doesn't mean the batch
     // Run finished" gap FilmAgentsTab.tsx fixes, applied to this switcher list.
-    listResearchRuns(projectId, passcode).then((runs) => {
+    listResearchRuns(projectId).then((runs) => {
       if (cancelled) return;
       setRunStatuses(Object.fromEntries(runs.map((r) => [r.id, r.status])));
     });
@@ -736,7 +732,7 @@ export function ResearchChatPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, passcode]);
+  }, [projectId]);
 
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
@@ -771,7 +767,7 @@ export function ResearchChatPanel({
     if (missing.length === 0) return;
     let cancelled = false;
     for (const runId of missing) {
-      streamResearchRunUpdates(projectId, runId, passcode, (event) => {
+      streamResearchRunUpdates(projectId, runId, (event) => {
         if (cancelled) return;
         setRunDetails((prev) => ({ ...prev, [runId]: event.run }));
         // Batch results land on the ProjectItem docs directly as the run
@@ -780,7 +776,7 @@ export function ResearchChatPanel({
         // it changes to keep the table behind the panel scoring live, same
         // as before this kickoff form stopped driving the original SSE
         // connection past its first event.
-        listItems(projectId, passcode).then((items) => {
+        listItems(projectId).then((items) => {
           if (!cancelled) setItems(items);
         });
       });
@@ -805,24 +801,24 @@ export function ResearchChatPanel({
   }
 
   async function handleAcceptResult(runId: string, itemId: string) {
-    const updated = await acceptResearchResult(projectId, runId, itemId, passcode);
+    const updated = await acceptResearchResult(projectId, runId, itemId);
     patchItem(updated.id, updated);
     removeResultFromRun(runId, itemId);
   }
 
   async function handleDiscardResult(runId: string, itemId: string) {
-    await discardResearchResult(projectId, runId, itemId, passcode);
+    await discardResearchResult(projectId, runId, itemId);
     removeResultFromRun(runId, itemId);
   }
 
   async function handleBulkAcceptResults(runId: string, itemIds: string[]) {
-    const updated = await bulkAcceptResearchResults(projectId, runId, itemIds, passcode);
+    const updated = await bulkAcceptResearchResults(projectId, runId, itemIds);
     for (const item of updated) patchItem(item.id, item);
     removeResultsFromRun(runId, itemIds);
   }
 
   async function handleBulkDiscardResults(runId: string, itemIds: string[]) {
-    await bulkDiscardResearchResults(projectId, runId, itemIds, passcode);
+    await bulkDiscardResearchResults(projectId, runId, itemIds);
     removeResultsFromRun(runId, itemIds);
   }
 
@@ -830,7 +826,7 @@ export function ResearchChatPanel({
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await deleteChatSession(projectId, deleteTarget.id, passcode);
+      await deleteChatSession(projectId, deleteTarget.id);
       removeChatSession(deleteTarget.id);
       setDeleteTarget(null);
     } catch (err) {
@@ -842,14 +838,14 @@ export function ResearchChatPanel({
 
   async function handleCreateAgent() {
     const nextSessionNumber = Math.max(0, ...chatSessions.map((s) => s.sessionNumber)) + 1;
-    const session = await createChatSession(projectId, { passcode, name: `Agent #${nextSessionNumber}` });
+    const session = await createChatSession(projectId, { name: `Agent #${nextSessionNumber}` });
     addChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(true);
   }
 
   async function handleCreateSession() {
-    const session = await createChatSession(projectId, { passcode, name: 'Session' });
+    const session = await createChatSession(projectId, { name: 'Session' });
     addChatSession(session);
     setPanelView('chat');
     setShowKickoffForm(false);
@@ -857,7 +853,7 @@ export function ResearchChatPanel({
 
   async function handleRenameSession(name: string) {
     if (!activeSession) return;
-    const session = await renameChatSession(projectId, activeSession.id, { passcode, name });
+    const session = await renameChatSession(projectId, activeSession.id, { name });
     upsertChatSession(session);
   }
 
@@ -870,7 +866,7 @@ export function ResearchChatPanel({
   async function handleSend(text: string) {
     let session = activeSession;
     if (!session) {
-      session = await createChatSession(projectId, { passcode });
+      session = await createChatSession(projectId, {});
       addChatSession(session);
     }
 
@@ -884,7 +880,7 @@ export function ResearchChatPanel({
       await sendChatMessage(
         projectId,
         session.id,
-        { passcode, text, testMode, itemId },
+        { text, testMode, itemId },
         (event) => {
           setLiveEvents((prev) => [...prev, event]);
           applyChatEvent(event);
@@ -895,7 +891,7 @@ export function ResearchChatPanel({
     } finally {
       // Re-fetch the session so the persisted turns (source of truth) replace
       // the live-event overlay — the backend already wrote them incrementally.
-      const sessions = await listChatSessions(projectId, passcode);
+      const sessions = await listChatSessions(projectId);
       setChatSessions(sessions);
       setLiveEvents([]);
       setPendingUserText(null);
@@ -1099,7 +1095,6 @@ export function ResearchChatPanel({
         <Modal title="Kick off agentic research?" onClose={() => setShowKickoffForm(false)} className="kickoff-modal">
           <KickoffForm
             projectId={projectId}
-            passcode={passcode}
             testMode={testMode}
             sessionId={activeSession.id}
             items={items}

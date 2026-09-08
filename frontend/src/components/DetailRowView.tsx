@@ -8,7 +8,6 @@ import { provenanceLabel, provenanceModifier } from '../utils/detailRowProvenanc
 
 export interface DetailRowViewProps {
   film: Film;
-  passcode: string;
   row: DetailRow;
   /** Every row in the table, in the same order it's rendered there — used for
    * Previous/Next and the "load another detail" dropdown, same as
@@ -52,7 +51,6 @@ function makeDraft(row: DetailRow): Draft {
  */
 export function DetailRowView({
   film,
-  passcode,
   row,
   rows,
   columns,
@@ -141,7 +139,6 @@ export function DetailRowView({
     setError(null);
     try {
       const updated = await updateDetailRow(film.id, row.id, {
-        passcode,
         startMs: draft.startMs,
         endMs: draft.endMs,
         values: draft.values,
@@ -157,7 +154,7 @@ export function DetailRowView({
   async function handleDeleteConfirmed() {
     setBusy(true);
     try {
-      await deleteDetailRow(film.id, row.id, passcode);
+      await deleteDetailRow(film.id, row.id);
       onRowDeleted(row.id);
       onBack();
     } catch (err) {

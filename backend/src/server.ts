@@ -1,5 +1,12 @@
 import 'dotenv/config';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { createApp } from './app.js';
+import type { VerifyIdToken } from './middleware/firebaseAuth.js';
+import type { FirebaseUserAdmin } from './routes/admin.js';
+import { createFirestoreAccountStore } from './services/accountStore.js';
+import { createFirestoreApiCallLogStore } from './services/apiCallLogStore.js';
+import { createFirestoreKillswitchStore } from './services/killswitchStore.js';
 import { createResearchAgent } from './services/researchAgent.js';
 import { createTrendAgent } from './services/trendAgent.js';
 import { createParallelSearchClient } from './services/parallelSearchClient.js';
@@ -26,7 +33,38 @@ import { loadConfig } from './config/env.js';
 
 const config = loadConfig();
 
+// Same ADC as Firestore/Vertex (docs/adr/0003) — no service-account key file.
+initializeApp({ credential: applicationDefault(), projectId: config.googleCloudProject });
+const firebaseAuth = getAuth();
+
+const verifyIdToken: VerifyIdToken = async (idToken) => {
+  // checkRevoked:true — see middleware/firebaseAuth.ts's doc comment on why
+  // (makes disabling an account take effect on its very next request).
+  const decoded = await firebaseAuth.verifyIdToken(idToken, true);
+  return { uid: decoded.uid, email: decoded.email ?? '', role: typeof decoded.role === 'string' ? decoded.role : undefined };
+};
+
+const firebaseUserAdmin: FirebaseUserAdmin = {
+  async createUser({ email, password }) {
+    const user = await firebaseAuth.createUser({ email, password });
+    return { uid: user.uid };
+  },
+  async setCustomUserClaims(uid, claims) {
+    await firebaseAuth.setCustomUserClaims(uid, claims);
+  },
+  async updateUser(uid, patch) {
+    await firebaseAuth.updateUser(uid, patch);
+    if (patch.disabled) await firebaseAuth.revokeRefreshTokens(uid);
+  },
+  async deleteUser(uid) {
+    await firebaseAuth.deleteUser(uid);
+  },
+};
+
 const firestore = createFirestoreClient(config);
+const accountStore = createFirestoreAccountStore(firestore);
+const apiCallLogStore = createFirestoreApiCallLogStore(firestore);
+const killswitchStore = createFirestoreKillswitchStore(firestore);
 const filmStore = createFirestoreFilmStore(firestore);
 const detailRowsStore = createFirestoreDetailRowsStore(firestore);
 const discoveryJobStore = createFirestoreDiscoveryJobStore(firestore);
@@ -69,6 +107,11 @@ const videoBucketUploader = createVideoBucketUploader({
 
 const app = createApp({
   config,
+  accountStore,
+  apiCallLogStore,
+  killswitchStore,
+  verifyIdToken,
+  firebaseUserAdmin,
   researchAgent,
   trendAgent,
   researchChatAgent,

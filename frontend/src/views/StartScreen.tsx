@@ -7,16 +7,12 @@ import { TrashIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { FILM_STATUS_LABELS } from '../utils/statusLabels';
 
-export interface StartScreenProps {
-  passcode: string;
-}
-
 /**
  * The fullscreen landing screen once logged in — a real screen, not a modal,
  * split in half like the wireframe: import a new film on the left, or pick
  * an existing one from the library on the right.
  */
-export function StartScreen({ passcode }: StartScreenProps) {
+export function StartScreen() {
   const [films, setFilms] = useState<Film[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -25,7 +21,7 @@ export function StartScreen({ passcode }: StartScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
-    listFilms(passcode)
+    listFilms()
       .then((f) => {
         if (!cancelled) setFilms(f);
       })
@@ -35,11 +31,11 @@ export function StartScreen({ passcode }: StartScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [passcode]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    listProjects(passcode)
+    listProjects()
       .then((projects) => {
         if (cancelled) return;
         const counts: Record<string, number> = {};
@@ -52,14 +48,14 @@ export function StartScreen({ passcode }: StartScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [passcode]);
+  }, []);
 
   async function handleDeleteConfirmed() {
     if (!deleteTarget) return;
     const film = deleteTarget;
     setDeletingId(film.id);
     try {
-      await deleteFilm(film.id, passcode);
+      await deleteFilm(film.id);
       setFilms((prev) => prev?.filter((f) => f.id !== film.id) ?? prev);
       setDeleteTarget(null);
     } catch (err) {

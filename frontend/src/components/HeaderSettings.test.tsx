@@ -2,6 +2,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HeaderSettings } from './HeaderSettings';
+import { signOut } from 'firebase/auth';
+
+vi.mock('../firebase', () => ({ auth: {} }));
+vi.mock('firebase/auth', () => ({
+  signOut: vi.fn(),
+}));
 
 describe('HeaderSettings', () => {
   it('renders a settings button and keeps the modal closed initially', () => {
@@ -141,5 +147,19 @@ describe('HeaderSettings', () => {
     await userEvent.click(screen.getByRole('button', { name: /settings/i }));
     await userEvent.selectOptions(screen.getByLabelText(/theme/i), 'light');
     expect(onThemeChange).toHaveBeenCalledWith('light');
+  });
+
+  it('calls signOut when the sign out button is clicked', async () => {
+    render(
+      <HeaderSettings
+        testMode={true}
+        onTestModeChange={() => {}}
+        theme="dark"
+        onThemeChange={() => {}}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /settings/i }));
+    await userEvent.click(screen.getByRole('button', { name: /sign out/i }));
+    expect(signOut).toHaveBeenCalled();
   });
 });

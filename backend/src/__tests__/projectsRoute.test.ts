@@ -7,8 +7,7 @@ import { createInMemoryDetailRowsStore, type DetailRowsStore } from '../services
 import type { ResearchAgent, ResearchItem, ResearchResult } from '../services/researchAgent.js';
 import type { TrendAgent } from '../services/trendAgent.js';
 import type { TrendSuggestion } from '../services/projectTypes.js';
-
-const TEST_PASSCODE = 'test-passcode';
+import { testAuthDeps, bearer, TEST_ADMIN } from './testAuth.js';
 
 function resultFor(item: ResearchItem, opts: { shouldTranscreate?: boolean } = {}): ResearchResult {
   const now = new Date().toISOString();
@@ -91,6 +90,7 @@ async function seedAppAndProject(
     videoUrl: 'http://example.com/video.mp4',
     subtitle: null,
     runDiscoveryOnCreate: false,
+    ownerUid: TEST_ADMIN.uid,
   });
   const rows = await Promise.all(
     Array.from({ length: rowCount }, (_, i) =>
@@ -105,7 +105,8 @@ async function seedAppAndProject(
   );
 
   const app = createApp({
-    config: { sharedPasscode: TEST_PASSCODE, rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
+    ...testAuthDeps(),
+    config: { rateLimitWindowMs: 60_000, rateLimitMax: 1000 },
     filmStore,
     detailRowsStore,
     researchAgent: overrides.researchAgent,
@@ -116,7 +117,8 @@ async function seedAppAndProject(
 
   const created = await request(app)
     .post(`/api/films/${film.id}/projects`)
-    .send({ passcode: TEST_PASSCODE, country: 'Japan', detailRowIds: rows.map((r) => r.id) });
+    .set(bearer(TEST_ADMIN.uid))
+    .send({ country: 'Japan', detailRowIds: rows.map((r) => r.id) });
 
   return { app, project: created.body.project as { id: string }, items: created.body.items as Array<{ id: string }> };
 }
@@ -127,7 +129,7 @@ describe('POST /api/films/:filmId/projects (film-first creation)', () => {
     expect(project.id).toBeTruthy();
     expect(items[0].id).toBeTruthy();
 
-    const rubrics = await request(app).get(`/api/projects/${project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    const rubrics = await request(app).get(`/api/projects/${project.id}/rubrics`).set(bearer(TEST_ADMIN.uid));
     expect(rubrics.body.length).toBeGreaterThan(0);
   });
 });
@@ -136,19 +138,19 @@ describe('GET /api/projects and /api/projects/:id', () => {
   it('lists created projects enriched with counts/agentStatus, and fetches one by id', async () => {
     const { app, project } = await seedAppAndProject();
 
-    const list = await request(app).get(`/api/projects?passcode=${TEST_PASSCODE}`);
+    const list = await request(app).get('/api/projects').set(bearer(TEST_ADMIN.uid));
     const found = list.body.find((p: { id: string }) => p.id === project.id);
     expect(found).toBeTruthy();
     expect(found).toMatchObject({ pendingCount: 0, acceptedCount: 0, rejectedCount: 0, needResearchCount: 1, agentStatus: null });
 
-    const fetched = await request(app).get(`/api/projects/${project.id}?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app).get(`/api/projects/${project.id}`).set(bearer(TEST_ADMIN.uid));
     expect(fetched.status).toBe(200);
     expect(fetched.body.id).toBe(project.id);
   });
 
   it('returns 404 for an unknown project id', async () => {
     const { app } = await seedAppAndProject();
-    const res = await request(app).get(`/api/projects/does-not-exist?passcode=${TEST_PASSCODE}`);
+    const res = await request(app).get('/api/projects/does-not-exist').set(bearer(TEST_ADMIN.uid));
     expect(res.status).toBe(404);
   });
 });
@@ -158,7 +160,8 @@ describe('PATCH /api/projects/:id/items/:itemId', () => {
     const { app, project, items } = await seedAppAndProject();
     const res = await request(app)
       .patch(`/api/projects/${project.id}/items/${items[0].id}`)
-      .send({ passcode: TEST_PASSCODE, action: 'accepted' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'accepted' });
     expect(res.status).toBe(200);
     expect(res.body.action).toBe('accepted');
   });
@@ -169,11 +172,13 @@ describe('PATCH /api/projects/:id/items/:itemId/scores/:rubricId (manual score e
     const { app, project, items } = await seedAppAndProject();
     const rubric = await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
-      .send({ passcode: TEST_PASSCODE, name: 'Test', description: 'desc', weight: 4 });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Test', description: 'desc', weight: 4 });
 
     const res = await request(app)
       .patch(`/api/projects/${project.id}/items/${items[0].id}/scores/${rubric.body.id}`)
-      .send({ passcode: TEST_PASSCODE, score: 8, reasoning: 'strong match', evidence: 'e' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ score: 8, reasoning: 'strong match', evidence: 'e' });
 
     expect(res.status).toBe(200);
     expect(res.body.scores).toEqual([
@@ -189,13 +194,14 @@ describe('POST /api/projects/:id/research-runs', () => {
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, 2);
     await Promise.all(
       items.map((i) =>
-        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' }),
+        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).set(bearer(TEST_ADMIN.uid)).send({ action: 'need-research' }),
       ),
     );
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'need-research' });
 
     const events = parseEvents(res.text);
     expect(events[0]).toMatchObject({ type: 'progress' });
@@ -203,14 +209,14 @@ describe('POST /api/projects/:id/research-runs', () => {
     expect(batchEvents).toHaveLength(2);
     expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalItems: 2, totalRecommendedForChange: 1 } });
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0]).toMatchObject({ status: 'done', mode: 'need-research', completedBatches: 2, totalBatches: 2 });
     expect(runs.body[0].pendingResults).toHaveLength(2);
     const runId = runs.body[0].id as string;
 
     // Nothing lands on the real items yet — staged for review, not applied.
     type FetchedItem = { id: string; action: string; summary: string | null; shouldTranscreate: boolean | null; lastResearchedAt: string | null };
-    const beforeAccept: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
+    const beforeAccept: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid))).body;
     const unreviewed = beforeAccept.find((i) => i.id === items[0].id)!;
     expect(unreviewed.action).toBe('need-research');
     expect(unreviewed.shouldTranscreate).toBeNull();
@@ -219,13 +225,14 @@ describe('POST /api/projects/:id/research-runs', () => {
 
     const accepted = await request(app)
       .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`)
-      .send({ passcode: TEST_PASSCODE, itemIds: items.map((i) => i.id) });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ itemIds: items.map((i) => i.id) });
     expect(accepted.status).toBe(201);
 
-    const runAfterAccept = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runAfterAccept = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runAfterAccept.body[0].pendingResults).toHaveLength(0);
 
-    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
+    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid))).body;
     const changed = fetchedItems.find((i) => i.id === items[0].id)!;
     expect(changed.shouldTranscreate).toBe(true);
     expect(changed.summary).toBe('should change');
@@ -238,24 +245,25 @@ describe('POST /api/projects/:id/research-runs', () => {
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, 2);
     await Promise.all(
       items.map((i) =>
-        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' }),
+        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).set(bearer(TEST_ADMIN.uid)).send({ action: 'need-research' }),
       ),
     );
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'need-research', autoApply: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'need-research', autoApply: true });
 
     const events = parseEvents(res.text);
     expect(events.filter((e) => e.type === 'batch_done')).toHaveLength(2);
     expect(events.at(-1)).toMatchObject({ type: 'done' });
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0]).toMatchObject({ status: 'done', completedBatches: 2, totalBatches: 2 });
     expect(runs.body[0].pendingResults).toHaveLength(0);
 
     type FetchedItem = { id: string; action: string; summary: string | null; shouldTranscreate: boolean | null; lastResearchedAt: string | null };
-    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`)).body;
+    const fetchedItems: FetchedItem[] = (await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid))).body;
     const changed = fetchedItems.find((i) => i.id === items[0].id)!;
     expect(changed.shouldTranscreate).toBe(true);
     expect(changed.summary).toBe('should change');
@@ -267,9 +275,12 @@ describe('POST /api/projects/:id/research-runs', () => {
     const real = noChangeAgent();
     const mock = noChangeAgent();
     const { app, project, items } = await seedAppAndProject({ researchAgent: real, mockResearchAgent: mock });
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
+    await request(app)
+      .patch(`/api/projects/${project.id}/items/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'need-research' });
 
-    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    await request(app).post(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid)).send({ mode: 'need-research' });
 
     expect(mock.researchBatch).toHaveBeenCalled();
     expect(real.researchBatch).not.toHaveBeenCalled();
@@ -279,11 +290,15 @@ describe('POST /api/projects/:id/research-runs', () => {
     const real = noChangeAgent();
     const mock = noChangeAgent();
     const { app, project, items } = await seedAppAndProject({ researchAgent: real, mockResearchAgent: mock });
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
+    await request(app)
+      .patch(`/api/projects/${project.id}/items/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'need-research' });
 
     await request(app)
       .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'need-research', testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'need-research', testMode: false });
 
     expect(real.researchBatch).toHaveBeenCalled();
     expect(mock.researchBatch).not.toHaveBeenCalled();
@@ -294,7 +309,8 @@ describe('POST /api/projects/:id/research-runs', () => {
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, 2);
     const res = await request(app)
       .post(`/api/projects/${project.id}/research-runs`)
-      .send({ passcode: TEST_PASSCODE, mode: 'custom', itemIds: [items[0].id] });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'custom', itemIds: [items[0].id] });
 
     const events = parseEvents(res.text);
     expect(events.at(-1)).toMatchObject({ type: 'done', summary: { totalItems: 1 } });
@@ -303,32 +319,49 @@ describe('POST /api/projects/:id/research-runs', () => {
   it('returns 400 for an invalid mode, and 400 when nothing matches', async () => {
     const { app, project, items } = await seedAppAndProject();
     expect(
-      (await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'bogus' })).status,
+      (await request(app).post(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid)).send({ mode: 'bogus' })).status,
     ).toBe(400);
     // fresh item defaults to 'need-research', so flip it to 'accepted' first so nothing matches
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'accepted' });
+    await request(app)
+      .patch(`/api/projects/${project.id}/items/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'accepted' });
     expect(
-      (await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' })).status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/research-runs`)
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ mode: 'need-research' })
+      ).status,
     ).toBe(400);
   });
 
   it('returns 404 when the project does not exist', async () => {
     const { app } = await seedAppAndProject();
-    const res = await request(app).post('/api/projects/does-not-exist/research-runs').send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    const res = await request(app)
+      .post('/api/projects/does-not-exist/research-runs')
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'need-research' });
     expect(res.status).toBe(404);
   });
 
   it('writes an error event and marks the run errored when the agent throws', async () => {
     const agent: ResearchAgent = { researchBatch: vi.fn().mockRejectedValue(new Error('boom')) };
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent });
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
+    await request(app)
+      .patch(`/api/projects/${project.id}/items/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'need-research' });
 
-    const res = await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    const res = await request(app)
+      .post(`/api/projects/${project.id}/research-runs`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ mode: 'need-research' });
 
     const events = parseEvents(res.text);
     expect(events.at(-1)).toMatchObject({ type: 'error', message: expect.stringContaining('boom') });
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0].status).toBe('error');
   });
 });
@@ -339,11 +372,11 @@ describe('POST/DELETE /api/projects/:id/research-runs/:runId/results/:itemId (si
     const { app, project, items } = await seedAppAndProject({ mockResearchAgent: agent }, rowCount);
     await Promise.all(
       items.map((i) =>
-        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' }),
+        request(app).patch(`/api/projects/${project.id}/items/${i.id}`).set(bearer(TEST_ADMIN.uid)).send({ action: 'need-research' }),
       ),
     );
-    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    await request(app).post(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid)).send({ mode: 'need-research' });
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     return { app, project, items, runId: runs.body[0].id as string };
   }
 
@@ -351,34 +384,42 @@ describe('POST/DELETE /api/projects/:id/research-runs/:runId/results/:itemId (si
     const { app, project, items, runId } = await runAndStage(1);
     const res = await request(app)
       .post(`/api/projects/${project.id}/research-runs/${runId}/results/${items[0].id}/accept`)
-      .send({ passcode: TEST_PASSCODE });
+      .set(bearer(TEST_ADMIN.uid));
     expect(res.status).toBe(201);
     expect(res.body.shouldTranscreate).toBe(true);
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0].pendingResults).toHaveLength(0);
   });
 
   it('discard removes the pending result without touching the item', async () => {
     const { app, project, items, runId } = await runAndStage(1);
-    const res = await request(app).delete(`/api/projects/${project.id}/research-runs/${runId}/results/${items[0].id}`).send({ passcode: TEST_PASSCODE });
+    const res = await request(app)
+      .delete(`/api/projects/${project.id}/research-runs/${runId}/results/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid));
     expect(res.status).toBe(204);
 
-    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid));
     expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).shouldTranscreate).toBeNull();
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0].pendingResults).toHaveLength(0);
   });
 
   it('returns 404 for an unknown run or an unknown/already-resolved item', async () => {
     const { app, project, items, runId } = await runAndStage(1);
     expect(
-      (await request(app).post(`/api/projects/${project.id}/research-runs/does-not-exist/results/${items[0].id}/accept`).send({ passcode: TEST_PASSCODE }))
-        .status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/research-runs/does-not-exist/results/${items[0].id}/accept`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(404);
     expect(
-      (await request(app).post(`/api/projects/${project.id}/research-runs/${runId}/results/does-not-exist/accept`).send({ passcode: TEST_PASSCODE }))
-        .status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/research-runs/${runId}/results/does-not-exist/accept`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(404);
   });
 
@@ -386,29 +427,36 @@ describe('POST/DELETE /api/projects/:id/research-runs/:runId/results/:itemId (si
     const { app, project, items, runId } = await runAndStage(3);
     const bulkAccept = await request(app)
       .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`)
-      .send({ passcode: TEST_PASSCODE, itemIds: [items[0].id, items[1].id] });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ itemIds: [items[0].id, items[1].id] });
     expect(bulkAccept.status).toBe(201);
     expect(bulkAccept.body).toHaveLength(2);
 
     const bulkDiscard = await request(app)
       .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-discard`)
-      .send({ passcode: TEST_PASSCODE, itemIds: [items[2].id] });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ itemIds: [items[2].id] });
     expect(bulkDiscard.status).toBe(204);
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     expect(runs.body[0].pendingResults).toHaveLength(0);
   });
 
   it('returns 400 when itemIds is missing or empty for the bulk routes', async () => {
     const { app, project, runId } = await runAndStage(1);
     expect(
-      (await request(app).post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`).send({ passcode: TEST_PASSCODE })).status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-accept`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(400);
     expect(
       (
         await request(app)
           .post(`/api/projects/${project.id}/research-runs/${runId}/results/bulk-discard`)
-          .send({ passcode: TEST_PASSCODE, itemIds: [] })
+          .set(bearer(TEST_ADMIN.uid))
+          .send({ itemIds: [] })
       ).status,
     ).toBe(400);
   });
@@ -427,19 +475,20 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
     const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
     await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
-      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
 
     // Item is still 'need-research' and has never been researched (no scores, shouldTranscreate null) —
     // the manual button is the trigger, so this must still work.
     const res = await request(app)
       .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
-      .send({ passcode: TEST_PASSCODE });
+      .set(bearer(TEST_ADMIN.uid));
 
     expect(res.status).toBe(200);
     expect(res.body.trendSuggestions).toEqual([trendSuggestion]);
     expect(trend.findTrendSuggestions).toHaveBeenCalled();
 
-    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid));
     expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).trendSuggestions).toEqual([trendSuggestion]);
   });
 
@@ -451,11 +500,13 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
     const { app, project, items } = await seedAppAndProject({ trendAgent: real, mockTrendAgent: mock });
     await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
-      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
 
     await request(app)
       .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
-      .send({ passcode: TEST_PASSCODE, testMode: false });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ testMode: false });
 
     expect(real.findTrendSuggestions).toHaveBeenCalled();
     expect(mock.findTrendSuggestions).not.toHaveBeenCalled();
@@ -466,14 +517,14 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
     const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
     // The default rubric set includes one trend-eligible rubric — remove every
     // rubric the project has so none remain trend-eligible.
-    const rubrics = await request(app).get(`/api/projects/${project.id}/rubrics?passcode=${TEST_PASSCODE}`);
+    const rubrics = await request(app).get(`/api/projects/${project.id}/rubrics`).set(bearer(TEST_ADMIN.uid));
     for (const r of rubrics.body as Array<{ id: string }>) {
-      await request(app).delete(`/api/projects/${project.id}/rubrics/${r.id}?passcode=${TEST_PASSCODE}`);
+      await request(app).delete(`/api/projects/${project.id}/rubrics/${r.id}`).set(bearer(TEST_ADMIN.uid));
     }
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
-      .send({ passcode: TEST_PASSCODE });
+      .set(bearer(TEST_ADMIN.uid));
 
     expect(res.status).toBe(400);
     expect(trend.findTrendSuggestions).not.toHaveBeenCalled();
@@ -482,10 +533,18 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
   it('returns 404 for an unknown project or unknown item', async () => {
     const { app, project, items } = await seedAppAndProject();
     expect(
-      (await request(app).post(`/api/projects/does-not-exist/items/${items[0].id}/trend-research`).send({ passcode: TEST_PASSCODE })).status,
+      (
+        await request(app)
+          .post(`/api/projects/does-not-exist/items/${items[0].id}/trend-research`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(404);
     expect(
-      (await request(app).post(`/api/projects/${project.id}/items/does-not-exist/trend-research`).send({ passcode: TEST_PASSCODE })).status,
+      (
+        await request(app)
+          .post(`/api/projects/${project.id}/items/does-not-exist/trend-research`)
+          .set(bearer(TEST_ADMIN.uid))
+      ).status,
     ).toBe(404);
   });
 
@@ -494,15 +553,16 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
     const { app, project, items } = await seedAppAndProject({ mockTrendAgent: trend });
     await request(app)
       .post(`/api/projects/${project.id}/rubrics`)
-      .send({ passcode: TEST_PASSCODE, name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ name: 'Slang', description: 'slang or memes', weight: 3, trendEligible: true });
 
     const res = await request(app)
       .post(`/api/projects/${project.id}/items/${items[0].id}/trend-research`)
-      .send({ passcode: TEST_PASSCODE });
+      .set(bearer(TEST_ADMIN.uid));
 
     expect(res.status).toBe(500);
     expect(res.body.error).toContain('trend boom');
-    const fetched = await request(app).get(`/api/projects/${project.id}/items?passcode=${TEST_PASSCODE}`);
+    const fetched = await request(app).get(`/api/projects/${project.id}/items`).set(bearer(TEST_ADMIN.uid));
     expect(fetched.body.find((i: { id: string }) => i.id === items[0].id).trendSuggestions).toBeNull();
   });
 });
@@ -510,13 +570,18 @@ describe('POST /api/projects/:id/items/:itemId/trend-research (manual, per-item)
 describe('GET /api/projects/:id/research-runs/:runId/stream (resumable)', () => {
   it('replays the current run document and ends immediately once terminal', async () => {
     const { app, project, items } = await seedAppAndProject();
-    await request(app).patch(`/api/projects/${project.id}/items/${items[0].id}`).send({ passcode: TEST_PASSCODE, action: 'need-research' });
-    await request(app).post(`/api/projects/${project.id}/research-runs`).send({ passcode: TEST_PASSCODE, mode: 'need-research' });
+    await request(app)
+      .patch(`/api/projects/${project.id}/items/${items[0].id}`)
+      .set(bearer(TEST_ADMIN.uid))
+      .send({ action: 'need-research' });
+    await request(app).post(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid)).send({ mode: 'need-research' });
 
-    const runs = await request(app).get(`/api/projects/${project.id}/research-runs?passcode=${TEST_PASSCODE}`);
+    const runs = await request(app).get(`/api/projects/${project.id}/research-runs`).set(bearer(TEST_ADMIN.uid));
     const runId = runs.body[0].id;
 
-    const res = await request(app).get(`/api/projects/${project.id}/research-runs/${runId}/stream?passcode=${TEST_PASSCODE}`);
+    const res = await request(app)
+      .get(`/api/projects/${project.id}/research-runs/${runId}/stream`)
+      .set(bearer(TEST_ADMIN.uid));
     const events = parseEvents(res.text);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'run_update', run: { id: runId, status: 'done' } });
@@ -524,7 +589,9 @@ describe('GET /api/projects/:id/research-runs/:runId/stream (resumable)', () => 
 
   it('returns 404 for an unknown run', async () => {
     const { app, project } = await seedAppAndProject();
-    const res = await request(app).get(`/api/projects/${project.id}/research-runs/does-not-exist/stream?passcode=${TEST_PASSCODE}`);
+    const res = await request(app)
+      .get(`/api/projects/${project.id}/research-runs/does-not-exist/stream`)
+      .set(bearer(TEST_ADMIN.uid));
     expect(res.status).toBe(404);
   });
 });

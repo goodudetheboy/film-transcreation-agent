@@ -11,6 +11,10 @@ import type { ProjectItemAction, RubricScore } from '../services/projectTypes.js
 import { computeImportanceScore } from '../services/importanceScore.js';
 import { detailRowsToProjectItemInputs } from '../services/projectItemImport.js';
 import { acceptResearchResult, discardResearchResult, acceptResearchResults, discardResearchResults } from '../services/researchResultActions.js';
+import type { Account } from '../services/accountTypes.js';
+import type { FilmStore } from '../services/filmStore.js';
+import type { DiscoveryJobStore } from '../services/discoveryJobStore.js';
+import { assertWithinRunQuota } from '../services/quota.js';
 
 export type ResearchRunStreamEvent =
   | { type: 'progress'; message: string; runId: string }
@@ -41,6 +45,12 @@ export interface ProjectsRouteDeps {
   trendAgent: TrendAgent;
   mockTrendAgent: TrendAgent;
   eventBus: ResearchRunEventBus;
+  filmStore: FilmStore;
+  discoveryJobStore: DiscoveryJobStore;
+}
+
+function ownsProject(account: Account, project: { ownerUid: string }): boolean {
+  return account.role === 'admin' || project.ownerUid === account.uid;
 }
 
 async function enrichProject(deps: ProjectsRouteDeps, project: Awaited<ReturnType<ProjectStore['getProject']>>) {
@@ -73,14 +83,15 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
 
   // ---- Projects -----------------------------------------------------------
 
-  router.get('/api/projects', async (_req, res) => {
+  router.get('/api/projects', async (req, res) => {
     const projects = await deps.projectStore.listProjects();
-    res.status(200).json(await Promise.all(projects.map((p) => enrichProject(deps, p))));
+    const visible = req.account!.role === 'admin' ? projects : projects.filter((p) => p.ownerUid === req.account!.uid);
+    res.status(200).json(await Promise.all(visible.map((p) => enrichProject(deps, p))));
   });
 
   router.get('/api/projects/:id', async (req, res) => {
     const project = await deps.projectStore.getProject(req.params.id);
-    if (!project) {
+    if (!project || !ownsProject(req.account!, project)) {
       res.status(404).json({ error: 'project not found' });
       return;
     }
@@ -88,6 +99,11 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
   });
 
   router.patch('/api/projects/:id', async (req, res) => {
+    const existing = await deps.projectStore.getProject(req.params.id);
+    if (!existing || !ownsProject(req.account!, existing)) {
+      res.status(404).json({ error: 'project not found' });
+      return;
+    }
     const { name, note, status } = req.body ?? {};
     const patch: { name?: string; note?: string; status?: 'draft' | 'in_progress' | 'completed' | 'abandoned' } = {};
     if (name !== undefined) {
@@ -363,7 +379,7 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
   // see docs/adr/0025's flagged consequence).
   router.post('/api/projects/:id/research-runs', async (req, res) => {
     const project = await deps.projectStore.getProject(req.params.id);
-    if (!project) {
+    if (!project || !ownsProject(req.account!, project)) {
       res.status(404).json({ error: 'project not found' });
       return;
     }
@@ -374,6 +390,15 @@ export function projectsRoute(deps: ProjectsRouteDeps): Router {
     }
     if (mode === 'custom' && (!Array.isArray(customItemIds) || customItemIds.length === 0)) {
       res.status(400).json({ error: 'itemIds is required and non-empty for mode "custom"' });
+      return;
+    }
+
+    const runQuota = await assertWithinRunQuota(
+      { filmStore: deps.filmStore, projectStore: deps.projectStore, discoveryJobStore: deps.discoveryJobStore, researchRunStore: deps.researchRunStore },
+      req.account!,
+    );
+    if (!runQuota.ok) {
+      res.status(403).json({ error: runQuota.error });
       return;
     }
 
