@@ -85,6 +85,18 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
 
   router.post(
     '/api/films/upload-video',
+    async (req, res, next) => {
+      // Checked before multer's diskStorage middleware below even starts
+      // consuming the request body — same reasoning as upload-video/init:
+      // no point taking the upload (even a small mock one) if it'll be
+      // rejected at film-creation time anyway.
+      const quota = await assertWithinFilmQuota({ filmStore: deps.filmStore }, req.account!);
+      if (!quota.ok) {
+        res.status(403).json({ error: quota.error });
+        return;
+      }
+      next();
+    },
     (req, res, next) => {
       uploadVideo.single('video')(req, res, (err: unknown) => {
         if (err) {
@@ -155,6 +167,16 @@ export function filmsRoute(deps: FilmsRouteDeps): Router {
   // keeps using the multer route above unchanged — it's for small test clips.
   router.post('/api/films/upload-video/init', async (req, res) => {
     const { filename, contentType, size, testMode } = req.body ?? {};
+
+    // Checked before minting the GCS resumable-upload session, i.e. before a
+    // single byte of a potentially multi-GB video moves — previously this
+    // account was only rejected at POST /api/films, after the full upload
+    // had already completed. See docs/adr/0028 for the quota model.
+    const quota = await assertWithinFilmQuota({ filmStore: deps.filmStore }, req.account!);
+    if (!quota.ok) {
+      res.status(403).json({ error: quota.error });
+      return;
+    }
 
     if (isMockRequest(testMode)) {
       res.status(400).json({ error: 'upload-video/init is not used in mock mode' });

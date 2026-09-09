@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, NavLink, Link, useLocation } from 'react-router-dom';
-import { onAuthStateChanged, type User } from 'firebase/auth';
+import { onAuthStateChanged, signInWithCustomToken, type User } from 'firebase/auth';
 import { auth } from './firebase';
+import { fetchDemoSessionToken } from './api/demoSessionApiClient';
 import { SignInGate } from './components/SignInGate';
 import { TestModeBanner } from './components/TestModeBanner';
 import { HeaderSettings } from './components/HeaderSettings';
@@ -29,6 +30,10 @@ function App() {
   // refresh of /admin (getIdTokenResult() below is async, so `role` briefly
   // holds its initial `null` even for an admin).
   const [roleLoading, setRoleLoading] = useState(true);
+  // Guards against retrying the demo sign-in on every subsequent auth-state
+  // change (e.g. after the demo account later signs out) — attempt once per
+  // page load, same lifetime as the `?demo=1` link itself.
+  const demoSignInAttempted = useRef(false);
   const [testMode, setTestMode] = useTestMode();
   const [theme, setTheme] = useTheme();
   // Re-renders on every navigation so the "Current Workspace" tab's target
@@ -38,6 +43,22 @@ function App() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
+      // A `?demo=1` link (e.g. handed to a hackathon judge) skips SignInGate
+      // entirely: trade the flag for a backend-minted custom token scoped to
+      // one fixed, pre-provisioned demo account — no password anywhere. See
+      // docs/adr/0030. Leaves `user` at its initial `undefined` (still
+      // "loading") while this is in flight so SignInGate doesn't flash first.
+      if (!u && !demoSignInAttempted.current && new URLSearchParams(window.location.search).get('demo') === '1') {
+        demoSignInAttempted.current = true;
+        try {
+          const token = await fetchDemoSessionToken();
+          await signInWithCustomToken(auth, token);
+          return; // onAuthStateChanged fires again with the now-signed-in user
+        } catch (err) {
+          console.error('demo sign-in failed, falling back to the normal sign-in gate', err);
+          // fall through to the normal unsigned-in path below
+        }
+      }
       setUser(u);
       setRole(u ? ((await u.getIdTokenResult()).claims.role as string | undefined) ?? null : null);
       setRoleLoading(false);

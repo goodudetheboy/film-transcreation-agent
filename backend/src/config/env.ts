@@ -14,6 +14,9 @@ export interface Config {
   maxSubtitleUploadBytes: number;
   mockDelayScale: number;
   mockUploadsDir: string;
+  /** Pre-provisioned "user"-role account (see docs/adr/0028) that /api/demo-session
+   * mints custom tokens for — see docs/adr/0030. Unset means the endpoint is disabled. */
+  demoAccountEmail?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -33,5 +36,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxSubtitleUploadBytes: Number(env.MAX_SUBTITLE_UPLOAD_BYTES ?? 5_000_000),
     mockDelayScale: Number(env.MOCK_DELAY_SCALE ?? 1),
     mockUploadsDir: env.MOCK_UPLOADS_DIR ?? '.data/mock-uploads',
+    demoAccountEmail: env.DEMO_ACCOUNT_EMAIL,
   };
 }

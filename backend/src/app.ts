@@ -7,6 +7,7 @@ import { projectChatRoute } from './routes/projectChat.js';
 import { discoveryChatRoute } from './routes/discoveryChat.js';
 import { filmsRoute } from './routes/films.js';
 import { adminRoute, type FirebaseUserAdmin } from './routes/admin.js';
+import { demoSessionRoute, type DemoAuthAdmin } from './routes/demoSession.js';
 import { firebaseAuthMiddleware, type VerifyIdToken } from './middleware/firebaseAuth.js';
 import { killswitchMiddleware } from './middleware/killswitch.js';
 import { callLoggingMiddleware } from './middleware/callLogging.js';
@@ -75,6 +76,7 @@ export interface AppDeps {
    * defaulting to notConfiguredResearchAgent below. */
   verifyIdToken?: VerifyIdToken;
   firebaseUserAdmin?: FirebaseUserAdmin;
+  demoAuthAdmin?: DemoAuthAdmin;
 }
 
 const notConfiguredResearchAgent: ResearchAgent = {
@@ -117,6 +119,15 @@ const notConfiguredVideoSegmentDescriber: VideoSegmentDescriber = {
 
 const notConfiguredVerifyIdToken: VerifyIdToken = async () => {
   throw new Error('verifyIdToken not provided to createApp()');
+};
+
+const notConfiguredDemoAuthAdmin: DemoAuthAdmin = {
+  async getUidByEmail() {
+    throw new Error('demoAuthAdmin not provided to createApp()');
+  },
+  async createCustomToken() {
+    throw new Error('demoAuthAdmin not provided to createApp()');
+  },
 };
 
 const notConfiguredFirebaseUserAdmin: FirebaseUserAdmin = {
@@ -192,6 +203,7 @@ export function createApp(deps: AppDeps = {}): Express {
   const killswitchStore = deps.killswitchStore ?? createInMemoryKillswitchStore();
   const verifyIdToken = deps.verifyIdToken ?? notConfiguredVerifyIdToken;
   const firebaseUserAdmin = deps.firebaseUserAdmin ?? notConfiguredFirebaseUserAdmin;
+  const demoAuthAdmin = deps.demoAuthAdmin ?? notConfiguredDemoAuthAdmin;
 
   const filmPrepPipeline: FilmPrepPipeline = createFilmPrepPipeline({
     filmStore,
@@ -214,6 +226,15 @@ export function createApp(deps: AppDeps = {}): Express {
   // same reason they used to ride a passcode query param instead of the real
   // gate. Mounted before firebaseAuth, same tier as the health check.
   app.use('/mock-uploads', express.static(config.mockUploadsDir));
+
+  // Unauthenticated by design — this is the mechanism a signed-out browser
+  // uses to get signed in. Its own rate limiter (same knobs, separate
+  // counter from `guarded`'s) so it can't be used to bypass rate limiting on
+  // the rest of the API. See docs/adr/0030.
+  app.use(
+    rateLimitMiddleware({ windowMs: config.rateLimitWindowMs, max: config.rateLimitMax }),
+    demoSessionRoute({ demoAuthAdmin, demoAccountEmail: config.demoAccountEmail }),
+  );
 
   // Rate limit runs before auth, so a flood of bad tokens still gets counted
   // and blocked (see docs/adr/0005).

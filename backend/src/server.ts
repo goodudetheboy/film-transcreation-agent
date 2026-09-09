@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { createApp } from './app.js';
 import type { VerifyIdToken } from './middleware/firebaseAuth.js';
 import type { FirebaseUserAdmin } from './routes/admin.js';
+import type { DemoAuthAdmin } from './routes/demoSession.js';
 import { createFirestoreAccountStore } from './services/accountStore.js';
 import { createFirestoreApiCallLogStore } from './services/apiCallLogStore.js';
 import { createFirestoreKillswitchStore } from './services/killswitchStore.js';
@@ -34,7 +35,18 @@ import { loadConfig } from './config/env.js';
 const config = loadConfig();
 
 // Same ADC as Firestore/Vertex (docs/adr/0003) — no service-account key file.
-initializeApp({ credential: applicationDefault(), projectId: config.googleCloudProject });
+// `serviceAccountId` is required for createCustomToken() (used by
+// routes/demoSession.ts): without it, firebase-admin's IAMSigner tries to
+// discover a signing account via the GCE metadata server, which only exists
+// on actual GCP infra — off-GCP (any local dev machine) it fails outright.
+// Explicitly naming the SA here makes it call IAM signBlob instead, which
+// needs iam.serviceAccountTokenCreator granted on that SA to whoever's ADC
+// identity is running this (see docs/adr/0030).
+initializeApp({
+  credential: applicationDefault(),
+  projectId: config.googleCloudProject,
+  serviceAccountId: `firebase-adminsdk-fbsvc@${config.googleCloudProject}.iam.gserviceaccount.com`,
+});
 const firebaseAuth = getAuth();
 
 const verifyIdToken: VerifyIdToken = async (idToken) => {
@@ -58,6 +70,20 @@ const firebaseUserAdmin: FirebaseUserAdmin = {
   },
   async deleteUser(uid) {
     await firebaseAuth.deleteUser(uid);
+  },
+};
+
+const demoAuthAdmin: DemoAuthAdmin = {
+  async getUidByEmail(email) {
+    try {
+      const user = await firebaseAuth.getUserByEmail(email);
+      return user.uid;
+    } catch {
+      return undefined;
+    }
+  },
+  async createCustomToken(uid) {
+    return firebaseAuth.createCustomToken(uid);
   },
 };
 
@@ -112,6 +138,7 @@ const app = createApp({
   killswitchStore,
   verifyIdToken,
   firebaseUserAdmin,
+  demoAuthAdmin,
   researchAgent,
   trendAgent,
   researchChatAgent,

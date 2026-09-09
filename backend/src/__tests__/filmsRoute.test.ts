@@ -10,7 +10,8 @@ import { createInMemoryDiscoveryJobStore } from '../services/discoveryJobStore.j
 import { createDiscoveryEventBus } from '../services/discoveryEventBus.js';
 import type { DiscoveryAgent } from '../services/discoveryAgent.js';
 import type { CreateFilmInput } from '../services/filmTypes.js';
-import { testAuthDeps, bearer, TEST_ADMIN } from './testAuth.js';
+import { testAuthDeps, bearer, TEST_ADMIN, TEST_USER } from './testAuth.js';
+import type { Account } from '../services/accountTypes.js';
 
 const SUBTITLE_ENTRIES = [{ id: 'e1', index: 0, startMs: 0, endMs: 2000, text: 'Hello there' }];
 
@@ -33,6 +34,7 @@ function buildApp(
     mockUploadsDir?: string;
     discoveryAgent?: DiscoveryAgent;
     mockDiscoveryAgent?: DiscoveryAgent;
+    accounts?: Account[];
   } = {},
 ) {
   const filmStore = createInMemoryFilmStore(overrides.seedFilms ?? []);
@@ -43,7 +45,7 @@ function buildApp(
   const mockDiscoveryAgent = overrides.mockDiscoveryAgent ?? noResultsAgent();
 
   const app = createApp({
-    ...testAuthDeps(),
+    ...testAuthDeps(overrides.accounts),
     config: {
       rateLimitWindowMs: 60_000,
       rateLimitMax: 1000,
@@ -522,6 +524,26 @@ describe('POST /api/films/upload-video', () => {
       await rm(mockUploadsDir, { recursive: true, force: true });
     }
   });
+
+  it('rejects with 403 before touching the upload once the account is at its film quota', async () => {
+    const seedFilms: CreateFilmInput[] = Array.from({ length: TEST_USER.quotas.maxFilms }, (_, i) => ({
+      title: `Film ${i}`,
+      videoUrl: 'gs://bucket/v.mp4',
+      subtitle: null,
+      runDiscoveryOnCreate: false,
+      ownerUid: TEST_USER.uid,
+    }));
+    const { app } = buildApp({ seedFilms });
+
+    const res = await request(app)
+      .post('/api/films/upload-video')
+      .set(bearer(TEST_USER.uid))
+      .field('testMode', 'true')
+      .attach('video', Buffer.from('fake video bytes'), { filename: 'clip.mp4', contentType: 'video/mp4' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/film quota reached/);
+  });
 });
 
 describe('POST /api/films/upload-video/init', () => {
@@ -593,6 +615,30 @@ describe('POST /api/films/upload-video/init', () => {
       .set(bearer(TEST_ADMIN.uid))
       .send({ filename: 'clip.mp4', size: 1000, testMode: false });
     expect(res.status).toBe(502);
+  });
+
+  it('rejects with 403 before minting a session once the account is at its film quota', async () => {
+    const seedFilms: CreateFilmInput[] = Array.from({ length: TEST_USER.quotas.maxFilms }, (_, i) => ({
+      title: `Film ${i}`,
+      videoUrl: 'gs://bucket/v.mp4',
+      subtitle: null,
+      runDiscoveryOnCreate: false,
+      ownerUid: TEST_USER.uid,
+    }));
+    const createResumableUploadSession = vi.fn();
+    const { app } = buildApp({
+      seedFilms,
+      videoBucketUploader: { uploadFromUrl: vi.fn(), uploadBuffer: vi.fn(), createResumableUploadSession, getObjectSizeBytes: vi.fn(), deleteObject: vi.fn() },
+    });
+
+    const res = await request(app)
+      .post('/api/films/upload-video/init')
+      .set(bearer(TEST_USER.uid))
+      .send({ filename: 'clip.mp4', contentType: 'video/mp4', size: 1000, testMode: false });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/film quota reached/);
+    expect(createResumableUploadSession).not.toHaveBeenCalled();
   });
 });
 
