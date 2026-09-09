@@ -82,7 +82,8 @@ OUTPUT, return ONLY this JSON array, no other text, no markdown fences:
         "reasoning": "<1-2 sentences, why this score>",
         "evidence": "<1-2 sentences of support, web-sourced if you searched,
           general knowledge if you didn't>",
-        "sources": ["<url>"] }
+        "sources": ["<the full URL of the page you actually read, e.g.
+          https://example.com/article>"] }
     ],
     "summary": "<2-3 sentence synthesis across all of this item's scores>",
     "should_transcreate": <true|false>,
@@ -91,7 +92,11 @@ OUTPUT, return ONLY this JSON array, no other text, no markdown fences:
   }
 ]
 The "scores" array must contain exactly one entry per rubric given in the
-input, in the same order, for every item, never fewer, never more.`;
+input, in the same order, for every item, never fewer, never more.
+Every string in a "sources" array must be a full "http(s)://" URL. Never
+write a bare citation number or footnote marker (e.g. "4") in its place —
+if you don't have the literal URL for a rubric you searched, leave that
+rubric's sources array empty ([]) instead.`;
 
 function buildPrompt(batch: ResearchItem[], targetCountry: string, rubrics: Rubric[]): string {
   const payload = {
@@ -136,8 +141,34 @@ export interface ResearchAgentConfig {
  * inject a fake without touching ADC or the real Vertex AI SDK. */
 export interface GenAIClient {
   models: {
-    generateContent(params: unknown): Promise<{ text?: string }>;
+    generateContent(params: unknown): Promise<{
+      text?: string;
+      candidates?: Array<{
+        groundingMetadata?: {
+          groundingChunks?: Array<{ web?: { uri?: string } }>;
+        };
+      }>;
+    }>;
   };
+}
+
+const URL_PATTERN = /^https?:\/\//i;
+
+/** The model is asked to write full URLs into "sources", but when the parallelAiSearch
+ * grounding tool is on it sometimes reverts to writing a bare citation number (e.g. "4")
+ * instead — a habit from grounded-answer footnotes. Resolve any such number against this
+ * call's actual grounding chunks (tried as both a 0- and 1-indexed reference, since the
+ * model's own indexing convention isn't guaranteed) rather than persisting a broken
+ * numeric "source" that renders as a dead link. */
+function resolveSources(raw: string[], groundingUrls: string[]): string[] {
+  return raw
+    .map((src) => {
+      if (URL_PATTERN.test(src)) return src;
+      const idx = Number(src);
+      if (!Number.isInteger(idx)) return null;
+      return groundingUrls[idx] ?? groundingUrls[idx - 1] ?? null;
+    })
+    .filter((s): s is string => Boolean(s));
 }
 
 export interface ResearchAgentDeps {
@@ -182,6 +213,10 @@ export function createResearchAgent(
           throw new Error(`Research agent response wasn't valid JSON: ${text}`);
         }
 
+        const groundingUrls = (response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+          .map((c) => c.web?.uri)
+          .filter((u): u is string => Boolean(u));
+
         const scoredAt = new Date().toISOString();
         const batchResults: ResearchResult[] = (parsed as Array<Record<string, unknown>>).map(
           (r) => ({
@@ -192,7 +227,7 @@ export function createResearchAgent(
               score: s.score as number,
               reasoning: s.reasoning as string,
               evidence: s.evidence as string,
-              sources: (s.sources as string[]) ?? [],
+              sources: resolveSources((s.sources as string[]) ?? [], groundingUrls),
               updatedAt: scoredAt,
               updatedBy: 'batch-agent' as const,
             })),

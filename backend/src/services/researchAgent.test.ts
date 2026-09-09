@@ -239,6 +239,70 @@ describe('createResearchAgent researchBatch', () => {
     expect(results[0].scores[0].updatedAt).toEqual(expect.any(String));
   });
 
+  it('resolves a bare citation number in sources against the response\'s grounding chunks', async () => {
+    const generateContent = vi.fn(async () => ({
+      text: JSON.stringify([
+        {
+          item_id: 'item-0',
+          target_country: 'Japan',
+          scores: [
+            { rubric_id: 'food-aversion', score: 5, reasoning: 'r', evidence: 'e', sources: ['4'] },
+          ],
+          summary: 'summary',
+          should_transcreate: false,
+        },
+      ]),
+      candidates: [
+        {
+          groundingMetadata: {
+            groundingChunks: [
+              { web: { uri: 'https://example.com/0' } },
+              { web: { uri: 'https://example.com/1' } },
+              { web: { uri: 'https://example.com/2' } },
+              { web: { uri: 'https://example.com/3' } },
+              { web: { uri: 'https://example.com/4' } },
+            ],
+          },
+        },
+      ],
+    }));
+    const agent = createResearchAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+
+    const results = await agent.researchBatch({
+      items: itemsList(1),
+      targetCountry: 'Japan',
+      rubrics: [rubric('food-aversion', 'test')],
+    });
+
+    // The model wrote "4" instead of a URL; resolved against the 0-indexed grounding chunks.
+    expect(results[0].scores[0].sources).toEqual(['https://example.com/4']);
+  });
+
+  it('drops a bare citation number that has no matching grounding chunk', async () => {
+    const generateContent = vi.fn(async () => ({
+      text: JSON.stringify([
+        {
+          item_id: 'item-0',
+          target_country: 'Japan',
+          scores: [
+            { rubric_id: 'food-aversion', score: 5, reasoning: 'r', evidence: 'e', sources: ['99'] },
+          ],
+          summary: 'summary',
+          should_transcreate: false,
+        },
+      ]),
+    }));
+    const agent = createResearchAgent(CONFIG, { genAI: fakeGenAI(generateContent) });
+
+    const results = await agent.researchBatch({
+      items: itemsList(1),
+      targetCountry: 'Japan',
+      rubrics: [rubric('food-aversion', 'test')],
+    });
+
+    expect(results[0].scores[0].sources).toEqual([]);
+  });
+
   it('omits suggestedReplacement entirely when suggested_replacement is null', async () => {
     const generateContent = vi.fn(async () => ({
       text: JSON.stringify([
