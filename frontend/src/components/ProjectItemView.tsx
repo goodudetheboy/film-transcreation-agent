@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BUILTIN_COLUMN_LABELS } from '../api/apiClient.types';
-import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction, Rubric, RubricScore } from '../api/apiClient.types';
+import type { ColumnDoc, DetailRow, ProjectItem, ProjectItemAction, Rubric } from '../api/apiClient.types';
 import { runTrendResearch, updateItem, updateItemScore } from '../api/projectsApiClient';
 import { formatClock } from '../utils/timeFormat';
 import { Modal } from './Modal';
@@ -26,17 +26,6 @@ function describeAge(publishedDate: string): string {
 
 function scoreTier(score: number): 'low' | 'mid' | 'high' {
   return score >= 7 ? 'high' : score >= 4 ? 'mid' : 'low';
-}
-
-// The store already tags every score write with who made it (see
-// projectItemStore.ts/researchChatAgent.ts's `updatedBy`) — this was never
-// surfaced in the UI, so a score set by the chat tool and one set by hand
-// via "Edit score" looked identical, with no way to tell whether the agent
-// might overwrite a manual edit on its next run.
-function scoreSourceLabel(updatedBy: RubricScore['updatedBy']): string {
-  if (updatedBy === 'user') return 'you';
-  if (updatedBy === 'chat-agent') return 'chat agent';
-  return 'research pass';
 }
 
 function assessmentColor(shouldTranscreate: boolean | null): string {
@@ -243,25 +232,20 @@ function ScoreBlock({
     <div className="finding-card">
       <div className="finding-card__top">
         <span className="finding-card__index">{index + 1}</span>
-        <p className="finding-card__rubric">
-          {rubric.name}
-          <span className="finding-card__weight">weight {rubric.weight}</span>
-          {existing && (
-            <span className="finding-card__weight" title={new Date(existing.updatedAt).toLocaleString()}>
-              · set by {scoreSourceLabel(existing.updatedBy)}
+        <p className="finding-card__rubric">{rubric.name}</p>
+        <div className="finding-card__score-wrap">
+          {existing ? (
+            <span className={`score-circle score-circle--${scoreTier(existing.score)}`}>
+              <span className="score-circle__value">{existing.score}</span>
+              <span className="score-circle__max">/10</span>
+            </span>
+          ) : (
+            <span className="score-circle score-circle--none">
+              <span className="score-circle__value">—</span>
             </span>
           )}
-        </p>
-        {existing ? (
-          <span className={`score-circle score-circle--${scoreTier(existing.score)}`}>
-            <span className="score-circle__value">{existing.score}</span>
-            <span className="score-circle__max">/10</span>
-          </span>
-        ) : (
-          <span className="score-circle score-circle--none">
-            <span className="score-circle__value">—</span>
-          </span>
-        )}
+          <span className="finding-card__weight">weight {rubric.weight}</span>
+        </div>
       </div>
 
       <p className="finding-card__text">{existing?.reasoning || <em>Not yet scored.</em>}</p>
@@ -517,10 +501,14 @@ export function ProjectItemView({
                   </div>
                   <p>{item.subtitleText || <em>Visual only</em>}</p>
                 </div>
-                <div className="field">
-                  <label>Scene / segment description</label>
-                  <p>{item.sceneDescription}</p>
-                </div>
+                <EditableField
+                  label="Executive reason"
+                  value={item.summary ?? ''}
+                  placeholder="Why does — or doesn't — this line need a change?"
+                  emptyText="No executive reason yet."
+                  displayClassName="executive-reason-display"
+                  onSave={saveSummary}
+                />
               </div>
               <div className="overview-card__side">
                 <span
@@ -572,16 +560,6 @@ export function ProjectItemView({
                   </select>
                 </div>
               </div>
-            </div>
-
-            <div className="overview-card__section">
-              <EditableField
-                label="Executive reason"
-                value={item.summary ?? ''}
-                placeholder="Why does — or doesn't — this line need a change?"
-                emptyText="No executive reason yet."
-                onSave={saveSummary}
-              />
             </div>
 
             <div className="overview-card__section">

@@ -5,7 +5,8 @@
       "name": "dev:frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:frontend"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "dev:backend",

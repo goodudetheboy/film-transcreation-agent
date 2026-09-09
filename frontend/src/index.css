@@ -1302,6 +1302,14 @@ textarea {
   letter-spacing: 0.02em;
 }
 
+.finding-card__score-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
 .finding-card__toggle {
   align-self: flex-start;
   background: transparent;
@@ -1467,6 +1475,23 @@ textarea {
   color: var(--text);
   font-size: 15px;
   font-weight: 600;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+/* Executive Reason now leads the context column (where Scene/Segment
+   description used to sit — that field moved into "Show full detail"), so it
+   needs to read as more than plain prose too, just quieter than the accent
+   blue .suggested-change-display, which should still outrank it as the
+   actual fix. */
+.executive-reason-display {
+  margin: 0;
+  background: var(--bg);
+  border-left: 3px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1.5;
   padding: 10px 12px;
 }
