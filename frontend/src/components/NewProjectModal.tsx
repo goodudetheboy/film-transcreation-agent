@@ -91,7 +91,10 @@ export function NewProjectModal({ filmId, testMode, onCreated, onClose }: NewPro
 
   async function handleGenerateDefaultRubrics() {
     const defaults = await getDefaultRubrics();
-    setRubrics((prev) => [...prev, ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight }))]);
+    setRubrics((prev) => [
+      ...prev,
+      ...defaults.map((d) => ({ name: d.name, description: d.description, weight: d.weight, trendEligible: d.trendEligible })),
+    ]);
   }
 
   function goNext() {

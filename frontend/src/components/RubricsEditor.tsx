@@ -4,6 +4,12 @@ export interface DraftRubric {
   name: string;
   description: string;
   weight: number;
+  /** Whether the Trend agent can run against this rubric — not exposed as an
+   * editable control here (reverted per direct feedback, see
+   * docs/progress/20260907.md's 04:30 entry), but still carried through so a
+   * default rubric copied into the wizard's draft state keeps the flag the
+   * server's default set gave it, instead of silently downgrading to false. */
+  trendEligible?: boolean;
 }
 
 export interface RubricsEditorProps {
