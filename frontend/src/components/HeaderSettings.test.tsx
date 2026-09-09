@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { HeaderSettings, type HeaderSettingsProps } from './HeaderSettings';
 import { signOut } from 'firebase/auth';
 
@@ -12,13 +13,21 @@ vi.mock('firebase/auth', () => ({
 function renderHeaderSettings(overrides: Partial<HeaderSettingsProps> = {}) {
   const props: HeaderSettingsProps = {
     email: 'testuser@example.com',
+    isAdmin: false,
     testMode: true,
     onTestModeChange: () => {},
     theme: 'dark',
     onThemeChange: () => {},
     ...overrides,
   };
-  render(<HeaderSettings {...props} />);
+  render(
+    <MemoryRouter initialEntries={['/']}>
+      <Routes>
+        <Route path="/" element={<HeaderSettings {...props} />} />
+        <Route path="/admin" element={<p>Admin page</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
 }
 
 async function openSettingsModal() {
@@ -39,6 +48,20 @@ describe('HeaderSettings', () => {
     await userEvent.click(screen.getByRole('button', { name: /testuser/i }));
     expect(screen.getByRole('menuitem', { name: /settings/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeInTheDocument();
+  });
+
+  it('does not show an Admin item in the dropdown for a non-admin user', async () => {
+    renderHeaderSettings({ isAdmin: false });
+    await userEvent.click(screen.getByRole('button', { name: /testuser/i }));
+    expect(screen.queryByRole('menuitem', { name: /admin/i })).not.toBeInTheDocument();
+  });
+
+  it('shows an Admin item that navigates to /admin and closes the menu, for an admin user', async () => {
+    renderHeaderSettings({ isAdmin: true });
+    await userEvent.click(screen.getByRole('button', { name: /testuser/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /admin/i }));
+    expect(await screen.findByText('Admin page')).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 
   it('closes the dropdown when Escape is pressed', async () => {

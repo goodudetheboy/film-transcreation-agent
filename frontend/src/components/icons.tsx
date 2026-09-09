@@ -52,6 +52,15 @@ export function UserIcon(props: IconProps) {
   );
 }
 
+export function ShieldIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3l7 3v5.5c0 4.6-3 8.4-7 9.5-4-1.1-7-4.9-7-9.5V6l7-3Z" />
+      <path d="M9 12l2.2 2.2L15.5 10" />
+    </Icon>
+  );
+}
+
 export function SignOutIcon(props: IconProps) {
   return (
     <Icon {...props}>

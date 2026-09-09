@@ -41,9 +41,25 @@ describe('AdminView', () => {
     vi.mocked(adminApiClient.listActivity).mockResolvedValue([]);
   });
 
+  it('shows a checking-access placeholder and fetches nothing while roleLoading', () => {
+    render(<AdminView role={null} roleLoading={true} />);
+
+    expect(screen.getByText(/checking access/i)).toBeInTheDocument();
+    expect(adminApiClient.listAccounts).not.toHaveBeenCalled();
+    expect(adminApiClient.getKillswitch).not.toHaveBeenCalled();
+  });
+
+  it('shows an access-denied notice for a non-admin role and never calls the admin API', () => {
+    render(<AdminView role="user" roleLoading={false} />);
+
+    expect(screen.getByText(/don.t have admin access/i)).toBeInTheDocument();
+    expect(adminApiClient.listAccounts).not.toHaveBeenCalled();
+    expect(adminApiClient.getKillswitch).not.toHaveBeenCalled();
+  });
+
   it('renders the fetched accounts as cards, including their quotas', async () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([fakeAccount()]);
-    const { container } = render(<AdminView />);
+    const { container } = render(<AdminView role="admin" roleLoading={false} />);
 
     expect(await screen.findByText('Alice')).toBeInTheDocument();
     expect(screen.getByText('alice@example.com')).toBeInTheDocument();
@@ -56,7 +72,7 @@ describe('AdminView', () => {
       fakeAccount({ uid: 'u1', label: 'Alice', role: 'admin' }),
       fakeAccount({ uid: 'u2', label: 'Carol', disabled: true }),
     ]);
-    const { container } = render(<AdminView />);
+    const { container } = render(<AdminView role="admin" roleLoading={false} />);
 
     await screen.findByText('Carol');
     const stats = [...container.querySelectorAll('.admin-stat')].map((el) => el.textContent);
@@ -67,7 +83,7 @@ describe('AdminView', () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([]);
     const created = fakeAccount({ uid: 'u2', email: 'bob@example.com', label: 'Bob', role: 'admin' });
     vi.mocked(adminApiClient.createAccount).mockResolvedValue(created);
-    render(<AdminView />);
+    render(<AdminView role="admin" roleLoading={false} />);
 
     await screen.findByText(/no accounts yet/i);
     await userEvent.click(screen.getByRole('button', { name: /\+ provision account/i }));
@@ -97,7 +113,7 @@ describe('AdminView', () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([fakeAccount()]);
     const updated = fakeAccount({ label: 'Alice B.', quotas: { maxFilms: 9, maxProjects: 5, maxConcurrentAgentRuns: 2 } });
     vi.mocked(adminApiClient.updateAccount).mockResolvedValue(updated);
-    render(<AdminView />);
+    render(<AdminView role="admin" roleLoading={false} />);
 
     await screen.findByText('Alice');
     await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
@@ -125,7 +141,7 @@ describe('AdminView', () => {
     vi.mocked(adminApiClient.listAccounts).mockResolvedValue([]);
     vi.mocked(adminApiClient.getKillswitch).mockResolvedValue(fakeKillswitch({ enabled: false }));
     vi.mocked(adminApiClient.setKillswitch).mockResolvedValue(fakeKillswitch({ enabled: true }));
-    render(<AdminView />);
+    render(<AdminView role="admin" roleLoading={false} />);
 
     const toggleButton = await screen.findByRole('button', { name: /turn on killswitch/i });
     await userEvent.click(toggleButton);

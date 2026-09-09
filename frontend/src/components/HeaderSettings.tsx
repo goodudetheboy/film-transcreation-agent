@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 import type { Theme } from '../utils/useTheme';
-import { GearIcon, SignOutIcon, UserIcon } from './icons';
+import { GearIcon, ShieldIcon, SignOutIcon, UserIcon } from './icons';
 
 export interface HeaderSettingsProps {
   email: string;
+  isAdmin: boolean;
   testMode: boolean;
   onTestModeChange: (value: boolean) => void;
   theme: Theme;
@@ -14,11 +16,13 @@ export interface HeaderSettingsProps {
 
 export function HeaderSettings({
   email,
+  isAdmin,
   testMode,
   onTestModeChange,
   theme,
   onThemeChange,
 }: HeaderSettingsProps) {
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,6 +57,20 @@ export function HeaderSettings({
       </button>
       {menuOpen && (
         <div className="account-menu" role="menu">
+          {isAdmin && (
+            <button
+              type="button"
+              role="menuitem"
+              className="account-menu__item"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate('/admin');
+              }}
+            >
+              <ShieldIcon />
+              Admin
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

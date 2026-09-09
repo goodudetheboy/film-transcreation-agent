@@ -35,13 +35,28 @@ function formatLastActive(a: Account): string {
   return `Active ${new Date(a.lastCallAt).toLocaleString()}`;
 }
 
+export interface AdminViewProps {
+  /** The signed-in user's Firebase ID token `role` claim, resolved once by
+   * App.tsx right after sign-in — `null` means either "still loading" or
+   * "genuinely not an admin"; `roleLoading` disambiguates the two. */
+  role: string | null;
+  roleLoading: boolean;
+}
+
 /**
  * Admin-only page — manage provisioned accounts, the global killswitch, and
- * recent API activity. Only reachable when the signed-in user's Firebase ID
- * token carries `role: 'admin'` (see App.tsx, which only renders the "Admin"
- * nav link and this route's content for that role).
+ * recent API activity. The backend already rejects every admin API call for
+ * a non-admin token (see `routes/admin.ts`'s router-level role guard), so
+ * this gate is a UX nicety, not the real security boundary: it checks `role`
+ * before firing any of those calls or rendering the management UI, and shows a
+ * plain notice instead — rather than letting a non-admin who lands on
+ * `/admin` directly (typed URL, stale bookmark) see the page shell flash by
+ * with a wall of "failed to load" errors from calls that were always going
+ * to be rejected.
  */
-export function AdminView() {
+export function AdminView({ role: viewerRole, roleLoading }: AdminViewProps) {
+  const isAdmin = viewerRole === 'admin';
+
   const [tab, setTab] = useState<Tab>('accounts');
 
   const [accounts, setAccounts] = useState<Account[] | null>(null);
@@ -79,6 +94,7 @@ export function AdminView() {
   const [activityError, setActivityError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isAdmin) return;
     let cancelled = false;
     listAccounts()
       .then((a) => {
@@ -90,9 +106,10 @@ export function AdminView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
+    if (!isAdmin) return;
     let cancelled = false;
     getKillswitch()
       .then((k) => {
@@ -104,10 +121,10 @@ export function AdminView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (tab !== 'activity') return;
+    if (!isAdmin || tab !== 'activity') return;
     let cancelled = false;
 
     function poll() {
@@ -126,7 +143,7 @@ export function AdminView() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [tab]);
+  }, [isAdmin, tab]);
 
   async function handleProvision(e: FormEvent) {
     e.preventDefault();
@@ -217,6 +234,22 @@ export function AdminView() {
 
   const adminCount = accounts?.filter((a) => a.role === 'admin').length ?? 0;
   const activeCount = accounts?.filter((a) => !a.disabled).length ?? 0;
+
+  if (roleLoading) {
+    return (
+      <div className="app-body-inner app-body-inner--centered">
+        <p className="results-placeholder">Checking access…</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="app-body-inner app-body-inner--centered">
+        <p className="passcode-gate__error">You don&rsquo;t have admin access.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="app-body-inner">

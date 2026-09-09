@@ -23,6 +23,12 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined); // undefined = still loading
   const [role, setRole] = useState<string | null>(null);
+  // True until the first ID-token claims check resolves after sign-in — lets
+  // AdminView tell "still checking" apart from "checked, not an admin"
+  // instead of flashing an access-denied notice for a real admin on a hard
+  // refresh of /admin (getIdTokenResult() below is async, so `role` briefly
+  // holds its initial `null` even for an admin).
+  const [roleLoading, setRoleLoading] = useState(true);
   const [testMode, setTestMode] = useTestMode();
   const [theme, setTheme] = useTheme();
   // Re-renders on every navigation so the "Current Workspace" tab's target
@@ -34,6 +40,7 @@ function App() {
     return onAuthStateChanged(auth, async (u) => {
       setUser(u);
       setRole(u ? ((await u.getIdTokenResult()).claims.role as string | undefined) ?? null : null);
+      setRoleLoading(false);
     });
   }, []);
 
@@ -64,15 +71,11 @@ function App() {
               Current Workspace
             </NavLink>
           )}
-          {role === 'admin' && (
-            <NavLink to="/admin" className={navLinkClass}>
-              Admin
-            </NavLink>
-          )}
         </nav>
         <div className="menu-bar__spacer" />
         <HeaderSettings
           email={user.email ?? ''}
+          isAdmin={role === 'admin'}
           testMode={testMode}
           onTestModeChange={setTestMode}
           theme={theme}
@@ -88,7 +91,7 @@ function App() {
             element={<FilmWorkspaceView testMode={testMode} />}
           />
           <Route path="/projects" element={<ProjectsLibraryView />} />
-          <Route path="/admin" element={<AdminView />} />
+          <Route path="/admin" element={<AdminView role={role} roleLoading={roleLoading} />} />
           {import.meta.env.DEV && <Route path="/dev/prep-animation" element={<PrepAnimationLab />} />}
         </Routes>
       </main>
