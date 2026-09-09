@@ -454,9 +454,6 @@ export function ProjectItemView({
         <button type="button" className="btn" onClick={onBack}>
           ← Back to table
         </button>
-        <p className="project-item-view__title">
-          {formatClock(item.startMs)}–{formatClock(item.endMs)}
-        </p>
         <div className="project-item-view__nav">
           <button type="button" className="btn" disabled={!prev} onClick={() => prev && onNavigate(prev.id)}>
             ← Previous
@@ -492,23 +489,53 @@ export function ProjectItemView({
           <div className="overview-card">
             <div className="overview-card__top">
               <div className="overview-card__context">
-                <div className="field">
-                  <div className="field__label-row">
-                    <label>Subtitle</label>
-                    <button type="button" className="link-back" onClick={() => setShowFullDetail(true)}>
-                      Show full detail
-                    </button>
-                  </div>
-                  <p>{item.subtitleText || <em>Visual only</em>}</p>
+                <div className="field__label-row">
+                  <p className="overview-card__title">
+                    {formatClock(item.startMs)}–{formatClock(item.endMs)} — {item.subtitleText || 'Visual only'}
+                  </p>
+                  <button type="button" className="link-back" onClick={() => setShowFullDetail(true)}>
+                    Show full detail
+                  </button>
                 </div>
-                <EditableField
-                  label="Executive reason"
-                  value={item.summary ?? ''}
-                  placeholder="Why does — or doesn't — this line need a change?"
-                  emptyText="No executive reason yet."
-                  displayClassName="executive-reason-display"
-                  onSave={saveSummary}
-                />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>AI Assessment</label>
+                    <select
+                      className="nav-select"
+                      style={{ color: assessmentColor(item.shouldTranscreate), fontWeight: 600 }}
+                      value={item.shouldTranscreate === true ? 'change' : item.shouldTranscreate === false ? 'no-change' : 'unassessed'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        saveShouldTranscreate(v === 'change' ? true : v === 'no-change' ? false : null);
+                      }}
+                    >
+                      <option value="unassessed" style={{ color: assessmentColor(null) }}>
+                        Not assessed
+                      </option>
+                      <option value="no-change" style={{ color: assessmentColor(false) }}>
+                        Fine As-Is
+                      </option>
+                      <option value="change" style={{ color: assessmentColor(true) }}>
+                        Needs Change
+                      </option>
+                    </select>
+                  </div>
+                  <div className="field" style={{ flex: 1 }}>
+                    <label>Your verdict</label>
+                    <select
+                      className="nav-select"
+                      style={{ color: actionColor(item.action), fontWeight: 600 }}
+                      value={item.action}
+                      onChange={(e) => onActionChange(item.id, e.target.value as ProjectItemAction)}
+                    >
+                      {ACTIONS.map((a) => (
+                        <option key={a} value={a} style={{ color: actionColor(a) }}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
               <div className="overview-card__side">
                 <span
@@ -520,46 +547,18 @@ export function ProjectItemView({
                 <p className="finding-card__weight" style={{ marginTop: -4 }}>
                   importance
                 </p>
-
-                <div className="field">
-                  <label>Your verdict</label>
-                  <select
-                    className="nav-select"
-                    style={{ color: actionColor(item.action), fontWeight: 600 }}
-                    value={item.action}
-                    onChange={(e) => onActionChange(item.id, e.target.value as ProjectItemAction)}
-                  >
-                    {ACTIONS.map((a) => (
-                      <option key={a} value={a} style={{ color: actionColor(a) }}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="field">
-                  <label>AI Assessment</label>
-                  <select
-                    className="nav-select"
-                    style={{ color: assessmentColor(item.shouldTranscreate), fontWeight: 600 }}
-                    value={item.shouldTranscreate === true ? 'change' : item.shouldTranscreate === false ? 'no-change' : 'unassessed'}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      saveShouldTranscreate(v === 'change' ? true : v === 'no-change' ? false : null);
-                    }}
-                  >
-                    <option value="unassessed" style={{ color: assessmentColor(null) }}>
-                      Not assessed
-                    </option>
-                    <option value="no-change" style={{ color: assessmentColor(false) }}>
-                      Fine As-Is
-                    </option>
-                    <option value="change" style={{ color: assessmentColor(true) }}>
-                      Needs Change
-                    </option>
-                  </select>
-                </div>
               </div>
+            </div>
+
+            <div className="overview-card__section">
+              <EditableField
+                label="Executive reason"
+                value={item.summary ?? ''}
+                placeholder="Why does — or doesn't — this line need a change?"
+                emptyText="No executive reason yet."
+                displayClassName="executive-reason-display"
+                onSave={saveSummary}
+              />
             </div>
 
             <div className="overview-card__section">

@@ -1430,6 +1430,20 @@ textarea {
   min-width: 0;
 }
 
+/* The item's start–end timestamp plus its subtitle text, read together as
+   one line ("00:33–00:36 — subtitle…") — bigger than the surrounding field
+   labels/values so it reads as the card's actual title, not just another
+   field. */
+.overview-card__title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 .overview-card__section {
   display: flex;
   flex-direction: column;
@@ -1458,6 +1472,16 @@ textarea {
   max-width: none;
   text-align: center;
   text-transform: capitalize;
+}
+
+/* AI Assessment/Your verdict sit side by side at the top of the context
+   column — without this, .nav-select's default max-width: 260px lets each
+   select size to its own option text ("Needs Change" vs. "pending"),
+   leaving the two boxes visibly different widths despite their .field
+   wrappers being equal flex:1 columns. */
+.overview-card__context .nav-select {
+  width: 100%;
+  max-width: none;
 }
 
 /* The one field on the Overview card that should visually lead — the actual
@@ -3231,10 +3255,6 @@ textarea {
   align-items: center;
   gap: var(--space-default);
   flex-wrap: wrap;
-}
-
-.project-item-view__title {
-  font-weight: 600;
 }
 
 .project-item-view__nav {
