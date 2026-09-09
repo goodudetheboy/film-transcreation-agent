@@ -20,6 +20,7 @@ import { useProjectWorkspaceStore } from '../store/projectWorkspaceStore';
 import { projectItemReference, type ChatReference } from '../utils/chatReferences';
 import { formatClock } from '../utils/timeFormat';
 import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
+import { humanizeToolName } from '../utils/humanizeToolName';
 import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, LightbulbIcon, PencilIcon, SearchIcon, SparkleIcon, TrashIcon } from './icons';
@@ -75,7 +76,19 @@ function toolStepLabel(name: string, args: Record<string, unknown>): ReactNode {
   if (name === 'propose_replacement') return <><LightbulbIcon /> Proposing a replacement…</>;
   if (name === 'update_assessment') return <><PencilIcon /> Updating the AI assessment…</>;
   if (name === 'describe_video_segment') return <>Looking at {formatClock(Number(args.startMs))}–{formatClock(Number(args.endMs))}…</>;
-  return <>Calling {name}…</>;
+  return <>Calling {humanizeToolName(name)}…</>;
+}
+
+/** Completed-state counterpart to toolStepLabel above — same tool set, past
+ * tense, no trailing ellipsis. Kept separate rather than deriving one from
+ * the other since the in-flight text carries its own icon markup that the
+ * completed branch (see ToolCallCard below) already prefixes with a shared
+ * CheckIcon instead. */
+function toolCompletedLabel(name: string): string {
+  if (name === 'update_rubric_score') return 'Updated a rubric score';
+  if (name === 'propose_replacement') return 'Proposed a replacement';
+  if (name === 'update_assessment') return 'Updated the AI assessment';
+  return humanizeToolName(name);
 }
 
 interface SearchResultCard {
@@ -192,7 +205,7 @@ function ToolCallCard({ name, args, result, rubrics }: { name: string; args: Rec
             ? <><SearchIcon /> Searched the web via Parallel</>
             : isVideoSight
               ? <><CheckIcon /> Looked at {formatClock(Number(args.startMs))}–{formatClock(Number(args.endMs))}</>
-              : <><CheckIcon /> {name}</>
+              : <><CheckIcon /> {toolCompletedLabel(name)}</>
           : toolStepLabel(name, args)}
       </p>
       {isSearch && Array.isArray(args.search_queries) && (

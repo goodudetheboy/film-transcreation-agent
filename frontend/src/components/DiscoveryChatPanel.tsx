@@ -30,6 +30,7 @@ import { formatClock } from '../utils/timeFormat';
 import { useResizableColumns } from '../utils/useResizableColumns';
 import { detailRowReference, type ChatReference } from '../utils/chatReferences';
 import { collectRunRefs, combinedAgentStatus } from '../utils/agentRunStatus';
+import { humanizeToolName } from '../utils/humanizeToolName';
 import { AGENT_RUN_LABELS } from '../utils/statusLabels';
 import type { VideoSelection } from './VideoScrubber';
 import { CheckIcon, SparkleIcon, TrashIcon } from './icons';
@@ -553,7 +554,7 @@ function DiscoveryToolCallCard({ name, args, result }: { name: string; args: Rec
               ? 'Discarded a candidate'
               : name === 'describe_video_segment'
                 ? `Looking at ${formatClock(Number(args.startMs))}–${formatClock(Number(args.endMs))}`
-                : `Called ${name}`;
+                : `Called ${humanizeToolName(name)}`;
 
   return (
     <div className="chat-step-card">
