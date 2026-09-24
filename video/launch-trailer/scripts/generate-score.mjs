@@ -93,30 +93,6 @@ function pluck(t, m, amp, { decay = 0.996, len = 1.6, pan = 0, send = 0.45, brig
   }
 }
 
-function kick(t, amp = 0.9, { f0 = 120, f1 = 42, len = 0.45 } = {}) {
-  const s0 = Math.floor(t * SR);
-  let ph = 0;
-  for (let i = 0; i < len * SR; i++) {
-    const tt = i / SR;
-    const f = f1 + (f0 - f1) * Math.exp(-tt * 28);
-    ph += (TAU * f) / SR;
-    const v = Math.sin(ph) * Math.exp(-tt * 7) * amp;
-    put(s0 + i, v, v, 0.05);
-  }
-}
-
-function noiseBurst(t, amp, len, { hp = 0.5, pan = 0, send = 0.1, decay = 30 } = {}) {
-  const s0 = Math.floor(t * SR);
-  let prev = 0;
-  for (let i = 0; i < len * SR; i++) {
-    const n = rnd() * 2 - 1;
-    const h = n - prev * hp;
-    prev = n;
-    const v = h * amp * Math.exp((-i / SR) * decay);
-    put(s0 + i, v * (0.5 - pan / 2), v * (0.5 + pan / 2), send);
-  }
-}
-
 /** Cinematic impact: sub drop + lowpassed noise crash + a bright bloom. */
 function impact(t, amp = 1) {
   const s0 = Math.floor(t * SR);
@@ -163,6 +139,52 @@ function whoosh(t, amp = 0.25) {
   }
 }
 
+/** Bowed string voice: soft attack, vibrato, gentle harmonic rolloff. */
+function bowed(t, dur, m, amp, { atk = 0.06, rel = 0.35, pan = 0, send = 0.55, harmonics = 7, bright = 1.25, vib = 0.12 } = {}) {
+  const s0 = Math.floor(t * SR);
+  const n = Math.floor((dur + rel) * SR);
+  for (const det of [-0.05, 0.05]) {
+    const f = mtof(m + det);
+    const harm = Array.from({ length: harmonics }, (_, i) => i + 1).filter((h) => f * h < 7000);
+    const ph = harm.map(() => rnd() * TAU);
+    const g = harm.map((h) => 1 / h ** bright);
+    const vr = 4.8 + rnd() * 0.8;
+    let phase = 0;
+    for (let i = 0; i < n; i++) {
+      const tt = i / SR;
+      let env = Math.min(1, tt / atk);
+      if (tt > dur) env *= Math.max(0, 1 - (tt - dur) / rel);
+      env = env * env * (3 - 2 * env);
+      const vibAmt = vib * Math.min(1, tt / 0.4);
+      phase += (TAU * f * (1 + (vibAmt / 100) * Math.sin(TAU * vr * tt))) / SR;
+      let v = 0;
+      for (let k = 0; k < harm.length; k++) v += Math.sin(ph[k] + phase * harm[k]) * g[k];
+      v *= amp * env * 0.5;
+      put(s0 + i, v * (0.5 - pan / 2), v * (0.5 + pan / 2), send);
+    }
+  }
+}
+
+/** Taiko / low tom: pitched body + felt-like noise thump, big room. */
+function taiko(t, amp = 0.6, { f0 = 95, f1 = 48, len = 1.4, send = 0.45 } = {}) {
+  const s0 = Math.floor(t * SR);
+  let ph = 0;
+  let lp = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const tt = i / SR;
+    const f = f1 + (f0 - f1) * Math.exp(-tt * 18);
+    ph += (TAU * f) / SR;
+    lp += (rnd() * 2 - 1 - lp) * 0.05;
+    const v = (Math.sin(ph) * Math.exp(-tt * 3.2) + lp * 2.2 * Math.exp(-tt * 22)) * amp;
+    put(s0 + i, v, v, send);
+  }
+}
+
+/** Low brass "braam": bright, slow-swelling, detuned stack. */
+function braam(t, notes, amp, dur = 3.5) {
+  for (const m of notes) bowed(t, dur, m, amp / notes.length, { atk: 0.12, rel: 2.5, harmonics: 16, bright: 0.85, vib: 0.02, send: 0.6 });
+}
+
 /* ---------------- arrangement ---------------- */
 
 const D2 = 38, A2 = 45, D3 = 50, F3 = 53, A3 = 57, C4 = 60, D4 = 62, E4 = 64, F4 = 65, G4 = 67, A4 = 69;
@@ -188,71 +210,93 @@ pad(51, 56.8, CH.C, 0.3, { atk: 1.5, rel: 0.2 });
 // cold-open bells on each subtitle line
 pluck(0.6, D4, 0.1, { decay: 0.9995, len: 5, send: 0.8, bright: 0.3 });
 pluck(5.4, A3, 0.1, { decay: 0.9995, len: 5, send: 0.8, bright: 0.3 });
-// soft thuds on story cuts
-for (const t of [10, 24]) kick(t, 0.55, { f0: 70, f1: 34, len: 1.2 });
-// heartbeat under the market-pressure stats
-for (let t = 34.2; t < 45.5; t += 1.0) {
-  kick(t, 0.4, { f0: 80, f1: 40, len: 0.35 });
-  kick(t + 0.22, 0.26, { f0: 70, f1: 38, len: 0.3 });
+// deep taiko on the story cuts
+for (const t of [10, 24]) taiko(t, 0.5, { f0: 70, f1: 38, len: 2.2 });
+// slow heartbeat under the market-pressure stats (felt more than heard)
+for (let t = 34.2; t < 45.5; t += 1.2) {
+  taiko(t, 0.26, { f0: 70, f1: 40, len: 0.8, send: 0.25 });
+  taiko(t + 0.26, 0.17, { f0: 64, f1: 38, len: 0.7, send: 0.25 });
 }
-// the gap: ticking pulse then riser into the title
-for (let t = 46; t < 56.5; t += 0.3) pluck(t, t < 51 ? A4 : C4 + 12, 0.08 + (t - 46) * 0.008, { decay: 0.98, len: 0.25, pan: Math.sin(t * 5) * 0.5, bright: 0.9 });
-riser(51, 56.95, 0.65);
+// cello line under the stats
+bowed(34.5, 5.6, D3 - 12, 0.22, { atk: 1.5, rel: 1.5 });
+bowed(40.5, 5.4, 46 - 12, 0.22, { atk: 1.5, rel: 1.5 });
+// the gap: high violin tremolo swelling into the riser
+for (let t = 46, k = 0; t < 56.7; t += 0.125, k++) {
+  const p = (t - 46) / 10.7;
+  bowed(t, 0.1, t < 51 ? A4 + 12 : C4 + 24, 0.02 + 0.06 * p * p, { atk: 0.02, rel: 0.06, pan: k % 2 ? 0.3 : -0.3, vib: 0, send: 0.7 });
+}
+riser(51, 56.95, 0.55);
 
-// TITLE HIT
-impact(57, 1);
-pad(57, 63.5, CH.Fadd9, 0.42, { atk: 0.05, rel: 3, bright: 1.3 });
-pluck(57.02, F4 + 12, 0.3, { decay: 0.9993, len: 5, send: 0.8 });
+// TITLE HIT — braam + impact + bloom
+impact(57, 0.9);
+braam(57, [29, 41, 48], 0.9, 3.2);
+pad(57, 63.5, CH.Fadd9, 0.4, { atk: 0.3, rel: 3, bright: 1.4 });
+pluck(57.4, F4 + 12, 0.14, { decay: 0.9994, len: 5, send: 0.9, bright: 0.3 });
 
-// Walkthrough drive: i–VI–III–VII at 100 BPM
+// Walkthrough: string ostinato over i–VI–III–VII, taiko only on phrase turns
 const BEAT = 0.6;
 const PROG = ['Dm', 'Bb', 'F', 'C'];
+const MELODY = { Dm: [A4, F4], Bb: [F4, D4], F: [C4 + 12, A4], C: [G4, E4] };
 const driveStart = 64;
 const driveEnd = 148;
+const intensity = (t) => (t < 75 ? 0.45 : t < 104 ? 0.7 : t < 121 ? 0.85 : 1);
 for (let t = driveStart, k = 0; t < driveEnd - 0.1; t += 8 * BEAT, k++) {
   const name = PROG[k % 4];
-  pad(t, Math.min(driveEnd, t + 8 * BEAT), CH[name], 0.34, { atk: 0.8, rel: 1.2 });
-  // arp
-  const tones = CH[name].slice(1).map((m) => m + 12);
-  const pattern = [0, 1, 2, 3, 2, 1, 3, 2, 0, 1, 2, 3, 1, 2, 3, 1];
+  const root = CH[name][0];
+  const end = Math.min(driveEnd, t + 8 * BEAT);
+  // sustained string section
+  pad(t, end, CH[name], 0.3, { atk: 1.2, rel: 1.6, bright: 1.8 });
+  // low strings: long bowed root, swelling
+  bowed(t, end - t - 0.1, root - 12, 0.2 * intensity(t), { atk: 1.2, rel: 1.2 });
+  // legato spiccato ostinato in the cello/viola register (no percussive attack)
+  const ost = [root, root + 7, root + 12, root + 7];
   for (let s = 0; s < 16; s++) {
     const tt = t + s * (BEAT / 2);
     if (tt >= driveEnd) break;
-    const lvl = tt < 75 ? 0.1 + ((tt - 64) / 11) * 0.08 : 0.19;
-    pluck(tt, tones[pattern[s] % tones.length], lvl, { decay: 0.994, len: 0.8, pan: s % 2 ? 0.45 : -0.45, bright: 0.65 });
+    const accent = s % 4 === 0 ? 1.25 : 1;
+    bowed(tt, 0.24, ost[s % 4], 0.07 * intensity(tt) * accent, { atk: 0.035, rel: 0.18, pan: s % 2 ? 0.25 : -0.25, vib: 0, send: 0.4 });
   }
-  // bass pulse from 75s
-  for (let b = 0; b < 8; b++) {
-    const tt = t + b * BEAT;
-    if (tt < 75 || tt >= driveEnd) continue;
-    pluck(tt, CH[name][0] - 12, 0.32, { decay: 0.99, len: 0.5, send: 0.05, bright: 0.25 });
+  // sparse piano motif from 92s
+  if (t >= 91) MELODY[name].forEach((m, i) => pluck(t + i * 4 * BEAT, m + 12, 0.1, { decay: 0.9993, len: 3.5, send: 0.85, bright: 0.28, pan: i ? 0.2 : -0.2 }));
+  // taiko on the downbeat of each phrase from 75s; a second hit mid-phrase from 121s
+  if (t >= 75) taiko(t, 0.42 * intensity(t));
+  if (t >= 121) taiko(t + 4 * BEAT, 0.28);
+}
+for (const t of [64, 75, 92, 104, 121, 136]) whoosh(t, 0.16);
+
+// Breakdown — principle: strings drop to a hush, lone piano
+pad(147.8, 156, CH.Bbmaj7, 0.17, { atk: 2, bright: 2.2 });
+bowed(148, 7.5, 46 - 12, 0.07, { atk: 2.5, rel: 2 });
+[[148.8, A4], [150.6, F4], [152.4, D4 + 12], [154.2, C4 + 12]].forEach(([t, m]) => pluck(t, m + 12, 0.07, { decay: 0.999, len: 3.5, send: 0.8, bright: 0.28 }));
+
+// Build — scale: ostinato quickens, taiko roll crescendo into the final hit
+pad(156, 160.5, CH.F, 0.32, { atk: 1 });
+pad(160.5, 164.9, CH.C, 0.36, { atk: 0.8, rel: 0.1 });
+bowed(156, 4.4, 41 - 12, 0.2, { atk: 1, rel: 0.4 });
+bowed(160.5, 4.3, 48 - 12, 0.24, { atk: 0.8, rel: 0.1 });
+for (let t = 156, k = 0; t < 164.8; t += BEAT / 4, k++) {
+  const p = (t - 156) / 8.8;
+  const r = t < 160.5 ? 41 : 48;
+  bowed(t, 0.12, [r, r + 7, r + 12, r + 7][k % 4], 0.05 + 0.07 * p, { atk: 0.02, rel: 0.1, pan: k % 2 ? 0.3 : -0.3, vib: 0, send: 0.35 });
+}
+{
+  let t = 156;
+  let gap = 1.2;
+  while (t < 164.85) {
+    const p = (t - 156) / 8.8;
+    taiko(t, 0.2 + 0.4 * p * p, { f0: 110, f1: 55, len: 0.9 });
+    t += gap;
+    gap = Math.max(0.15, gap * 0.86);
   }
 }
-for (let t = 75; t < driveEnd - 0.05; t += BEAT) {
-  const beatIdx = Math.round((t - 75) / BEAT);
-  if (t < 104 ? beatIdx % 2 === 0 : true) kick(t, 0.5);
-  if (t >= 92) noiseBurst(t + BEAT / 2, 0.07, 0.06, { hp: 0.95, pan: 0.3, decay: 60 });
-  if (t >= 121 && beatIdx % 2 === 1) noiseBurst(t, 0.2, 0.25, { hp: 0.6, send: 0.35, decay: 16 });
-}
-for (const t of [64, 75, 92, 104, 121, 136]) whoosh(t, 0.22);
+riser(161.5, 164.97, 0.5);
 
-// Breakdown — principle
-pad(147.8, 156, CH.Bbmaj7, 0.3, { atk: 1.2 });
-[[148.6, A4], [150.4, F4], [152.2, D4 + 12], [154.0, C4 + 12]].forEach(([t, m]) => pluck(t, m, 0.26, { decay: 0.9993, len: 4, send: 0.8, bright: 0.35 }));
-
-// Build — scale
-pad(156, 160.5, CH.F, 0.3, { atk: 0.6 });
-pad(160.5, 164.9, CH.C, 0.32, { atk: 0.6, rel: 0.1 });
-for (let t = 156; t < 164.8; t += BEAT) kick(t, 0.55);
-for (let t = 156; t < 164.8; t += BEAT / 4) noiseBurst(t, 0.03 + ((t - 156) / 9) * 0.07, 0.04, { hp: 0.95, pan: Math.sin(t * 9) * 0.4, decay: 70 });
-for (let t = 156, k = 0; t < 164.8; t += BEAT / 2, k++) pluck(t, [A4, C4 + 12, F4 + 12, C4 + 12][k % 4], 0.16, { decay: 0.994, len: 0.7, pan: k % 2 ? 0.4 : -0.4 });
-riser(161.5, 164.97, 0.6);
-
-// FINAL HIT + tail
-impact(165, 1);
-pad(165, 171, [29, 41, 48, 57, 60, 67, 72], 0.42, { atk: 0.05, rel: 3.5, bright: 1.3 });
-pluck(165.02, F4 + 12, 0.3, { decay: 0.9994, len: 7, send: 0.9 });
-pluck(166.2, C4 + 24, 0.18, { decay: 0.9994, len: 6, send: 0.9 });
+// FINAL HIT — braam, impact, resolve on F with a long tail
+impact(165, 0.95);
+braam(165, [29, 41, 48], 1, 4);
+pad(165, 171, [29, 41, 48, 57, 60, 67, 72], 0.4, { atk: 0.3, rel: 3.5, bright: 1.4 });
+pluck(165.4, F4 + 12, 0.14, { decay: 0.9995, len: 7, send: 0.95, bright: 0.28 });
+pluck(166.6, C4 + 24, 0.09, { decay: 0.9995, len: 6, send: 0.95, bright: 0.28 });
 
 /* ---------------- reverb send ---------------- */
 function reverb(inp, offset) {
@@ -265,7 +309,7 @@ function reverb(inp, offset) {
     for (const c of combs) {
       const o = c.buf[c.i];
       c.lp = o * 0.7 + c.lp * 0.3;
-      c.buf[c.i] = x + c.lp * 0.86;
+      c.buf[c.i] = x + c.lp * 0.89;
       c.i = (c.i + 1) % c.buf.length;
       y += o;
     }

@@ -3,6 +3,7 @@ import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } fr
 import { CLAMP, easeInOut, outro, prog } from '../anim';
 import { Flag } from '../components/Flags';
 import { LogoMark, Wordmark } from '../components/Logo';
+import { Broccoli3D, Pepper3D } from '../components/Produce';
 import { Backdrop, Check, Footnote, Grain, Reveal, Vignette } from '../components/ui';
 import { C, FONT } from '../theme';
 
@@ -49,35 +50,6 @@ export const ColdOpen: React.FC<{ dur: number }> = ({ dur }) => {
 /* ---------- line-art props ---------- */
 const draw = (p: number) => ({ pathLength: 1, strokeDasharray: 1, strokeDashoffset: 1 - p });
 
-const Broccoli: React.FC<{ p: number; fill: number }> = ({ p, fill }) => {
-  const florets: [number, number, number][] = [
-    [70, 82, 26], [100, 64, 30], [132, 84, 26], [84, 106, 22], [118, 108, 22], [100, 92, 20],
-  ];
-  return (
-    <svg width={360} height={360} viewBox="0 0 200 200">
-      <path d="M86 196 C88 170 90 150 82 124 M114 196 C112 170 110 150 118 124 M86 196 H114 M100 176 C100 150 100 130 100 110 M92 150 C84 140 76 132 70 120 M108 150 C116 140 124 132 130 122"
-        fill="none" stroke="#8fd19e" strokeWidth={3} strokeLinecap="round" {...draw(p)} />
-      {florets.map(([cx, cy, r], i) => (
-        <circle key={i} cx={cx} cy={cy} r={r} fill={`rgba(76,175,80,${0.16 * fill})`} stroke="#8fd19e" strokeWidth={3} {...draw(Math.min(1, p * 1.2 - i * 0.04))} />
-      ))}
-      {florets.map(([cx, cy, r], i) => (
-        <circle key={`d${i}`} cx={cx - r / 3} cy={cy - r / 4} r={r / 5} fill="none" stroke="#8fd19e" strokeWidth={2} opacity={fill * 0.7} />
-      ))}
-    </svg>
-  );
-};
-
-const Pepper: React.FC<{ p: number; fill: number }> = ({ p, fill }) => (
-  <svg width={360} height={360} viewBox="0 0 200 200">
-    <path d="M100 60 C70 55 45 70 45 105 C45 145 62 182 82 184 C92 185 96 176 100 176 C104 176 108 185 118 184 C138 182 155 145 155 105 C155 70 130 55 100 60 Z"
-      fill={`rgba(52,168,83,${0.18 * fill})`} stroke="#6fdc8c" strokeWidth={3} strokeLinejoin="round" {...draw(p)} />
-    <path d="M100 64 C92 100 94 150 100 174 M70 70 C60 100 62 140 76 176 M130 70 C140 100 138 140 124 176" fill="none" stroke="#6fdc8c" strokeWidth={2} opacity={0.55} {...draw(p)} />
-    <path d="M82 62 C88 50 112 50 118 62" fill="none" stroke="#6fdc8c" strokeWidth={3} strokeLinecap="round" {...draw(p)} />
-    <path d="M100 56 C100 42 106 32 120 28" fill="none" stroke="#6fdc8c" strokeWidth={4} strokeLinecap="round" {...draw(p)} />
-    <path d="M62 96 C60 110 62 124 66 132" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" opacity={0.35 * fill} />
-  </svg>
-);
-
 /* 2 — The Inside Out broccoli story. */
 export const BroccoliStory: React.FC<{ dur: number }> = ({ dur }) => {
   const f = useCurrentFrame();
@@ -86,7 +58,12 @@ export const BroccoliStory: React.FC<{ dur: number }> = ({ dur }) => {
   const arrow = prog(f, 140, 26);
   const pep = prog(f, 150, 60, easeInOut);
   const chip = (at: number) => ({ opacity: prog(f, at, 18), transform: `translateY(${(1 - prog(f, at, 18)) * 12}px)` });
-  const broDim = interpolate(f, [150, 200], [1, 0.45], CLAMP);
+  const broDim = interpolate(f, [150, 200], [1, 0.5], CLAMP);
+  const pop = (p: number, phase: number): React.CSSProperties => ({
+    opacity: p,
+    transform: `translateY(${(1 - p) * 50 + Math.sin(f / 38 + phase) * 5}px) scale(${0.9 + 0.1 * p})`,
+    filter: `blur(${(1 - p) * 10}px)`,
+  });
   return (
     <AbsoluteFill style={{ opacity: o, fontFamily: FONT }}>
       <Backdrop tint="rgba(76,175,80,0.09)" grid={false} />
@@ -97,9 +74,11 @@ export const BroccoliStory: React.FC<{ dur: number }> = ({ dur }) => {
           <Reveal text=" Green peppers are." start={196} style={{ color: '#6fdc8c' }} />
         </div>
       </div>
-      <div style={{ position: 'absolute', top: 320, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 70 }}>
-        <div style={{ textAlign: 'center', opacity: broDim }}>
-          <Broccoli p={bro} fill={prog(f, 70, 30)} />
+      <div style={{ position: 'absolute', top: 300, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 90 }}>
+        <div style={{ textAlign: 'center', opacity: broDim, filter: `saturate(${broDim})` }}>
+          <div style={pop(bro, 0)}>
+            <Broccoli3D size={330} />
+          </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', color: C.dim, fontSize: 20, ...chip(60) }}>
             <Flag code="US" w={30} /> Riley's broccoli
           </div>
@@ -108,7 +87,9 @@ export const BroccoliStory: React.FC<{ dur: number }> = ({ dur }) => {
           <path d="M4 20 H150 M136 8 L152 20 L136 32" fill="none" stroke={C.accent} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" {...draw(arrow)} />
         </svg>
         <div style={{ textAlign: 'center' }}>
-          <Pepper p={pep} fill={prog(f, 200, 30)} />
+          <div style={pop(pep, 1.7)}>
+            <Pepper3D size={330} />
+          </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', color: C.text, fontSize: 20, ...chip(190) }}>
             <Flag code="JP" w={30} /> ピーマン · green pepper
           </div>
