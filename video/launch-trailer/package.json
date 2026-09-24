@@ -1,0 +1,26 @@
+{
+  "name": "transcreai-launch-trailer",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TranscreAI launch trailer — every frame authored in React + SVG with Remotion",
+  "scripts": {
+    "assets": "node scripts/extract-clips.mjs && node scripts/generate-score.mjs",
+    "score": "node scripts/generate-score.mjs",
+    "prestudio": "node scripts/generate-score.mjs",
+    "studio": "remotion studio src/index.ts",
+    "prerender": "node scripts/generate-score.mjs",
+    "render": "remotion render src/index.ts LaunchTrailer out/transcreai-launch-trailer.mp4 --codec h264 --crf 18",
+    "still": "remotion still src/index.ts LaunchTrailer out/still.png",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.528",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "4.0.528"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}

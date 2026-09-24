@@ -1,0 +1,4 @@
+node_modules/
+out/
+# Generated deterministically by scripts/generate-score.mjs (npm run assets)
+public/score.wav
