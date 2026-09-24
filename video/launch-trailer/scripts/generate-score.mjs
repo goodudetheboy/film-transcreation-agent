@@ -1,9 +1,9 @@
 // Synthesizes the trailer's original, upbeat score as public/score.wav — no
 // samples, fully deterministic. 126 BPM, D minor (i–VI–III–VII).
 //
-// Every section restarts its groove on its own start time, so each scene cut
-// lands on a downbeat. The last beats before a cut carry a transition fill
-// (snare roll + reverse cymbal), and the cut itself lands on a crash + sub hit.
+// The groove runs on one continuous bar grid through the story act (from 10s)
+// and another through the walkthrough (from the title drop at 57s); sections
+// only change the arrangement (layers, lead on/off), never restart the beat.
 // Section boundaries mirror SCENES in src/LaunchTrailer.tsx:
 //   0 cold open · 10 broccoli · 24 two questions · 34 pressure · 46 gap (build)
 //   57 TITLE DROP · 64 import · 75 discover · 92 target · 104 research
@@ -245,24 +245,26 @@ const arpNote = (t, m, amp, bright, pan) => voice(t, B * 0.2, m, amp, { atk: 0.0
 const leadNote = (t, m, amp) => voice(t, B * 0.42, m, amp, { atk: 0.006, rel: 0.12, harm: 12, open: 0.95, closed: 1.5, fdec: 5, detune: [-0.08, 0.08], send: 0.4 });
 
 /**
- * One section of groove from t0 to t1, bar grid anchored at t0.
- * Kick, clap, hats and bass drop out for the last `fillBeats` beats (the transition fill).
+ * Groove from t0 to t1 on a bar grid anchored at `anchor` (defaults to t0), so
+ * consecutive sections sharing an anchor continue the same beat seamlessly.
  */
 function groove(t0, t1, o = {}) {
   const {
     kickEvery = 1, clapOn = [1, 3], ohat = true, chat = true, bass = true, pads = true,
-    arp = true, arpBright = 1.1, arpAmp = 0.11, lead = false, padAmp = 0.1, fillBeats = 2, kickAmp = 1,
+    arp = true, arpBright = 1.1, arpAmp = 0.11, lead = false, padAmp = 0.1, kickAmp = 1, anchor = t0,
   } = o;
-  const fillStart = t1 - fillBeats * B - 1e-6;
-  for (let bar = 0; ; bar++) {
-    const tb = t0 + bar * 4 * B;
-    if (tb >= t1 - 1e-3) break;
+  const eps = 1e-3;
+  for (let bar = Math.max(0, Math.floor((t0 - anchor + eps) / (4 * B))); ; bar++) {
+    const tb = anchor + bar * 4 * B;
+    if (tb >= t1 - eps) break;
     const name = PROG[bar % 4];
-    if (pads) padChord(tb, Math.min(4 * B, t1 - tb) - 0.05, name, padAmp);
+    const ps = Math.max(tb, t0);
+    if (pads) padChord(ps, Math.min(tb + 4 * B, t1) - ps - 0.05, name, padAmp);
     for (let beat = 0; beat < 4; beat++) {
       const tt = tb + beat * B;
-      if (tt >= t1 - 1e-3) break;
-      const fill = tt >= fillStart;
+      if (tt >= t1 - eps) break;
+      if (tt < t0 - eps) continue;
+      const fill = false;
       if (!fill && kickEvery && beat % kickEvery === 0) kick(tt, kickAmp);
       if (!fill && clapOn.includes(beat)) clap(tt, 0.75);
       if (!fill && ohat) hat(tt + B / 2, true, 0.16, 0.2);
@@ -284,21 +286,6 @@ function groove(t0, t1, o = {}) {
         }
     }
   }
-  if (fillBeats > 0) transitionFill(t1, fillBeats);
-}
-
-/** The "you've moved on" signal: snare-roll fill into the cut… */
-function transitionFill(tCut, beats) {
-  const t0 = tCut - beats * B;
-  const steps = beats * 4;
-  for (let s = 0; s < steps; s++) snare(t0 + (s * B) / 4, 0.35 + 0.85 * (s / steps) ** 1.5);
-  reverseSwell(t0, tCut, 0.75);
-}
-/** …then crash + kick + sub on the downbeat of the new scene. */
-function transitionHit(t, amp = 1) {
-  crash(t, 0.55 * amp);
-  kick(t, 1.1 * amp);
-  impact(t, 0.35 * amp);
 }
 
 /* ---------------- arrangement ---------------- */
@@ -311,21 +298,23 @@ pluck(0.6, 74, 0.08, { decay: 0.999, len: 4, send: 0.8, bright: 0.3 });
 pluck(5.4, 69, 0.08, { decay: 0.999, len: 4, send: 0.8, bright: 0.3 });
 reverseSwell(8, 10, 0.35);
 
-// 10–24 broccoli: pulse starts — hats, bass, dark arp, kick on the one
-transitionHit(10, 0.6);
-groove(10, 24, { kickEvery: 4, clapOn: [], ohat: false, arpBright: 2.2, arpAmp: 0.08, padAmp: 0.07, fillBeats: 1, kickAmp: 0.8 });
+// Story act: one continuous grid from 10s; layers stack up section by section
+const STORY = 10;
+// 10–24 broccoli: pulse — hats, bass, dark arp, kick on the one
+groove(10, 24, { anchor: STORY, kickEvery: 4, clapOn: [], ohat: false, arpBright: 2.2, arpAmp: 0.08, padAmp: 0.07, kickAmp: 0.8 });
 // 24–34 two questions: half-time
-transitionHit(24, 0.7);
-groove(24, 34, { kickEvery: 2, clapOn: [2], ohat: false, arpBright: 1.8, arpAmp: 0.09, padAmp: 0.08, fillBeats: 1 });
+groove(24, 34, { anchor: STORY, kickEvery: 2, clapOn: [2], ohat: false, arpBright: 1.8, arpAmp: 0.09, padAmp: 0.08 });
 // 34–46 pressure: four on the floor, still filtered
-transitionHit(34, 0.8);
-groove(34, 46, { clapOn: [1, 3], arpBright: 1.5, arpAmp: 0.1, padAmp: 0.09, fillBeats: 1 });
+// the build starts on the first downbeat at/after the 46s cut, so the grid never breaks
+const BUILD_BAR = Math.ceil((46 - STORY - 1e-3) / (4 * B));
+const BUILD = STORY + BUILD_BAR * 4 * B;
+groove(34, BUILD, { anchor: STORY, clapOn: [1, 3], arpBright: 1.5, arpAmp: 0.1, padAmp: 0.09 });
 // 46–57 the gap: build — snare roll accelerating, riser, then a breath of silence
-transitionHit(46, 0.8);
 {
   const end = 56.7;
+  const firstBar = BUILD_BAR;
   for (let bar = 0; ; bar++) {
-    const tb = 46 + bar * 4 * B;
+    const tb = STORY + (firstBar + bar) * 4 * B;
     if (tb >= end) break;
     const name = bar < 2 ? 'Bb' : 'C';
     padChord(tb, Math.min(4 * B, end - tb), name, 0.09 + bar * 0.01);
@@ -345,26 +334,19 @@ transitionHit(46, 0.8);
 // 57 TITLE DROP
 impact(57, 1);
 crash(57, 0.7);
-groove(57, 64, { lead: true, padAmp: 0.12, fillBeats: 2 });
-transitionHit(64);
-
-// Product walkthrough: full groove per feature, transition on every cut
-const FEATURES = [
-  [64, 75, { lead: false }],
-  [75, 92, { lead: false }],
-  [92, 104, { lead: true }],
-  [104, 121, { lead: false }],
-  [121, 136, { lead: true }],
-  [136, 148, { lead: true }],
-];
-FEATURES.forEach(([t0, t1, o], i) => {
-  groove(t0, t1, { ...o, padAmp: 0.11, fillBeats: 2 });
-  if (i < FEATURES.length - 1) transitionHit(t1);
-});
+// Title + product walkthrough: one continuous groove from the drop; sections
+// only toggle the lead hook
+const DROP = 57;
+[
+  [57, 64, true],
+  [64, 92, false],
+  [92, 104, true],
+  [104, 121, false],
+  [121, 148, true],
+].forEach(([t0, t1, lead]) => groove(t0, t1, { anchor: DROP, lead, padAmp: t0 === 57 ? 0.12 : 0.11 }));
 
 // 148–156 breakdown: drums out, pads + piano
-crash(148, 0.4);
-impact(148, 0.3);
+crash(148, 0.35);
 [['Bb', 148], ['F', 150], ['C', 152], ['Dm', 154]].forEach(([name, t]) => padChord(t, 2 - 0.05, name, 0.08));
 [[148.4, 81], [150.3, 77], [152.2, 79], [154.1, 74]].forEach(([t, m]) => pluck(t, m, 0.06, { decay: 0.999, len: 3, send: 0.8, bright: 0.28 }));
 for (let s = 0; s < 64; s++) arpNote(148 + (s * B) / 4, ARP[PROG[Math.floor(s / 16) % 4]][s % 4] + 12, 0.04, 2.4, s % 2 ? 0.3 : -0.3);
@@ -390,7 +372,7 @@ for (let s = 0; s < 64; s++) arpNote(148 + (s * B) / 4, ARP[PROG[Math.floor(s / 
 // 165 FINAL DROP — 3 bars of full groove, then a last stab that rings out
 impact(165, 1);
 crash(165, 0.75);
-groove(165, 165 + 12 * B, { lead: true, padAmp: 0.12, fillBeats: 0 });
+groove(165, 165 + 12 * B, { lead: true, padAmp: 0.12 });
 {
   const t = 165 + 12 * B;
   kick(t, 1.1);

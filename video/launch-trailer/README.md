@@ -30,7 +30,7 @@ Requires `ffmpeg` on `PATH` (for loudness-normalizing the score and cutting clip
 | `src/components/Produce.tsx` | Shaded 3D-look broccoli (buds laid out on a phyllotaxis spiral, lit per bud) and a glossy bell pepper |
 | `src/theme.ts` | Colors mirrored from `frontend/src/index.css` |
 | `src/data/subtitles.ts` | Timings generated from the film's real `.srt` (drives the timeline track) |
-| `scripts/generate-score.mjs` | Deterministic 126 BPM score synth: kick-sidechained pads, offbeat bass, arp, lead hook, and a transition fill + crash on every scene cut. Cut points mirror the scene list and `CUTS` in `LaunchTrailer.tsx`, so change all three together |
+| `scripts/generate-score.mjs` | Deterministic 126 BPM score synth: kick-sidechained pads, offbeat bass, arp, lead hook, on a continuous grid (no per-cut fills). Drop/breakdown times mirror the scene list, so change both together |
 | `scripts/extract-clips.mjs` | Re-cuts `public/clips/*.mp4` from the source film (`upload/` at repo root by default) |
 
 `public/score.wav` is generated and git-ignored; `public/clips/` is committed so
