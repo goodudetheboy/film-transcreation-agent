@@ -1,9 +1,13 @@
-// Synthesizes the trailer's original score as public/score.wav — no samples,
-// no external assets, fully deterministic. Cut points mirror SCENES in
-// src/LaunchTrailer.tsx:
-//   0   cold open        10  broccoli     24 two questions   34 pressure
-//   46  the gap (riser)  57  TITLE HIT    64 walkthrough drive (… 148)
-//   148 breakdown        156 build        165 FINAL HIT       174 end
+// Synthesizes the trailer's original, upbeat score as public/score.wav — no
+// samples, fully deterministic. 126 BPM, D minor (i–VI–III–VII).
+//
+// Every section restarts its groove on its own start time, so each scene cut
+// lands on a downbeat. The last beats before a cut carry a transition fill
+// (snare roll + reverse cymbal), and the cut itself lands on a crash + sub hit.
+// Section boundaries mirror SCENES in src/LaunchTrailer.tsx:
+//   0 cold open · 10 broccoli · 24 two questions · 34 pressure · 46 gap (build)
+//   57 TITLE DROP · 64 import · 75 discover · 92 target · 104 research
+//   121 decide · 136 converse · 148 breakdown · 156 build · 165 FINAL DROP · 174
 //
 //   node scripts/generate-score.mjs
 import { execFileSync } from 'node:child_process';
@@ -14,11 +18,17 @@ import { fileURLToPath } from 'node:url';
 const SR = 44100;
 const LEN = 174;
 const N = SR * LEN;
-const L = new Float32Array(N);
-const R = new Float32Array(N);
-const sendL = new Float32Array(N);
-const sendR = new Float32Array(N);
-const TAU = Math.PI * 2;
+const BPM = 126;
+const B = 60 / BPM;
+
+// buses: music (sidechain-ducked by the kick), drums, reverb send
+const ML = new Float32Array(N);
+const MR = new Float32Array(N);
+const DL = new Float32Array(N);
+const DR = new Float32Array(N);
+const SL = new Float32Array(N);
+const SRv = new Float32Array(N);
+const DUCK = new Float32Array(N).fill(1);
 
 let seed = 0x7a11e5;
 const rnd = () => {
@@ -28,277 +38,370 @@ const rnd = () => {
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
+const TN = 8192;
+const TBL = new Float32Array(TN).map((_, i) => Math.sin((2 * Math.PI * i) / TN));
+const S = (cycles) => TBL[((cycles * TN) | 0) & (TN - 1)];
 const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
-const put = (i, l, r, send = 0) => {
+const idx = (t) => Math.floor(t * SR);
+
+function put(bus, i, l, r, send) {
   if (i < 0 || i >= N) return;
-  L[i] += l;
-  R[i] += r;
-  sendL[i] += l * send;
-  sendR[i] += r * send;
-};
-
-/* ---------------- instruments ---------------- */
-
-/** Warm additive pad; attack/release in seconds. */
-function pad(t0, t1, notes, amp, { atk = 2, rel = 2.5, bright = 1.6, send = 0.6 } = {}) {
-  const s0 = Math.floor(t0 * SR);
-  const s1 = Math.min(N, Math.floor((t1 + rel) * SR));
-  notes.forEach((m, ni) => {
-    const pan = notes.length > 1 ? (ni / (notes.length - 1)) * 0.8 - 0.4 : 0;
-    for (const det of m < 50 ? [-0.015, 0.015] : [-0.06, 0.06]) {
-      const f = mtof(m + det);
-      const harm = [1, 2, 3, 4, 5].filter((h) => f * h < 5000);
-      const ph = harm.map(() => rnd() * TAU);
-      const w = harm.map((h) => (TAU * f * h) / SR);
-      const g = harm.map((h) => 1 / h ** bright);
-      const lfoRate = 0.1 + rnd() * 0.15;
-      for (let i = s0; i < s1; i++) {
-        const t = i / SR;
-        let env = Math.min(1, (t - t0) / atk);
-        if (t > t1) env *= Math.max(0, 1 - (t - t1) / rel);
-        env = env * env * (3 - 2 * env);
-        let v = 0;
-        for (let k = 0; k < harm.length; k++) v += Math.sin(ph[k] + w[k] * (i - s0)) * g[k];
-        v *= amp * env * (0.85 + 0.15 * Math.sin(TAU * lfoRate * t)) / notes.length;
-        put(i, v * (0.5 - pan * 0.5 + (det < 0 ? 0.1 : -0.1)), v * (0.5 + pan * 0.5 + (det > 0 ? 0.1 : -0.1)), send);
-      }
-    }
-  });
+  if (bus === 'M') {
+    ML[i] += l;
+    MR[i] += r;
+  } else {
+    DL[i] += l;
+    DR[i] += r;
+  }
+  SL[i] += l * send;
+  SRv[i] += r * send;
 }
 
-/** Karplus–Strong pluck (arp / piano-ish bell). */
+/* ---------------- synth voice ---------------- */
+
+/**
+ * Additive saw-ish voice with a filter envelope (harmonic weights crossfade
+ * from `open` to `closed` rolloff at rate `fdec`).
+ */
+function voice(t, dur, m, amp, o = {}) {
+  const { atk = 0.005, rel = 0.08, decay = 0, harm = 8, open = 1.1, closed = 1.1, fdec = 0, detune = [0], pan = 0, bus = 'M', send = 0.3 } = o;
+  const s0 = idx(t);
+  const n = Math.floor((dur + rel) * SR);
+  for (const det of detune) {
+    const f = mtof(m + det);
+    const H = [];
+    for (let h = 1; h <= harm && f * h < 12000; h++) H.push(h);
+    const wo = H.map((h) => 1 / h ** open);
+    const wc = H.map((h) => 1 / h ** closed);
+    const ph0 = rnd();
+    const inc = f / SR;
+    const vpan = pan + (detune.length > 1 ? det * 2 : 0);
+    const gl = (0.5 - vpan / 2) * (amp / detune.length);
+    const gr = (0.5 + vpan / 2) * (amp / detune.length);
+    for (let i = 0; i < n; i++) {
+      const tt = i / SR;
+      let env = tt < atk ? tt / atk : 1;
+      if (decay) env *= Math.exp(-(tt - Math.min(tt, atk)) * decay);
+      if (tt > dur) env *= Math.max(0, 1 - (tt - dur) / rel);
+      if (env <= 0) continue;
+      const fm = fdec ? Math.exp(-tt * fdec) : 0;
+      const ph = ph0 + inc * i;
+      let v = 0;
+      for (let k = 0; k < H.length; k++) v += S(ph * H[k]) * (wc[k] + (wo[k] - wc[k]) * fm);
+      v *= env;
+      put(bus, s0 + i, v * gl, v * gr, send);
+    }
+  }
+}
+
+/** Karplus–Strong bell / piano-ish pluck. */
 function pluck(t, m, amp, { decay = 0.996, len = 1.6, pan = 0, send = 0.45, bright = 0.5 } = {}) {
-  const f = mtof(m);
-  const p = Math.max(2, Math.round(SR / f));
+  const p = Math.max(2, Math.round(SR / mtof(m)));
   const buf = new Float32Array(p);
   let prevN = 0;
   for (let i = 0; i < p; i++) {
-    const n = rnd() * 2 - 1;
-    buf[i] = n * bright + prevN * (1 - bright);
+    buf[i] = (rnd() * 2 - 1) * bright + prevN * (1 - bright);
     prevN = buf[i];
   }
-  const s0 = Math.floor(t * SR);
+  const s0 = idx(t);
   const n = Math.floor(len * SR);
-  let idx = 0;
+  let j = 0;
   let prev = 0;
   for (let i = 0; i < n; i++) {
-    const y = buf[idx];
-    const nv = decay * 0.5 * (y + prev);
+    const y = buf[j];
+    buf[j] = decay * 0.5 * (y + prev);
     prev = y;
-    buf[idx] = nv;
-    idx = (idx + 1) % p;
+    j = (j + 1) % p;
     const env = Math.min(1, i / 60) * (i > n - 2000 ? (n - i) / 2000 : 1);
-    const v = y * amp * env;
-    put(s0 + i, v * (0.5 - pan / 2), v * (0.5 + pan / 2), send);
+    put('M', s0 + i, y * amp * env * (0.5 - pan / 2), y * amp * env * (0.5 + pan / 2), send);
   }
 }
 
-/** Cinematic impact: sub drop + lowpassed noise crash + a bright bloom. */
+/* ---------------- drums ---------------- */
+
+function duck(t, depth = 0.62, len = 0.3) {
+  const s0 = idx(t);
+  const n = Math.floor(len * SR);
+  for (let i = 0; i < n && s0 + i < N; i++) {
+    const x = i / n;
+    const sm = x * x * (3 - 2 * x);
+    const g = 1 - depth * (1 - sm);
+    if (s0 + i >= 0 && g < DUCK[s0 + i]) DUCK[s0 + i] = g;
+  }
+}
+
+function kick(t, amp = 1) {
+  const s0 = idx(t);
+  let ph = 0;
+  for (let i = 0; i < 0.38 * SR; i++) {
+    const tt = i / SR;
+    ph += (48 + 115 * Math.exp(-tt * 34)) / SR;
+    let v = S(ph) * Math.exp(-tt * 8.5);
+    if (i < 140) v += (rnd() * 2 - 1) * 0.5 * (1 - i / 140);
+    v = Math.tanh(v * 1.6) * amp;
+    put('D', s0 + i, v, v, 0.02);
+  }
+  duck(t);
+}
+
+function bandNoise(t, len, amp, { lo = 0.35, hi = 0.05, decay = 20, pan = 0, send = 0.25, shape } = {}) {
+  const s0 = idx(t);
+  let a = 0;
+  let b = 0;
+  for (let i = 0; i < len * SR; i++) {
+    const tt = i / SR;
+    const n = rnd() * 2 - 1;
+    a += (n - a) * lo;
+    b += (a - b) * hi;
+    const env = shape ? shape(tt) : Math.exp(-tt * decay);
+    const v = (a - b) * env * amp;
+    put('D', s0 + i, v * (0.5 - pan / 2), v * (0.5 + pan / 2), send);
+  }
+}
+
+function clap(t, amp = 0.8) {
+  for (let k = 0; k < 3; k++) bandNoise(t + k * 0.011, 0.012, amp * 1.2, { lo: 0.4, hi: 0.06, decay: 0, send: 0.2 });
+  bandNoise(t + 0.033, 0.18, amp, { lo: 0.4, hi: 0.06, decay: 22, send: 0.35 });
+}
+
+function hat(t, open = false, amp = 0.25, pan = 0.25) {
+  bandNoise(t, open ? 0.3 : 0.06, amp, { lo: 0.95, hi: 0.5, decay: open ? 11 : 55, pan, send: 0.06 });
+}
+
+function snare(t, amp = 0.6) {
+  const s0 = idx(t);
+  let ph = 0;
+  for (let i = 0; i < 0.12 * SR; i++) {
+    const tt = i / SR;
+    ph += 190 / SR;
+    const v = S(ph) * Math.exp(-tt * 28) * amp * 0.7;
+    put('D', s0 + i, v, v, 0.2);
+  }
+  bandNoise(t, 0.22, amp, { lo: 0.55, hi: 0.08, decay: 16, send: 0.3 });
+}
+
+function crash(t, amp = 0.5) {
+  bandNoise(t, 2.6, amp, { lo: 0.97, hi: 0.35, decay: 1.5, send: 0.35 });
+  const s0 = idx(t);
+  const partials = [3120, 4570, 6230, 7410];
+  for (let i = 0; i < 1.6 * SR; i++) {
+    const tt = i / SR;
+    let v = 0;
+    for (const p of partials) v += S((p * i) / SR);
+    v *= 0.02 * amp * Math.exp(-tt * 2.2);
+    put('D', s0 + i, v, v, 0.3);
+  }
+}
+
+/** Reverse cymbal: noise swelling into a cut, ending exactly at `t1`. */
+function reverseSwell(t0, t1, amp = 0.4) {
+  const len = t1 - t0;
+  bandNoise(t0, len, amp, { lo: 0.9, hi: 0.2, send: 0.45, shape: (tt) => (tt / len) ** 3 });
+}
+
 function impact(t, amp = 1) {
-  const s0 = Math.floor(t * SR);
+  const s0 = idx(t);
   let ph = 0;
   let lp = 0;
-  for (let i = 0; i < 4.5 * SR; i++) {
+  for (let i = 0; i < 4 * SR; i++) {
     const tt = i / SR;
-    const f = 30 + 45 * Math.exp(-tt * 3);
-    ph += (TAU * f) / SR;
-    const sub = Math.sin(ph) * Math.exp(-tt * 1.1) * 0.95;
+    ph += (30 + 45 * Math.exp(-tt * 3)) / SR;
     lp += (rnd() * 2 - 1 - lp) * 0.08;
-    const crash = lp * Math.exp(-tt * 1.6) * 1.6;
-    const v = (sub + crash) * amp;
-    put(s0 + i, v, v, 0.35);
+    const v = (S(ph) * Math.exp(-tt * 1.2) * 0.95 + lp * Math.exp(-tt * 1.8) * 1.2) * amp;
+    put('D', s0 + i, v, v, 0.3);
   }
 }
 
-/** Reverse swell into a hit (noise + rising tone), cut sharply at `t1`. */
 function riser(t0, t1, amp = 0.5) {
-  const s0 = Math.floor(t0 * SR);
-  const s1 = Math.floor(t1 * SR);
+  const s0 = idx(t0);
+  const s1 = idx(t1);
   let lp = 0;
   let ph = 0;
   for (let i = s0; i < s1; i++) {
     const p = (i - s0) / (s1 - s0);
-    const cutoff = 0.01 + 0.35 * p * p;
-    lp += (rnd() * 2 - 1 - lp) * cutoff;
-    ph += (TAU * (180 + 900 * p * p)) / SR;
-    const v = (lp * 0.9 + Math.sin(ph) * 0.12) * amp * p ** 2.2;
-    put(i, v * (1 - p * 0.3), v * (0.7 + p * 0.3), 0.4);
+    lp += (rnd() * 2 - 1 - lp) * (0.01 + 0.35 * p * p);
+    ph += (180 + 1100 * p * p) / SR;
+    const v = (lp * 0.9 + S(ph) * 0.14) * amp * p ** 2.2;
+    put('D', i, v * (1 - p * 0.3), v * (0.7 + p * 0.3), 0.4);
   }
 }
 
-function whoosh(t, amp = 0.25) {
-  const s0 = Math.floor((t - 0.45) * SR);
-  let lp = 0;
-  const n = Math.floor(0.9 * SR);
-  for (let i = 0; i < n; i++) {
-    const p = i / n;
-    const env = Math.sin(Math.PI * p) ** 2;
-    lp += (rnd() * 2 - 1 - lp) * (0.04 + 0.2 * env);
-    const v = lp * env * amp;
-    put(s0 + i, v * (1 - p), v * p, 0.3);
-  }
-}
+/* ---------------- music ---------------- */
 
-/** Bowed string voice: soft attack, vibrato, gentle harmonic rolloff. */
-function bowed(t, dur, m, amp, { atk = 0.06, rel = 0.35, pan = 0, send = 0.55, harmonics = 7, bright = 1.25, vib = 0.12 } = {}) {
-  const s0 = Math.floor(t * SR);
-  const n = Math.floor((dur + rel) * SR);
-  for (const det of [-0.05, 0.05]) {
-    const f = mtof(m + det);
-    const harm = Array.from({ length: harmonics }, (_, i) => i + 1).filter((h) => f * h < 7000);
-    const ph = harm.map(() => rnd() * TAU);
-    const g = harm.map((h) => 1 / h ** bright);
-    const vr = 4.8 + rnd() * 0.8;
-    let phase = 0;
-    for (let i = 0; i < n; i++) {
-      const tt = i / SR;
-      let env = Math.min(1, tt / atk);
-      if (tt > dur) env *= Math.max(0, 1 - (tt - dur) / rel);
-      env = env * env * (3 - 2 * env);
-      const vibAmt = vib * Math.min(1, tt / 0.4);
-      phase += (TAU * f * (1 + (vibAmt / 100) * Math.sin(TAU * vr * tt))) / SR;
-      let v = 0;
-      for (let k = 0; k < harm.length; k++) v += Math.sin(ph[k] + phase * harm[k]) * g[k];
-      v *= amp * env * 0.5;
-      put(s0 + i, v * (0.5 - pan / 2), v * (0.5 + pan / 2), send);
+const PROG = ['Dm', 'Bb', 'F', 'C'];
+const PAD = { Dm: [50, 57, 62, 65, 69], Bb: [46, 53, 58, 62, 65], F: [41, 48, 57, 60, 65], C: [48, 55, 60, 64, 67] };
+const ROOT = { Dm: 38, Bb: 34, F: 41, C: 36 };
+const ARP = { Dm: [62, 65, 69, 74], Bb: [62, 65, 70, 74], F: [60, 65, 69, 72], C: [60, 64, 67, 72] };
+const LEAD = {
+  Dm: [74, -1, 72, 74, 77, -1, 76, 74],
+  Bb: [74, -1, 72, 70, 69, -1, 70, 72],
+  F: [72, -1, 69, 72, 77, -1, 76, 72],
+  C: [76, -1, 74, 72, 67, -1, 69, 72],
+};
+
+const padChord = (t, dur, name, amp) => PAD[name].forEach((m) => voice(t, dur, m, amp, { atk: 0.02, rel: 0.25, harm: 7, open: 1.35, closed: 1.35, detune: [-0.12, 0, 0.12], send: 0.35 }));
+const bassNote = (t, m, amp) => voice(t, B * 0.42, m, amp, { atk: 0.003, rel: 0.03, harm: 12, open: 0.95, closed: 2.1, fdec: 22, send: 0.02 });
+const arpNote = (t, m, amp, bright, pan) => voice(t, B * 0.2, m, amp, { atk: 0.002, rel: 0.09, harm: 10, open: bright, closed: bright + 1, fdec: 18, pan, send: 0.35 });
+const leadNote = (t, m, amp) => voice(t, B * 0.42, m, amp, { atk: 0.006, rel: 0.12, harm: 12, open: 0.95, closed: 1.5, fdec: 5, detune: [-0.08, 0.08], send: 0.4 });
+
+/**
+ * One section of groove from t0 to t1, bar grid anchored at t0.
+ * Kick, clap, hats and bass drop out for the last `fillBeats` beats (the transition fill).
+ */
+function groove(t0, t1, o = {}) {
+  const {
+    kickEvery = 1, clapOn = [1, 3], ohat = true, chat = true, bass = true, pads = true,
+    arp = true, arpBright = 1.1, arpAmp = 0.11, lead = false, padAmp = 0.1, fillBeats = 2, kickAmp = 1,
+  } = o;
+  const fillStart = t1 - fillBeats * B - 1e-6;
+  for (let bar = 0; ; bar++) {
+    const tb = t0 + bar * 4 * B;
+    if (tb >= t1 - 1e-3) break;
+    const name = PROG[bar % 4];
+    if (pads) padChord(tb, Math.min(4 * B, t1 - tb) - 0.05, name, padAmp);
+    for (let beat = 0; beat < 4; beat++) {
+      const tt = tb + beat * B;
+      if (tt >= t1 - 1e-3) break;
+      const fill = tt >= fillStart;
+      if (!fill && kickEvery && beat % kickEvery === 0) kick(tt, kickAmp);
+      if (!fill && clapOn.includes(beat)) clap(tt, 0.75);
+      if (!fill && ohat) hat(tt + B / 2, true, 0.16, 0.2);
+      if (!fill && chat) for (let s = 0; s < 4; s++) if (s !== 2) hat(tt + (s * B) / 4, false, s === 0 ? 0.1 : 0.06, -0.25);
+      if (!fill && bass) {
+        bassNote(tt + B / 2, ROOT[name], 0.5);
+        if (beat === 3) bassNote(tt + (3 * B) / 4, ROOT[name] + 12, 0.28);
+      }
+      if (arp)
+        for (let s = 0; s < 4; s++) {
+          const step = beat * 4 + s;
+          const m = ARP[name][[0, 1, 2, 3, 1, 2, 3, 2][step % 8]] + (bar % 2 ? 12 : 0);
+          arpNote(tt + (s * B) / 4, m, arpAmp * (s === 0 ? 1.2 : 1), arpBright, s % 2 ? 0.35 : -0.35);
+        }
+      if (lead && !fill)
+        for (let e = 0; e < 2; e++) {
+          const m = LEAD[name][beat * 2 + e];
+          if (m > 0) leadNote(tt + (e * B) / 2, m, 0.13);
+        }
     }
   }
+  if (fillBeats > 0) transitionFill(t1, fillBeats);
 }
 
-/** Taiko / low tom: pitched body + felt-like noise thump, big room. */
-function taiko(t, amp = 0.6, { f0 = 95, f1 = 48, len = 1.4, send = 0.45 } = {}) {
-  const s0 = Math.floor(t * SR);
-  let ph = 0;
-  let lp = 0;
-  for (let i = 0; i < len * SR; i++) {
-    const tt = i / SR;
-    const f = f1 + (f0 - f1) * Math.exp(-tt * 18);
-    ph += (TAU * f) / SR;
-    lp += (rnd() * 2 - 1 - lp) * 0.05;
-    const v = (Math.sin(ph) * Math.exp(-tt * 3.2) + lp * 2.2 * Math.exp(-tt * 22)) * amp;
-    put(s0 + i, v, v, send);
-  }
+/** The "you've moved on" signal: snare-roll fill into the cut… */
+function transitionFill(tCut, beats) {
+  const t0 = tCut - beats * B;
+  const steps = beats * 4;
+  for (let s = 0; s < steps; s++) snare(t0 + (s * B) / 4, 0.35 + 0.85 * (s / steps) ** 1.5);
+  reverseSwell(t0, tCut, 0.75);
 }
-
-/** Low brass "braam": bright, slow-swelling, detuned stack. */
-function braam(t, notes, amp, dur = 3.5) {
-  for (const m of notes) bowed(t, dur, m, amp / notes.length, { atk: 0.12, rel: 2.5, harmonics: 16, bright: 0.85, vib: 0.02, send: 0.6 });
+/** …then crash + kick + sub on the downbeat of the new scene. */
+function transitionHit(t, amp = 1) {
+  crash(t, 0.55 * amp);
+  kick(t, 1.1 * amp);
+  impact(t, 0.35 * amp);
 }
 
 /* ---------------- arrangement ---------------- */
 
-const D2 = 38, A2 = 45, D3 = 50, F3 = 53, A3 = 57, C4 = 60, D4 = 62, E4 = 64, F4 = 65, G4 = 67, A4 = 69;
-const CH = {
-  Dm: [D3, A3, D4, F4, A4],
-  Bb: [46, 53, 58, 62, 65],
-  F: [41, 48, 57, 60, 65],
-  C: [48, 55, 60, 64, 67],
-  Gm: [43, 50, 58, 62, 67],
-  Fadd9: [41, 48, 53, 57, 60, 67],
-  Bbmaj7: [46, 53, 57, 62, 65],
-};
+// 0–10 cold open: atmosphere only
+voice(0, 10, 38, 0.22, { atk: 4, rel: 1, harm: 5, open: 2, closed: 2, detune: [-0.03, 0.03], send: 0.6 });
+voice(0, 10, 45, 0.14, { atk: 5, rel: 1, harm: 5, open: 2, closed: 2, detune: [-0.03, 0.03], send: 0.6 });
+PAD.Dm.forEach((m) => voice(4, 6, m, 0.05, { atk: 3, rel: 0.5, harm: 5, open: 1.8, closed: 1.8, detune: [-0.1, 0.1], send: 0.6 }));
+pluck(0.6, 74, 0.08, { decay: 0.999, len: 4, send: 0.8, bright: 0.3 });
+pluck(5.4, 69, 0.08, { decay: 0.999, len: 4, send: 0.8, bright: 0.3 });
+reverseSwell(8, 10, 0.35);
 
-// Intro drone + slow harmony
-pad(0, 24, [D2, A2], 0.2, { atk: 4, bright: 2.2 });
-pad(4, 17.5, CH.Dm, 0.22, { atk: 4 });
-pad(17, 24.5, CH.Bb, 0.22, { atk: 2 });
-pad(24, 34.5, CH.Gm, 0.24, { atk: 2 });
-pad(34, 46.5, CH.Dm, 0.26, { atk: 2 });
-pad(34, 46, [D2], 0.16, { atk: 2, bright: 3 });
-pad(46, 51.5, CH.Bb, 0.28, { atk: 1.5 });
-pad(51, 56.8, CH.C, 0.3, { atk: 1.5, rel: 0.2 });
-// cold-open bells on each subtitle line
-pluck(0.6, D4, 0.1, { decay: 0.9995, len: 5, send: 0.8, bright: 0.3 });
-pluck(5.4, A3, 0.1, { decay: 0.9995, len: 5, send: 0.8, bright: 0.3 });
-// deep taiko on the story cuts
-for (const t of [10, 24]) taiko(t, 0.5, { f0: 70, f1: 38, len: 2.2 });
-// slow heartbeat under the market-pressure stats (felt more than heard)
-for (let t = 34.2; t < 45.5; t += 1.2) {
-  taiko(t, 0.26, { f0: 70, f1: 40, len: 0.8, send: 0.25 });
-  taiko(t + 0.26, 0.17, { f0: 64, f1: 38, len: 0.7, send: 0.25 });
-}
-// cello line under the stats
-bowed(34.5, 5.6, D3 - 12, 0.22, { atk: 1.5, rel: 1.5 });
-bowed(40.5, 5.4, 46 - 12, 0.22, { atk: 1.5, rel: 1.5 });
-// the gap: high violin tremolo swelling into the riser
-for (let t = 46, k = 0; t < 56.7; t += 0.125, k++) {
-  const p = (t - 46) / 10.7;
-  bowed(t, 0.1, t < 51 ? A4 + 12 : C4 + 24, 0.02 + 0.06 * p * p, { atk: 0.02, rel: 0.06, pan: k % 2 ? 0.3 : -0.3, vib: 0, send: 0.7 });
-}
-riser(51, 56.95, 0.55);
-
-// TITLE HIT — braam + impact + bloom
-impact(57, 0.9);
-braam(57, [29, 41, 48], 0.9, 3.2);
-pad(57, 63.5, CH.Fadd9, 0.4, { atk: 0.3, rel: 3, bright: 1.4 });
-pluck(57.4, F4 + 12, 0.14, { decay: 0.9994, len: 5, send: 0.9, bright: 0.3 });
-
-// Walkthrough: string ostinato over i–VI–III–VII, taiko only on phrase turns
-const BEAT = 0.6;
-const PROG = ['Dm', 'Bb', 'F', 'C'];
-const MELODY = { Dm: [A4, F4], Bb: [F4, D4], F: [C4 + 12, A4], C: [G4, E4] };
-const driveStart = 64;
-const driveEnd = 148;
-const intensity = (t) => (t < 75 ? 0.45 : t < 104 ? 0.7 : t < 121 ? 0.85 : 1);
-for (let t = driveStart, k = 0; t < driveEnd - 0.1; t += 8 * BEAT, k++) {
-  const name = PROG[k % 4];
-  const root = CH[name][0];
-  const end = Math.min(driveEnd, t + 8 * BEAT);
-  // sustained string section
-  pad(t, end, CH[name], 0.3, { atk: 1.2, rel: 1.6, bright: 1.8 });
-  // low strings: long bowed root, swelling
-  bowed(t, end - t - 0.1, root - 12, 0.2 * intensity(t), { atk: 1.2, rel: 1.2 });
-  // legato spiccato ostinato in the cello/viola register (no percussive attack)
-  const ost = [root, root + 7, root + 12, root + 7];
-  for (let s = 0; s < 16; s++) {
-    const tt = t + s * (BEAT / 2);
-    if (tt >= driveEnd) break;
-    const accent = s % 4 === 0 ? 1.25 : 1;
-    bowed(tt, 0.24, ost[s % 4], 0.07 * intensity(tt) * accent, { atk: 0.035, rel: 0.18, pan: s % 2 ? 0.25 : -0.25, vib: 0, send: 0.4 });
-  }
-  // sparse piano motif from 92s
-  if (t >= 91) MELODY[name].forEach((m, i) => pluck(t + i * 4 * BEAT, m + 12, 0.1, { decay: 0.9993, len: 3.5, send: 0.85, bright: 0.28, pan: i ? 0.2 : -0.2 }));
-  // taiko on the downbeat of each phrase from 75s; a second hit mid-phrase from 121s
-  if (t >= 75) taiko(t, 0.42 * intensity(t));
-  if (t >= 121) taiko(t + 4 * BEAT, 0.28);
-}
-for (const t of [64, 75, 92, 104, 121, 136]) whoosh(t, 0.16);
-
-// Breakdown — principle: strings drop to a hush, lone piano
-pad(147.8, 156, CH.Bbmaj7, 0.17, { atk: 2, bright: 2.2 });
-bowed(148, 7.5, 46 - 12, 0.07, { atk: 2.5, rel: 2 });
-[[148.8, A4], [150.6, F4], [152.4, D4 + 12], [154.2, C4 + 12]].forEach(([t, m]) => pluck(t, m + 12, 0.07, { decay: 0.999, len: 3.5, send: 0.8, bright: 0.28 }));
-
-// Build — scale: ostinato quickens, taiko roll crescendo into the final hit
-pad(156, 160.5, CH.F, 0.32, { atk: 1 });
-pad(160.5, 164.9, CH.C, 0.36, { atk: 0.8, rel: 0.1 });
-bowed(156, 4.4, 41 - 12, 0.2, { atk: 1, rel: 0.4 });
-bowed(160.5, 4.3, 48 - 12, 0.24, { atk: 0.8, rel: 0.1 });
-for (let t = 156, k = 0; t < 164.8; t += BEAT / 4, k++) {
-  const p = (t - 156) / 8.8;
-  const r = t < 160.5 ? 41 : 48;
-  bowed(t, 0.12, [r, r + 7, r + 12, r + 7][k % 4], 0.05 + 0.07 * p, { atk: 0.02, rel: 0.1, pan: k % 2 ? 0.3 : -0.3, vib: 0, send: 0.35 });
-}
+// 10–24 broccoli: pulse starts — hats, bass, dark arp, kick on the one
+transitionHit(10, 0.6);
+groove(10, 24, { kickEvery: 4, clapOn: [], ohat: false, arpBright: 2.2, arpAmp: 0.08, padAmp: 0.07, fillBeats: 1, kickAmp: 0.8 });
+// 24–34 two questions: half-time
+transitionHit(24, 0.7);
+groove(24, 34, { kickEvery: 2, clapOn: [2], ohat: false, arpBright: 1.8, arpAmp: 0.09, padAmp: 0.08, fillBeats: 1 });
+// 34–46 pressure: four on the floor, still filtered
+transitionHit(34, 0.8);
+groove(34, 46, { clapOn: [1, 3], arpBright: 1.5, arpAmp: 0.1, padAmp: 0.09, fillBeats: 1 });
+// 46–57 the gap: build — snare roll accelerating, riser, then a breath of silence
+transitionHit(46, 0.8);
 {
-  let t = 156;
-  let gap = 1.2;
-  while (t < 164.85) {
-    const p = (t - 156) / 8.8;
-    taiko(t, 0.2 + 0.4 * p * p, { f0: 110, f1: 55, len: 0.9 });
-    t += gap;
-    gap = Math.max(0.15, gap * 0.86);
+  const end = 56.7;
+  for (let bar = 0; ; bar++) {
+    const tb = 46 + bar * 4 * B;
+    if (tb >= end) break;
+    const name = bar < 2 ? 'Bb' : 'C';
+    padChord(tb, Math.min(4 * B, end - tb), name, 0.09 + bar * 0.01);
+    for (let s = 0; s < 16; s++) {
+      const tt = tb + (s * B) / 4;
+      if (tt >= end) break;
+      const p = (tt - 46) / (end - 46);
+      if (s % 4 === 0) kick(tt, 0.85);
+      const div = p < 0.35 ? 4 : p < 0.7 ? 2 : 1; // quarters → 8ths → 16ths
+      if (s % div === 0) snare(tt, 0.12 + 0.45 * p * p);
+      arpNote(tt, ARP[name][s % 4] + 12, 0.07 + 0.06 * p, 2 - p, s % 2 ? 0.3 : -0.3);
+    }
   }
+  riser(51, end, 0.6);
 }
-riser(161.5, 164.97, 0.5);
 
-// FINAL HIT — braam, impact, resolve on F with a long tail
-impact(165, 0.95);
-braam(165, [29, 41, 48], 1, 4);
-pad(165, 171, [29, 41, 48, 57, 60, 67, 72], 0.4, { atk: 0.3, rel: 3.5, bright: 1.4 });
-pluck(165.4, F4 + 12, 0.14, { decay: 0.9995, len: 7, send: 0.95, bright: 0.28 });
-pluck(166.6, C4 + 24, 0.09, { decay: 0.9995, len: 6, send: 0.95, bright: 0.28 });
+// 57 TITLE DROP
+impact(57, 1);
+crash(57, 0.7);
+groove(57, 64, { lead: true, padAmp: 0.12, fillBeats: 2 });
+transitionHit(64);
 
-/* ---------------- reverb send ---------------- */
+// Product walkthrough: full groove per feature, transition on every cut
+const FEATURES = [
+  [64, 75, { lead: false }],
+  [75, 92, { lead: false }],
+  [92, 104, { lead: true }],
+  [104, 121, { lead: false }],
+  [121, 136, { lead: true }],
+  [136, 148, { lead: true }],
+];
+FEATURES.forEach(([t0, t1, o], i) => {
+  groove(t0, t1, { ...o, padAmp: 0.11, fillBeats: 2 });
+  if (i < FEATURES.length - 1) transitionHit(t1);
+});
+
+// 148–156 breakdown: drums out, pads + piano
+crash(148, 0.4);
+impact(148, 0.3);
+[['Bb', 148], ['F', 150], ['C', 152], ['Dm', 154]].forEach(([name, t]) => padChord(t, 2 - 0.05, name, 0.08));
+[[148.4, 81], [150.3, 77], [152.2, 79], [154.1, 74]].forEach(([t, m]) => pluck(t, m, 0.06, { decay: 0.999, len: 3, send: 0.8, bright: 0.28 }));
+for (let s = 0; s < 64; s++) arpNote(148 + (s * B) / 4, ARP[PROG[Math.floor(s / 16) % 4]][s % 4] + 12, 0.04, 2.4, s % 2 ? 0.3 : -0.3);
+
+// 156–165 build into the final drop
+{
+  const end = 164.75;
+  for (let s = 0; ; s++) {
+    const tt = 156 + (s * B) / 4;
+    if (tt >= end) break;
+    const p = (tt - 156) / (end - 156);
+    const name = p < 0.5 ? 'F' : 'C';
+    if (s % 16 === 0) padChord(tt, Math.min(4 * B, end - tt), name, 0.09 + 0.05 * p);
+    if (s % 4 === 0) kick(tt, 0.9);
+    if (s % 8 === 2 || s % 8 === 6) bassNote(tt, ROOT[name], 0.45);
+    const div = p < 0.3 ? 4 : p < 0.65 ? 2 : 1;
+    if (s % div === 0) snare(tt, 0.1 + 0.5 * p * p);
+    arpNote(tt, ARP[name][s % 4] + 12, 0.07 + 0.07 * p, 1.9 - 0.9 * p, s % 2 ? 0.3 : -0.3);
+  }
+  riser(160.5, end, 0.6);
+}
+
+// 165 FINAL DROP — 3 bars of full groove, then a last stab that rings out
+impact(165, 1);
+crash(165, 0.75);
+groove(165, 165 + 12 * B, { lead: true, padAmp: 0.12, fillBeats: 0 });
+{
+  const t = 165 + 12 * B;
+  kick(t, 1.1);
+  crash(t, 0.6);
+  impact(t, 0.5);
+  PAD.Dm.forEach((m) => voice(t, 2.5, m, 0.13, { atk: 0.01, rel: 2.5, harm: 8, open: 1.2, closed: 1.2, detune: [-0.12, 0, 0.12], send: 0.6 }));
+  voice(t, 2.5, 26, 0.35, { atk: 0.01, rel: 2.5, harm: 6, open: 1.4, closed: 1.4, send: 0.2 });
+  pluck(t + 0.02, 86, 0.08, { decay: 0.9995, len: 5, send: 0.9, bright: 0.3 });
+}
+
+/* ---------------- reverb ---------------- */
 function reverb(inp, offset) {
   const out = new Float32Array(N);
   const combs = [1557, 1617, 1491, 1422, 1277, 1356].map((d) => ({ buf: new Float32Array(d + offset), i: 0, lp: 0 }));
@@ -308,8 +411,8 @@ function reverb(inp, offset) {
     let y = 0;
     for (const c of combs) {
       const o = c.buf[c.i];
-      c.lp = o * 0.7 + c.lp * 0.3;
-      c.buf[c.i] = x + c.lp * 0.89;
+      c.lp = o * 0.65 + c.lp * 0.35;
+      c.buf[c.i] = x + c.lp * 0.84;
       c.i = (c.i + 1) % c.buf.length;
       y += o;
     }
@@ -324,24 +427,24 @@ function reverb(inp, offset) {
   }
   return out;
 }
-const rvL = reverb(sendL, 0);
-const rvR = reverb(sendR, 23);
+const rvL = reverb(SL, 0);
+const rvR = reverb(SRv, 23);
 
 /* ---------------- master ---------------- */
+const L = new Float32Array(N);
+const R = new Float32Array(N);
 let peak = 0;
 for (let i = 0; i < N; i++) {
-  L[i] += rvL[i] * 0.9;
-  R[i] += rvR[i] * 0.9;
+  L[i] = DL[i] + ML[i] * DUCK[i] + rvL[i] * 0.8;
+  R[i] = DR[i] + MR[i] * DUCK[i] + rvR[i] * 0.8;
   peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
 }
-const gain = 1.6 / peak;
+const gain = 1.5 / peak;
 const pcm = Buffer.alloc(N * 4);
 for (let i = 0; i < N; i++) {
-  const fade = i > N - SR * 2 ? (N - i) / (SR * 2) : 1;
-  const l = Math.tanh(L[i] * gain) * 0.89 * fade;
-  const r = Math.tanh(R[i] * gain) * 0.89 * fade;
-  pcm.writeInt16LE(Math.round(l * 32767), i * 4);
-  pcm.writeInt16LE(Math.round(r * 32767), i * 4 + 2);
+  const fade = i > N - SR * 1.5 ? (N - i) / (SR * 1.5) : 1;
+  pcm.writeInt16LE(Math.round(Math.tanh(L[i] * gain) * 0.89 * fade * 32767), i * 4);
+  pcm.writeInt16LE(Math.round(Math.tanh(R[i] * gain) * 0.89 * fade * 32767), i * 4 + 2);
 }
 const header = Buffer.alloc(44);
 header.write('RIFF', 0);
@@ -363,7 +466,7 @@ mkdirSync(resolve(root, 'public'), { recursive: true });
 const raw = resolve(root, 'public/score.raw.wav');
 const dest = resolve(root, 'public/score.wav');
 writeFileSync(raw, Buffer.concat([header, pcm]));
-// Broadcast-style loudness: -16 LUFS integrated, -1.5 dBTP ceiling.
-execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', raw, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', String(SR), dest]);
+// Trailer loudness: -14 LUFS integrated, -1 dBTP ceiling.
+execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', raw, '-af', 'loudnorm=I=-14:TP=-1:LRA=9', '-ar', String(SR), dest]);
 rmSync(raw);
-console.log('wrote', dest, `(${LEN}s, peak-normalized from ${peak.toFixed(2)})`);
+console.log('wrote', dest, `(${LEN}s @ ${BPM} BPM)`);

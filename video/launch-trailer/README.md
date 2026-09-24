@@ -2,7 +2,7 @@
 
 A 2:54, 1080p30 launch trailer for localization professionals. Everything is
 code: scenes are React + inline SVG rendered with [Remotion](https://remotion.dev),
-the orchestral-style score is synthesized in JavaScript, and the only external media are short
+the upbeat 126 BPM score is synthesized in JavaScript, and the only external media are short
 silent excerpts of Blender Studio's *Sprite Fright* (CC BY 4.0), the same film
 the live demo account is seeded with.
 
@@ -30,7 +30,7 @@ Requires `ffmpeg` on `PATH` (for loudness-normalizing the score and cutting clip
 | `src/components/Produce.tsx` | Shaded 3D-look broccoli (buds laid out on a phyllotaxis spiral, lit per bud) and a glossy bell pepper |
 | `src/theme.ts` | Colors mirrored from `frontend/src/index.css` |
 | `src/data/subtitles.ts` | Timings generated from the film's real `.srt` (drives the timeline track) |
-| `scripts/generate-score.mjs` | Deterministic score synth (string pads, bowed ostinato, taiko, braams, piano, hall reverb). No drum kit. Cut points mirror the scene list, so change both together |
+| `scripts/generate-score.mjs` | Deterministic 126 BPM score synth: kick-sidechained pads, offbeat bass, arp, lead hook, and a transition fill + crash on every scene cut. Cut points mirror the scene list and `CUTS` in `LaunchTrailer.tsx`, so change all three together |
 | `scripts/extract-clips.mjs` | Re-cuts `public/clips/*.mp4` from the source film (`upload/` at repo root by default) |
 
 `public/score.wav` is generated and git-ignored; `public/clips/` is committed so
